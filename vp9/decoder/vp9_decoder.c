@@ -260,6 +260,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
     cm->frame_refs[ref_index].idx = -1;
 }
 
+//Hyunho: psource, size matches for a single frame
 int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
                                 const uint8_t **psource) {
   VP9_COMMON *volatile const cm = &pbi->common;

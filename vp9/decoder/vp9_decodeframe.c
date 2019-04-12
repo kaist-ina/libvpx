@@ -555,14 +555,14 @@ static void dec_build_inter_predictors(
 
     scaled_mv.row = mv->row * (1 << (1 - pd->subsampling_y));
     scaled_mv.col = mv->col * (1 << (1 - pd->subsampling_x));
-    xs = ys = 16;
+    xs = ys = 16; //Hyunho: 1/16th pixel precision으로 하는데, scaling factor가 들어가면 달라질 수 있는 것을 세팅하는 부분
   }
-  subpel_x = scaled_mv.col & SUBPEL_MASK;
+  subpel_x = scaled_mv.col & SUBPEL_MASK; //Hyunho: x coordinate을 다시 1 pixel precision으로 바꿨을 때 남는 부분
   subpel_y = scaled_mv.row & SUBPEL_MASK;
-
+  
   // Calculate the top left corner of the best matching block in the
   // reference frame.
-  x0 += scaled_mv.col >> SUBPEL_BITS;
+  x0 += scaled_mv.col >> SUBPEL_BITS; //Hyunho: 1/16pixel precision으로 계산한 coordinate 값을 다시 1 pixel precision으로 변환하는 부분
   y0 += scaled_mv.row >> SUBPEL_BITS;
   x0_16 += scaled_mv.col;
   y0_16 += scaled_mv.row;
@@ -623,7 +623,7 @@ static void dec_build_inter_predictors(
   }
 #else
   inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
-                  sf, w, h, ref, kernel, xs, ys);
+                  sf, w, h, ref, kernel, xs, ys); //Hyunho: xs, ys, subpel_x, subpel_y
 #endif  // CONFIG_VP9_HIGHBITDEPTH
 }
 
@@ -687,6 +687,11 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
         const int n4w_x4 = 4 * num_4x4_w;
         const int n4h_x4 = 4 * num_4x4_h;
         struct buf_2d *const pre_buf = &pd->pre[ref];
+        //MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
+        //    int mi_x, int mi_y, const InterpKernel *kernel,
+        //    const struct scale_factors *sf, struct buf_2d *pre_buf,
+        //    struct buf_2d *dst_buf, const MV *mv, RefCntBuffer *ref_frame_buf,
+        //    int is_scaled, int ref)
         dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
                                    n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
                                    dst_buf, &mv, ref_frame_buf, is_scaled, ref);
@@ -1348,6 +1353,7 @@ static void get_tile_buffers(VP9Decoder *pbi, const uint8_t *data,
   }
 }
 
+//Hyunho: data is copied to tile_buffers
 static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                    const uint8_t *data_end) {
   VP9_COMMON *const cm = &pbi->common;

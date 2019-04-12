@@ -193,7 +193,7 @@ typedef struct macroblockd {
   int corrupted;
 
   struct vpx_internal_error_info *error_info;
-} MACROBLOCKD;
+} MACROBLOCKD; //Hyunho: a) contain frame-wise info for decoding / b) plane corresponds to a block processed in decode_block() / c) refer a current frame saved in frame_buffer (VP9COMMON)
 
 static INLINE PLANE_TYPE get_plane_type(int plane) {
   return (PLANE_TYPE)(plane > 0);
