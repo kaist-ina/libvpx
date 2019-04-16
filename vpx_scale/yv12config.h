@@ -15,6 +15,7 @@
 extern "C" {
 #endif
 
+#include <stdio.h>
 #include "./vpx_config.h"
 #include "vpx/vpx_codec.h"
 #include "vpx/vpx_frame_buffer.h"
@@ -78,6 +79,12 @@ int vpx_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
                            int use_highbitdepth,
 #endif
                            int border, int byte_alignment);
+
+void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s);
+
+int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, FILE *serialize_file, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
+
+int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_);
 
 // Updates the yv12 buffer config with the frame buffer. |byte_alignment| must
 // be a power of 2, from 32 to 1024. 0 sets legacy alignment. If cb is not

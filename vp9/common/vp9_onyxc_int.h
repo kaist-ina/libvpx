@@ -224,6 +224,7 @@ typedef struct VP9Common {
   unsigned int frame_context_idx; /* Context to use/update */
   FRAME_COUNTS counts;
 
+  unsigned int current_super_frame; //hyunho: index for frames inside a single super-frame
   unsigned int current_video_frame;
   BITSTREAM_PROFILE profile;
 

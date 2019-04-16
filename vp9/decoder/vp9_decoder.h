@@ -11,6 +11,7 @@
 #ifndef VP9_DECODER_VP9_DECODER_H_
 #define VP9_DECODER_VP9_DECODER_H_
 
+#include <stdbool.h>
 #include "./vpx_config.h"
 
 #include "vpx/vpx_codec.h"
