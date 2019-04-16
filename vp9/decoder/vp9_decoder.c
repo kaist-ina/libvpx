@@ -114,6 +114,11 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
   cm->error.setjmp = 0;
 
+#if DEBUG_RESIZE
+  cm->frame_to_resize = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
+  cm->scale = 4;
+#endif
+
   vpx_get_worker_interface()->init(&pbi->lf_worker);
 
   return pbi;

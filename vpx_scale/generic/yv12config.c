@@ -140,6 +140,7 @@ int vp8_yv12_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 
 #if CONFIG_VP9
 
+#if DEBUG_SERIALIZE
 void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s) {
     //TODO(hyunho): check serialization correctness
     fwrite(&s->y_width, sizeof(int), 1, serialize_file);
@@ -321,6 +322,7 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
 
     return 0;
 }
+#endif
 
 
 // TODO(jkoleszar): Maybe replace this with struct vpx_image

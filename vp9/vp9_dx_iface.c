@@ -382,7 +382,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                 return VPX_CODEC_CORRUPT_FRAME;
             }
 
-            ctx->pbi->common.current_super_frame++;
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
 
@@ -392,6 +391,8 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             // TODO: initialize a decoder
             // TODO: set other input arguments rather than pbi, such as user_priv?
 #if DEBUG_SERIALIZE
+            ctx->pbi->common.current_super_frame++;
+
             // 1) serialize and save
             LOGD("serialization test start");
             YV12_BUFFER_CONFIG *original_frame = &frame_bufs[ctx->pbi->common.new_fb_idx].buf;
