@@ -108,6 +108,10 @@ typedef struct VP9Common {
     int use_highbitdepth;  // Marks if we need to use 16bit frame buffers.
 #endif
 
+#if DEBUG_SERIALIZE
+    YV12_BUFFER_CONFIG *frame_to_deserialize;
+#endif
+
 #if DEBUG_RESIZE
     YV12_BUFFER_CONFIG *frame_to_resize;
     struct scale_factors sf;
@@ -232,9 +236,10 @@ typedef struct VP9Common {
     unsigned int frame_context_idx; /* Context to use/update */
     FRAME_COUNTS counts;
 
-#if DEBUG_SERIALIZE
+#if DEBUG_RESIZE || DEBUG_SERIALIZE
     unsigned int current_super_frame; //hyunho: index for frames inside a single super-frame
 #endif
+
     unsigned int current_video_frame;
     BITSTREAM_PROFILE profile;
 

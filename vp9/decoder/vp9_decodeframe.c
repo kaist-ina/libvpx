@@ -851,7 +851,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                     predict_and_reconstruct_intra_block(twd, mi, plane, row, col,
                                                         tx_size);
 #if DEBUG_RESIZE
-            //TODO (hyunho): a) define sf for resizing, and b) apply inter_predictor, c) check n4_w * 4 or n4_w * 4 * scale
             inter_predictor(xd->plane[plane].dst.buf, xd->plane[plane].dst.stride, xd->plane[plane].resize.buf, xd->plane[plane].resize.stride, 0, 0,
                             &cm->sf, xd->plane[plane].n4_w * 4 * cm->scale, xd->plane[plane].n4_h * 4 * cm->scale, 0,
                             vp9_filter_kernels[mi->interp_filter], cm->sf.x_step_q4, cm->sf.y_step_q4);
@@ -891,7 +890,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                         eobtotal +=
                                 reconstruct_inter_block(twd, mi, plane, row, col, tx_size);
 #if DEBUG_RESIZE
-                //TODO (hyunho): a) define sf for resizing, and b) apply inter_predictor, c) check n4_w * 4 or n4_w * 4 * scale
                 inter_predictor(xd->plane[plane].dst.buf, xd->plane[plane].dst.stride, xd->plane[plane].resize.buf, xd->plane[plane].resize.stride, 0, 0,
                                     &cm->sf, xd->plane[plane].n4_w * 4 * cm->scale, xd->plane[plane].n4_h * 4 * cm->scale, 0,
                                 vp9_filter_kernels[mi->interp_filter], cm->sf.x_step_q4, cm->sf.y_step_q4);
@@ -1233,7 +1231,7 @@ static void resize_context_buffers(VP9_COMMON *cm, int width, int height) {
 #if DEBUG_RESIZE
 static void setup_resize_frame_size(VP9_COMMON *cm)
 {
-    //LOGD("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
+    //("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
     if (vpx_realloc_frame_buffer(
             cm->frame_to_resize, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
             cm->subsampling_y,

@@ -142,7 +142,6 @@ int vp8_yv12_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 
 #if DEBUG_SERIALIZE
 void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s) {
-    //TODO(hyunho): check serialization correctness
     fwrite(&s->y_width, sizeof(int), 1, serialize_file);
     fwrite(&s->y_height, sizeof(int), 1, serialize_file);
     fwrite(&s->y_crop_width, sizeof(int), 1, serialize_file);

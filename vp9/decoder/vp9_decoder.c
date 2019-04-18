@@ -114,8 +114,14 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
   cm->error.setjmp = 0;
 
+#if DEBUG_SERIALIZE
+  cm->frame_to_deserialize = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
+  vpx_free_frame_buffer(cm->frame_to_deserialize);
+#endif
+
 #if DEBUG_RESIZE
   cm->frame_to_resize = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
+  vpx_free_frame_buffer(cm->frame_to_resize);
   cm->scale = 4;
 #endif
 

@@ -30,6 +30,7 @@
 #include "vp9/vp9_iface_common.h"
 
 #include <android/log.h>
+#include <vpxdec.h>
 
 #define TAG "vp9_dx_iface.c JNI"
 #define _UNKNOWN   0
@@ -362,14 +363,15 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 #if DEBUG_SERIALIZE
     ctx->pbi->common.current_super_frame = 0;
     RefCntBuffer *const frame_bufs = ctx->pbi->common.buffer_pool->frame_bufs;
-    YV12_BUFFER_CONFIG *deserialized_frame = (YV12_BUFFER_CONFIG *) malloc(sizeof(YV12_BUFFER_CONFIG));
-    deserialized_frame->buffer_alloc_sz = 0;
-    deserialized_frame->buffer_alloc = NULL;
+    VP9_COMMON *cm = &ctx->pbi->common;
+    char file_path[PATH_MAX];
+    char name[PATH_MAX];
+#elif DEBUG_RESIZE
+    ctx->pbi->common.current_super_frame = 0;
     VP9_COMMON *cm = &ctx->pbi->common;
     char file_path[PATH_MAX];
     char name[PATH_MAX];
 #endif
-
     if (frame_count > 0) {
         int i;
 
@@ -400,7 +402,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             memset(&file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(name, "%d_%d", ctx->pbi->common.current_video_frame,
                     ctx->pbi->common.current_super_frame);
-            sprintf(file_path, "%s/%s", (char *) user_priv, name);
+            sprintf(file_path, "%s_%s", (char *) user_priv, name);
             LOGD("file path: %s", file_path);
             FILE *file = fopen(file_path, "wb");
             if (file == NULL) {
@@ -413,7 +415,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
             // 2) deserialize and load
             file = fopen(file_path, "rb");
-            if(vpx_deserialize_load(deserialized_frame, file, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+            if(vpx_deserialize_load(cm->frame_to_deserialize, file, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
             {
                 LOGE("deserialzation fail");
                 fclose(file);
@@ -422,7 +424,46 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             fclose(file);
 
             // 3) validate
-            if(vpx_compare_frames(original_frame, deserialized_frame))
+            if(vpx_compare_frames(original_frame, cm->frame_to_deserialize))
+            {
+                LOGE("validation fail");
+                goto EXIT;
+            }
+            LOGD("serialization test sucesss");
+
+            EXIT:
+            LOGD("serialization test end");
+#elif DEBUG_RESIZE
+            // 1) serialize and save
+            YV12_BUFFER_CONFIG *resized_frame = cm->frame_to_resize;
+            memset(&name, 0, sizeof(char) * PATH_MAX);
+            memset(&file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(name, "%d_%d", ctx->pbi->common.current_video_frame,
+                    ctx->pbi->common.current_super_frame);
+            sprintf(file_path, "%s_%s", (char *) user_priv, name);
+            LOGD("file path: %s", file_path);
+            FILE *file = fopen(file_path, "wb");
+            if (file == NULL) {
+                LOGE("file open fail: %s", file_path);
+                fclose(file);
+                goto EXIT;
+            }
+            vpx_serialize_save(file, resized_frame);
+            fclose(file);
+
+            // 2) deserialize and load
+            file = fopen(file_path, "rb");
+            //LOGD("subsampling_x:%d, subsampling_y: %d, byte_alignment: %d", cm->subsampling_x, cm->subsampling_y, cm->byte_alignment);
+            if(vpx_deserialize_load(cm->frame_to_resize, file, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+            {
+                LOGE("deserialzation fail");
+                fclose(file);
+                goto EXIT;
+            }
+            fclose(file);
+
+            // 3) validate
+            if(vpx_compare_frames(resized_frame, cm->frame_to_resize))
             {
                 LOGE("validation fail");
                 goto EXIT;
@@ -456,7 +497,8 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             memset(&file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(name, "%d_%d", ctx->pbi->common.current_video_frame,
                     ctx->pbi->common.current_super_frame);
-            sprintf(file_path, "%s/%s", (char *) user_priv, name);
+            //video_info_t *video_info = (video_info_t *) user_priv;
+            sprintf(file_path, "%s_%s", (char *)user_priv, name);
             LOGD("file path: %s", file_path);
             FILE *file = fopen(file_path, "wb");
             if (file == NULL) {
@@ -469,7 +511,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
             // 2) deserialize and load
             file = fopen(file_path, "rb");
-            if(vpx_deserialize_load(deserialized_frame, file, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+            if(vpx_deserialize_load(cm->frame_to_deserialize, file, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
             {
                 LOGE("deserialzation fail");
                 fclose(file);
@@ -478,7 +520,45 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             fclose(file);
 
             // 3) validate
-            if(vpx_compare_frames(original_frame, deserialized_frame))
+            if(vpx_compare_frames(original_frame, cm->frame_to_deserialize))
+            {
+                LOGE("validation fail");
+                goto EXIT_;
+            }
+            LOGD("serialization test sucesss");
+
+            EXIT_:
+            LOGD("serialization test end");
+#elif DEBUG_RESIZE
+            // 1) serialize and save
+            YV12_BUFFER_CONFIG *resized_frame = cm->frame_to_resize;
+            memset(&name, 0, sizeof(char) * PATH_MAX);
+            memset(&file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(name, "%d_%d", ctx->pbi->common.current_video_frame,
+                    ctx->pbi->common.current_super_frame);
+            sprintf(file_path, "%s_%s", (char *) user_priv, name);
+            LOGD("file path: %s", file_path);
+            FILE *file = fopen(file_path, "wb");
+            if (file == NULL) {
+                LOGE("file open fail: %s", file_path);
+                fclose(file);
+                goto EXIT_;
+            }
+            vpx_serialize_save(file, resized_frame);
+            fclose(file);
+
+            // 2) deserialize and load
+            file = fopen(file_path, "rb");
+            if(vpx_deserialize_load(cm->frame_to_resize, file, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+            {
+                LOGE("deserialzation fail");
+                fclose(file);
+                goto EXIT_;
+            }
+            fclose(file);
+
+            // 3) validate
+            if(vpx_compare_frames(resized_frame, cm->frame_to_resize))
             {
                 LOGE("validation fail");
                 goto EXIT_;

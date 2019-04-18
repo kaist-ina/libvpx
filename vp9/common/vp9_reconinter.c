@@ -40,6 +40,27 @@ void vp9_highbd_build_inter_predictor(
 }
 #endif  // CONFIG_VP9_HIGHBITDEPTH
 
+#include <android/log.h>
+#define TAG "vp9_recointer.c JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+
 void vp9_build_inter_predictor(const uint8_t *src, int src_stride, uint8_t *dst,
                                int dst_stride, const MV *src_mv,
                                const struct scale_factors *sf, int w, int h,
@@ -265,6 +286,7 @@ void vp9_setup_resize_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
   int i;
 
   for (i = 0; i < MAX_MB_PLANE; ++i) {
+    //LOGD("stride: %d, mi_row: %d, mi_col: %d", strides[i], mi_row, mi_col);
     struct macroblockd_plane *const pd = &planes[i];
     setup_pred_plane(&pd->resize, buffers[i], strides[i], mi_row, mi_col, NULL,
                      pd->subsampling_x, pd->subsampling_y);
