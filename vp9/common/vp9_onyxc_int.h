@@ -11,6 +11,7 @@
 #ifndef VP9_COMMON_VP9_ONYXC_INT_H_
 #define VP9_COMMON_VP9_ONYXC_INT_H_
 
+#include <vpxdec.h>
 #include "./vpx_config.h"
 #include "vpx/internal/vpx_codec_internal.h"
 #include "vpx_util/vpx_thread.h"
@@ -104,19 +105,28 @@ typedef struct VP9Common {
     int subsampling_x;
     int subsampling_y;
 
+    int count;
+
 #if CONFIG_VP9_HIGHBITDEPTH
     int use_highbitdepth;  // Marks if we need to use 16bit frame buffers.
 #endif
 
-#if DEBUG_SERIALIZE
-    YV12_BUFFER_CONFIG *frame_to_deserialize;
-#endif
+    //General
+    video_info_t *video_info;
 
-#if DEBUG_RESIZE
+    //DEBUG_SERIALIZE
+    YV12_BUFFER_CONFIG *frame_to_deserialize;
+
+    //DEBUG_RESIZE
+    YV12_BUFFER_CONFIG *frame_to_input;
     YV12_BUFFER_CONFIG *frame_to_resize;
     struct scale_factors sf;
     int scale;
-#endif
+
+    //DEBUG_QUALITY
+    YV12_BUFFER_CONFIG *frame_to_compare_0;
+    YV12_BUFFER_CONFIG *frame_to_compare_1;
+    YV12_BUFFER_CONFIG *frame_to_reference;
 
     YV12_BUFFER_CONFIG *frame_to_show;
     RefCntBuffer *prev_frame;
@@ -236,9 +246,7 @@ typedef struct VP9Common {
     unsigned int frame_context_idx; /* Context to use/update */
     FRAME_COUNTS counts;
 
-#if DEBUG_RESIZE || DEBUG_SERIALIZE
     unsigned int current_super_frame; //hyunho: index for frames inside a single super-frame
-#endif
 
     unsigned int current_video_frame;
     BITSTREAM_PROFILE profile;

@@ -80,11 +80,13 @@ int vpx_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 #endif
                            int border, int byte_alignment);
 
-void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s);
+int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s);
 
-int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, FILE *serialize_file, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
+int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
 
 int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_);
+
+void vpx_reset_frames(YV12_BUFFER_CONFIG *s);
 
 // Updates the yv12 buffer config with the frame buffer. |byte_alignment| must
 // be a power of 2, from 32 to 1024. 0 sets legacy alignment. If cb is not

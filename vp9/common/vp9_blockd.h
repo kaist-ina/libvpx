@@ -118,9 +118,8 @@ struct macroblockd_plane {
   int subsampling_x;
   int subsampling_y;
   struct buf_2d dst;
-#if DEBUG_RESIZE
-  struct buf_2d resize;
-#endif
+  struct buf_2d resize; //DEBUG_RESIZE
+  struct buf_2d input; //DEBUG_RESIZE
   struct buf_2d pre[2];
   ENTROPY_CONTEXT *above_context;
   ENTROPY_CONTEXT *left_context;

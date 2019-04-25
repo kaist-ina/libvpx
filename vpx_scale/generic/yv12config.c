@@ -140,8 +140,14 @@ int vp8_yv12_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 
 #if CONFIG_VP9
 
-#if DEBUG_SERIALIZE
-void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s) {
+int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s) {
+    FILE *serialize_file = fopen(file_path, "wb");
+    if(serialize_file == NULL)
+    {
+        LOGE("file open fail: %s", file_path);
+        return -1;
+    }
+
     fwrite(&s->y_width, sizeof(int), 1, serialize_file);
     fwrite(&s->y_height, sizeof(int), 1, serialize_file);
     fwrite(&s->y_crop_width, sizeof(int), 1, serialize_file);
@@ -158,26 +164,24 @@ void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s) {
     fwrite(&s->alpha_height, sizeof(int), 1, serialize_file);
     fwrite(&s->alpha_stride, sizeof(int), 1, serialize_file);
 
-    LOGD("original frame: %d", s->y_width);
-
     unsigned char *src = s->y_buffer;
     int h = s->y_crop_height;
     do {
-        fwrite(src, s->y_width, 1, serialize_file);
+        fwrite(src, s->y_crop_width, 1, serialize_file);
         src += s->y_stride;
     } while (--h);
 
     src = s->u_buffer;
     h = s->uv_crop_height;
     do {
-        fwrite(src, s->uv_width, 1, serialize_file);
+        fwrite(src, s->uv_crop_width, 1, serialize_file);
         src += s->uv_stride;
     } while (--h);
 
     src = s->v_buffer;
     h = s->uv_crop_height;
     do {
-        fwrite(src, s->uv_width, 1, serialize_file);
+        fwrite(src, s->uv_crop_width, 1, serialize_file);
         src += s->uv_stride;
     } while (--h);
 
@@ -199,16 +203,25 @@ void vpx_serialize_save(FILE *serialize_file, YV12_BUFFER_CONFIG *s) {
 
     fwrite(&s->corrupted, sizeof(int), 1, serialize_file);
     fwrite(&s->flags, sizeof(int), 1, serialize_file);
+
+    fclose(serialize_file);
+    return 0;
 }
 
-int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, FILE *serialize_file, int width, int height,
+int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height,
                          int subsampling_x, int subsampling_y, int byte_alignment) {
-    //TODO(hyunho): check deserialization correctness
-    //TODO(hyunho): Memory allocation for uint_8 *y_buffer,u_buffer,v_buffer
-    //TODO(hyunho): check why not use crop_width instead of width
-    LOGD("width: %d, height: %d, subsampling_x: %d, subsampling_y: %d, byte_alignment: %d", width, height, subsampling_x, subsampling_y, byte_alignment);
+    //LOGD("width: %d, height: %d, subsampling_x: %d, subsampling_y: %d, byte_alignment: %d", width, height, subsampling_x, subsampling_y, byte_alignment);
 
-    if (vpx_realloc_frame_buffer(
+    int ret = 0;
+
+    FILE *serialize_file = fopen(file_path, "rb");
+    if(serialize_file == NULL)
+    {
+        LOGE("file open fail: %s", file_path);
+        return -1;
+    }
+
+    if (ret = vpx_realloc_frame_buffer(
             s, width, height, subsampling_x,
             subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
@@ -216,7 +229,8 @@ int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, FILE *serialize_file, int width,
 #endif
             VP9_DEC_BORDER_IN_PIXELS, byte_alignment,
             NULL, NULL, NULL)) {
-        return -1;
+        fclose(serialize_file);
+        return ret;
     };
 
     fread(&s->y_width, sizeof(int), 1, serialize_file);
@@ -238,21 +252,21 @@ int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, FILE *serialize_file, int width,
     unsigned char *src = s->y_buffer;
     int h = s->y_crop_height;
     do {
-        fread(src, s->y_width, 1, serialize_file);
+        fread(src, s->y_crop_width, 1, serialize_file);
         src += s->y_stride;
     } while (--h);
 
     src = s->u_buffer;
     h = s->uv_crop_height;
     do {
-        fread(src, s->uv_width, 1, serialize_file);
+        fread(src, s->uv_crop_width, 1, serialize_file);
         src += s->uv_stride;
     } while (--h);
 
     src = s->v_buffer;
     h = s->uv_crop_height;
     do {
-        fread(src, s->uv_width, 1, serialize_file);
+        fread(src, s->uv_crop_width, 1, serialize_file);
         src += s->uv_stride;
     } while (--h);
 
@@ -275,7 +289,8 @@ int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, FILE *serialize_file, int width,
     fread(&s->corrupted, sizeof(int), 1, serialize_file);
     fread(&s->flags, sizeof(int), 1, serialize_file);
 
-    return 0;
+    fclose(serialize_file);
+    return ret;
 }
 
 int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
@@ -292,11 +307,7 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
     int h = s->y_crop_height;
 
     do {
-        if (ret = memcmp(src, dst, s->y_width))
-        {
-            LOGD("src: %c, dst: %c", src[1], dst[1]);
-            return ret;
-        }
+        if (ret = memcmp(src, dst, s->y_crop_width)) return ret;
         src += s->y_stride;
         dst += s_->y_stride;
     } while (--h);
@@ -305,7 +316,7 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
     dst = s_->u_buffer;
     h = s->uv_crop_height;
     do {
-        if (ret = memcmp(src, dst, s->uv_width)) return ret;
+        if (ret = memcmp(src, dst, s->uv_crop_width)) return ret;
         src += s->uv_stride;
         dst += s_->uv_stride;
     } while (--h);
@@ -314,17 +325,40 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
     dst = s_->v_buffer;
     h = s->uv_crop_height;
     do {
-        if (ret = memcmp(src, dst, s->uv_width)) return ret;
+        if (ret = memcmp(src, dst, s->uv_crop_width)) return ret;
         src += s->uv_stride;
         dst += s_->uv_stride;
     } while (--h);
 
     return 0;
 }
-#endif
-
 
 // TODO(jkoleszar): Maybe replace this with struct vpx_image
+
+void vpx_reset_frames(YV12_BUFFER_CONFIG *s)
+{
+    unsigned char *src = s->y_buffer;
+    int h = s->y_height;
+    do {
+        memset(src, 0, s->y_width);
+        src += s->y_stride;
+    } while (--h);
+
+    src = s->u_buffer;
+    h = s->uv_height;
+    do {
+        memset(src, 0, s->uv_width);
+        src += s->uv_stride;
+    } while (--h);
+
+    src = s->v_buffer;
+    h = s->uv_height;
+    do {
+        memset(src, 0, s->uv_width);
+        src += s->uv_stride;
+    } while (--h);
+}
+
 
 int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
     if (ybf) {

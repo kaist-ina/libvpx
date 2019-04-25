@@ -11,6 +11,48 @@
 #include "vpx_dsp/skin_detection.h"
 #include "vpx_util/vpx_write_yuv_frame.h"
 
+#include <android/log.h>
+#define TAG "vp9_dx_iface.c JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+
+int vpx_write_y_frame(char *file_path, YV12_BUFFER_CONFIG *s){
+    FILE *y_file = fopen(file_path, "wb");
+    if(y_file == NULL)
+    {
+        LOGE("file open fail: %s", file_path);
+        return -1;
+    }
+
+    unsigned char *src = s->y_buffer;
+    int h = s->y_crop_height;
+
+    do {
+        fwrite(src, s->y_crop_width, 1, y_file);
+        src += s->y_stride;
+    } while (--h);
+
+    fclose(y_file);
+    return 0;
+}
+
+
 void vpx_write_yuv_frame(FILE *yuv_file, YV12_BUFFER_CONFIG *s) {
 #if defined(OUTPUT_YUV_SRC) || defined(OUTPUT_YUV_DENOISED) || \
     defined(OUTPUT_YUV_SKINMAP)

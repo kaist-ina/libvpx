@@ -95,11 +95,13 @@ void vp9_setup_dst_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col);
 
-#if DEBUG_RESIZE
+void vp9_setup_input_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                          const YV12_BUFFER_CONFIG *src, int mi_row,
+                          int mi_col);
+
 void vp9_setup_resize_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                              const YV12_BUFFER_CONFIG *src, int mi_row,
                              int mi_col);
-#endif
 
 void vp9_setup_pre_planes(MACROBLOCKD *xd, int idx,
                           const YV12_BUFFER_CONFIG *src, int mi_row, int mi_col,
