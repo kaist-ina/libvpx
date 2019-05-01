@@ -142,28 +142,39 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
     cm->error.setjmp = 0;
 
+    /*******************Hyunho************************/
+    //cm->tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+
 #if DEBUG_SERIALIZE
     cm->frame_to_deserialize = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    vpx_free_frame_buffer(cm->frame_to_deserialize);
+    memset(cm->frame_to_deserialize, 0, sizeof(YV12_BUFFER_CONFIG));
+    //vpx_free_frame_buffer(cm->frame_to_deserialize); //TODO (hyunho): die when 480p video comes
 #endif
 
 #if DEBUG_RESIZE
     cm->frame_to_resize = (YV12_BUFFER_CONFIG *) malloc(sizeof(YV12_BUFFER_CONFIG));
-    vpx_free_frame_buffer(cm->frame_to_resize);
+    memset(cm->frame_to_resize, 0, sizeof(YV12_BUFFER_CONFIG));
+    //vpx_free_frame_buffer(cm->frame_to_resize);
     cm->frame_to_input = (YV12_BUFFER_CONFIG *) malloc(sizeof(YV12_BUFFER_CONFIG));
-    vpx_free_frame_buffer(cm->frame_to_input);
+    memset(cm->frame_to_input, 0, sizeof(YV12_BUFFER_CONFIG));
+    //vpx_free_frame_buffer(cm->frame_to_input);
 #endif
-    cm->scale = 4;
 
 #if DEBUG_QUALITY
     cm->frame_to_compare_0 = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    vpx_free_frame_buffer(cm->frame_to_compare_0);
+    memset(cm->frame_to_compare_0, 0, sizeof(YV12_BUFFER_CONFIG));
+    //vpx_free_frame_buffer(cm->frame_to_compare_0);
     cm->frame_to_compare_1 = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    vpx_free_frame_buffer(cm->frame_to_compare_1);
+    memset(cm->frame_to_compare_1, 0, sizeof(YV12_BUFFER_CONFIG));
+    //vpx_free_frame_buffer(cm->frame_to_compare_1);
     cm->frame_to_reference = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    vpx_free_frame_buffer(cm->frame_to_reference);
+    memset(cm->frame_to_reference, 0, sizeof(YV12_BUFFER_CONFIG));
+    //vpx_free_frame_buffer(cm->frame_to_reference);
 #endif
     cm->count = 0;
+    cm->intra_count = 0;
+    cm->inter_count = 0;
+    /*******************Hyunho************************/
 
     vpx_get_worker_interface()->init(&pbi->lf_worker);
 
@@ -408,6 +419,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
 
     swap_frame_buffers(pbi);
 
+    //TODO (hyunho): move to outer loop because super-frame may be different in 240p and 960p, should compare quality only on visible frames
 #if DEBUG_RESIZE || DEBUG_SERIALIZE || DEBUG_QUALITY
     char name[PATH_MAX];
     char file_path[PATH_MAX];
@@ -420,8 +432,8 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(name, 0, sizeof(char) * PATH_MAX);
     memset(file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", cm->current_video_frame, cm->current_super_frame);
-    if (cm->video_info->upsample == 1){sprintf(file_path, "%s/%dp_%s_upsample", cm->video_info->log_dir, cm->video_info->resolution, name);}
-    else {sprintf(file_path, "%s/%dp_%s", cm->video_info->log_dir, cm->video_info->resolution, name);}
+    if (cm->decode_info->upsample == 1){sprintf(file_path, "%s/%dp_%s_upsample", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
+    else {sprintf(file_path, "%s/%dp_%s", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
     LOGD("file_path: %s", file_path);
 
     if (vpx_serialize_save(file_path, original_frame))
@@ -430,6 +442,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         goto EXIT;
     };
 
+    /*
     //deserialize and load
     LOGD("width: %d, height: %d, subsample_x: %d, subsample_y: %d, byte_alignment: %d", cm->height, cm->width, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment);
     if (vpx_deserialize_load(cm->frame_to_deserialize, file_path, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
@@ -444,6 +457,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         LOGE("validation fail");
         goto EXIT;
     }
+     */
 
     LOGD("serialization test sucesss");
     EXIT:
@@ -456,8 +470,8 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", pbi->common.current_video_frame,
             cm->current_super_frame);
-    if (cm->video_info->upsample) {sprintf(file_path, "%s/%dp_%s_y_upsample.frame", cm->video_info->log_dir, cm->video_info->resolution, name);}
-    else {sprintf(file_path, "%s/%dp_%s_y.frame", cm->video_info->log_dir, cm->video_info->resolution, name);}
+    if (cm->decode_info->upsample) {sprintf(file_path, "%s/%dp_%s_y_upsample.frame", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
+    else {sprintf(file_path, "%s/%dp_%s_y.frame", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
 
     if (vpx_write_y_frame(file_path, cm->frame_to_deserialize)) //TODO (hyunho): check whether using frame_to_show is valid or not
     {
@@ -471,7 +485,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(name, 0, sizeof(char) * PATH_MAX);
     memset(file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", cm->current_video_frame, cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_resize", cm->video_info->log_dir, cm->video_info->resolution * cm->video_info->scale, name);
+    sprintf(file_path, "%s/%dp_%s_resize", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
 
     if (vpx_serialize_save(file_path, cm->frame_to_resize))
     {
@@ -484,7 +498,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d",  cm->current_video_frame,
             cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_y_input.frame", cm->video_info->log_dir, cm->video_info->resolution, name);
+    sprintf(file_path, "%s/%dp_%s_y_input.frame", cm->decode_info->log_dir, cm->decode_info->resolution, name);
 
     if (vpx_write_y_frame(file_path, cm->frame_to_input))
     {
@@ -496,7 +510,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", cm->current_video_frame,
             cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_y_resize.frame", cm->video_info->log_dir, cm->video_info->resolution * cm->video_info->scale, name);
+    sprintf(file_path, "%s/%dp_%s_y_resize.frame", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
 
     if (vpx_write_y_frame(file_path, cm->frame_to_resize))
     {
@@ -512,7 +526,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(&file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", cm->current_video_frame,
             cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_upsample", cm->video_info->log_dir, cm->video_info->resolution * cm->video_info->scale, name);
+    sprintf(file_path, "%s/%dp_%s_upsample", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
 
     LOGD("width: %d, height: %d", cm->width * cm->scale, cm->height * cm->scale);
     if(vpx_deserialize_load(cm->frame_to_compare_0, file_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
@@ -525,7 +539,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(&file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", cm->current_video_frame,
             cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s", cm->video_info->log_dir, cm->video_info->resolution * cm->video_info->scale, name);
+    sprintf(file_path, "%s/%dp_%s", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
 
     if(vpx_deserialize_load(cm->frame_to_reference, file_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
     {
@@ -537,7 +551,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     memset(&file_path, 0, sizeof(char) * PATH_MAX);
     sprintf(name, "%d_%d", cm->current_video_frame,
             cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_resize", cm->video_info->log_dir, cm->video_info->resolution * cm->video_info->scale, name);
+    sprintf(file_path, "%s/%dp_%s_resize", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
     if(vpx_deserialize_load(cm->frame_to_compare_1, file_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
     {
         LOGE("quality measurment fail");

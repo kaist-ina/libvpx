@@ -208,6 +208,79 @@ int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s) {
     return 0;
 }
 
+int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment) {
+    //LOGD("width: %d, height: %d, subsampling_x: %d, subsampling_y: %d, byte_alignment: %d", width, height, subsampling_x, subsampling_y, byte_alignment);
+    //LOGD("width: %d, height: %d", s->y_crop_width, s->y_crop_height);
+
+    int ret = 0;
+
+    FILE *serialize_file = fopen(file_path, "rb");
+    if(serialize_file == NULL)
+    {
+        LOGE("file open fail: %s", file_path);
+        return -1;
+    }
+
+    fread(&s->y_width, sizeof(int), 1, serialize_file);
+    fread(&s->y_height, sizeof(int), 1, serialize_file);
+    fread(&s->y_crop_width, sizeof(int), 1, serialize_file);
+    fread(&s->y_crop_height, sizeof(int), 1, serialize_file);
+    fread(&s->y_stride, sizeof(int), 1, serialize_file);
+
+    fread(&s->uv_width, sizeof(int), 1, serialize_file);
+    fread(&s->uv_height, sizeof(int), 1, serialize_file);
+    fread(&s->uv_crop_width, sizeof(int), 1, serialize_file);
+    fread(&s->uv_crop_height, sizeof(int), 1, serialize_file);
+    fread(&s->uv_stride, sizeof(int), 1, serialize_file);
+
+    fread(&s->alpha_width, sizeof(int), 1, serialize_file);
+    fread(&s->alpha_height, sizeof(int), 1, serialize_file);
+    fread(&s->alpha_stride, sizeof(int), 1, serialize_file);
+
+    unsigned char *src = s->y_buffer;
+    int h = s->y_crop_height;
+    do {
+        fread(src, s->y_crop_width, 1, serialize_file);
+        src += s->y_stride;
+    } while (--h);
+
+    src = s->u_buffer;
+    h = s->uv_crop_height;
+    do {
+        fread(src, s->uv_crop_width, 1, serialize_file);
+        src += s->uv_stride;
+    } while (--h);
+
+    src = s->v_buffer;
+    h = s->uv_crop_height;
+    do {
+        fread(src, s->uv_crop_width, 1, serialize_file);
+        src += s->uv_stride;
+    } while (--h);
+
+    /* Hyunho: following member variables are not needed for caching
+     * uint8_t *alpha_buffer;
+     * uint8_t *buffer_alloc;
+     * int buffer_alloc_sz;
+     * */
+
+    fread(&s->border, sizeof(int), 1, serialize_file);
+    fread(&s->frame_size, sizeof(int), 1, serialize_file);
+    fread(&s->subsampling_x, sizeof(int), 1, serialize_file);
+    fread(&s->subsampling_y, sizeof(int), 1, serialize_file);
+    fread(&s->bit_depth, sizeof(unsigned int), 1, serialize_file);
+    fread(&s->color_space, sizeof(vpx_color_space_t), 1, serialize_file);
+    fread(&s->color_range, sizeof(vpx_color_range_t), 1, serialize_file);
+    fread(&s->render_width, sizeof(int), 1, serialize_file);
+    fread(&s->render_height, sizeof(int), 1, serialize_file);
+
+    fread(&s->corrupted, sizeof(int), 1, serialize_file);
+    fread(&s->flags, sizeof(int), 1, serialize_file);
+
+    fclose(serialize_file);
+    return ret;
+}
+
 int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height,
                          int subsampling_x, int subsampling_y, int byte_alignment) {
     //LOGD("width: %d, height: %d, subsampling_x: %d, subsampling_y: %d, byte_alignment: %d", width, height, subsampling_x, subsampling_y, byte_alignment);

@@ -11,6 +11,7 @@
 #ifndef VP9_COMMON_VP9_SCALE_H_
 #define VP9_COMMON_VP9_SCALE_H_
 
+#include <stdbool.h>
 #include "vp9/common/vp9_mv.h"
 #include "vpx_dsp/vpx_convolve.h"
 
@@ -44,6 +45,10 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
                                        int other_h, int this_w, int this_h,
                                        int use_high);
 #else
+
+void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
+                                          int other_h, int this_w, int this_h, bool upsample);
+
 void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
                                        int other_h, int this_w, int this_h);
 #endif

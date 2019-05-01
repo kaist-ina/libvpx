@@ -82,6 +82,8 @@ int vpx_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 
 int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s);
 
+int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
+
 int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
 
 int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_);

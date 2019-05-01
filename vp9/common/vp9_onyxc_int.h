@@ -106,27 +106,38 @@ typedef struct VP9Common {
     int subsampling_y;
 
     int count;
+    int intra_count;
+    int inter_count;
 
 #if CONFIG_VP9_HIGHBITDEPTH
     int use_highbitdepth;  // Marks if we need to use 16bit frame buffers.
 #endif
 
-    //General
-    video_info_t *video_info;
+    struct scale_factors sf;
 
+    /*******************Hyunho************************/
     //DEBUG_SERIALIZE
     YV12_BUFFER_CONFIG *frame_to_deserialize;
 
     //DEBUG_RESIZE
     YV12_BUFFER_CONFIG *frame_to_input;
     YV12_BUFFER_CONFIG *frame_to_resize;
-    struct scale_factors sf;
+
+    struct scale_factors sf_upsample;
     int scale;
 
     //DEBUG_QUALITY
     YV12_BUFFER_CONFIG *frame_to_compare_0;
     YV12_BUFFER_CONFIG *frame_to_compare_1;
     YV12_BUFFER_CONFIG *frame_to_reference;
+
+    //General
+    decode_info_t *decode_info;
+    DECODE_MODE mode;
+    YV12_BUFFER_CONFIG *tmp_frame; //only used for internal process
+    YV12_BUFFER_CONFIG *compare_frame;
+    YV12_BUFFER_CONFIG *reference_frame;
+    /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;
     RefCntBuffer *prev_frame;

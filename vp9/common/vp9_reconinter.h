@@ -95,6 +95,10 @@ void vp9_setup_dst_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col);
 
+void vp9_setup_sr_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                         const YV12_BUFFER_CONFIG *src, int mi_row,
+                         int mi_col, const struct scale_factors *sf);
+
 void vp9_setup_input_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col);
