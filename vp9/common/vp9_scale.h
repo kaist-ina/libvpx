@@ -47,7 +47,7 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
 #else
 
 void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
-                                          int other_h, int this_w, int this_h, bool upsample);
+                                          int other_h, int this_w, int this_h, bool upsample, bool add);
 
 void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
                                        int other_h, int this_w, int this_h);

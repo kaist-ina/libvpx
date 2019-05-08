@@ -203,6 +203,20 @@ void vpx_convolve8_avg_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
   vpx_convolve_avg_c(temp, 64, dst, dst_stride, NULL, 0, 0, 0, 0, w, h);
 }
 
+void vpx_convolve8_add_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
+                         ptrdiff_t dst_stride, const InterpKernel *filter,
+                         int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
+                         int w, int h) {
+  // Fixed size intermediate buffer places limits on parameters.
+  DECLARE_ALIGNED(16, uint8_t, temp[64 * 64]);
+  assert(w <= 64);
+  assert(h <= 64);
+
+  vpx_convolve8_c(src, src_stride, temp, 64, filter, x0_q4, x_step_q4, y0_q4,
+                  y_step_q4, w, h);
+  vpx_convolve_add_c(temp, 64, dst, dst_stride, NULL, 0, 0, 0, 0, w, h);
+}
+
 void vpx_convolve_copy_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                          ptrdiff_t dst_stride, const InterpKernel *filter,
                          int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
@@ -236,6 +250,25 @@ void vpx_convolve_avg_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
 
   for (y = 0; y < h; ++y) {
     for (x = 0; x < w; ++x) dst[x] = ROUND_POWER_OF_TWO(dst[x] + src[x], 1);
+    src += src_stride;
+    dst += dst_stride;
+  }
+}
+
+void vpx_convolve_add_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
+                        ptrdiff_t dst_stride, const InterpKernel *filter,
+                        int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
+                        int w, int h) {
+  int x, y;
+
+  (void)filter;
+  (void)x0_q4;
+  (void)x_step_q4;
+  (void)y0_q4;
+  (void)y_step_q4;
+
+  for (y = 0; y < h; ++y) {
+    for (x = 0; x < w; ++x) dst[x] = dst[x] + src[x];
     src += src_stride;
     dst += dst_stride;
   }
@@ -287,6 +320,14 @@ void vpx_scaled_avg_2d_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                          int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
                          int w, int h) {
   vpx_convolve8_avg_c(src, src_stride, dst, dst_stride, filter, x0_q4,
+                      x_step_q4, y0_q4, y_step_q4, w, h);
+}
+
+void vpx_scaled_add_2d_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
+                         ptrdiff_t dst_stride, const InterpKernel *filter,
+                         int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
+                         int w, int h) {
+  vpx_convolve8_add_c(src, src_stride, dst, dst_stride, filter, x0_q4,
                       x_step_q4, y0_q4, y_step_q4, w, h);
 }
 

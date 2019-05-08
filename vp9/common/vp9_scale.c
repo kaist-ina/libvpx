@@ -13,6 +13,28 @@
 #include "vp9/common/vp9_scale.h"
 #include "vpx_dsp/vpx_filter.h"
 
+#include <android/log.h>
+
+#define TAG "vp9_scale.c JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+
 static INLINE int scaled_x(int val, const struct scale_factors *sf) {
     return (int) ((int64_t) val * sf->x_scale_fp >> REF_SCALE_SHIFT);
 }
@@ -39,6 +61,8 @@ MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf) {
     const int y_off_q4 = scaled_y(y << SUBPEL_BITS, sf) & SUBPEL_MASK;
     const MV32 res = {scaled_y(mv->row, sf) + y_off_q4,
                       scaled_x(mv->col, sf) + x_off_q4};
+
+    //LOGD("mv->row: %d, y_off_q4: %d, res.row: %d", mv->row, y_off_q4, res.row);
     return res;
 }
 
@@ -49,17 +73,30 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
 #else
 
 void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
-                                          int other_h, int this_w, int this_h, bool upsample) {
+                                          int other_h, int this_w, int this_h, bool upsample, bool add) {
 #endif
     //TODO (Hyunho): how to check valid frame size?
+    /*
+    if (!valid_ref_frame_size(other_w, other_h, this_w, this_h)) {
+        sf->x_scale_fp = REF_INVALID_SCALE;
+        sf->y_scale_fp = REF_INVALID_SCALE;
+        return;
+    }
+    */
 
-    sf->x_scale_fp = get_fixed_point_scale_factor(other_w, this_w);
-    sf->y_scale_fp = get_fixed_point_scale_factor(other_h, this_h);
+    if (upsample) { //hyunho: both scale x_scale_fp, x_step_q4
+        sf->x_scale_fp = get_fixed_point_scale_factor(this_w, other_w);
+        sf->y_scale_fp = get_fixed_point_scale_factor(this_w, other_w);
 
-    if (upsample) {
         sf->x_step_q4 = scaled_x(16, sf);
         sf->y_step_q4 = scaled_y(16, sf);
+
+        sf->x_scale_fp = get_fixed_point_scale_factor(other_w, this_w);
+        sf->y_scale_fp = get_fixed_point_scale_factor(other_h, this_h);
     } else {
+        sf->x_scale_fp = get_fixed_point_scale_factor(other_w, this_w);
+        sf->y_scale_fp = get_fixed_point_scale_factor(other_h, this_h);
+
         sf->x_step_q4 = 16;
         sf->y_step_q4 = 16;
     }
@@ -107,13 +144,29 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
             sf->predict[1][0][0] = vpx_scaled_horiz;
             sf->predict[1][0][1] = vpx_scaled_avg_horiz;
         } else {
-            // Must always scale in both directions.
-            sf->predict[0][0][0] = vpx_scaled_2d;
-            sf->predict[0][0][1] = vpx_scaled_avg_2d;
-            sf->predict[0][1][0] = vpx_scaled_2d;
-            sf->predict[0][1][1] = vpx_scaled_avg_2d;
-            sf->predict[1][0][0] = vpx_scaled_2d;
-            sf->predict[1][0][1] = vpx_scaled_avg_2d;
+            // Must always scale in both directions. //TODO (hyunho): handle all case
+            if (add) {
+                sf->predict[0][0][0] = vpx_scaled_add_2d;
+                sf->predict[0][0][1] = vpx_scaled_avg_2d;
+                sf->predict[0][1][0] = vpx_scaled_add_2d;
+                sf->predict[0][1][1] = vpx_scaled_avg_2d;
+                sf->predict[1][0][0] = vpx_scaled_add_2d;
+                sf->predict[1][0][1] = vpx_scaled_avg_2d;
+//                sf->predict[0][0][0] = vpx_scaled_avg_2d;
+//                sf->predict[0][0][1] = vpx_scaled_avg_2d;
+//                sf->predict[0][1][0] = vpx_scaled_avg_2d;
+//                sf->predict[0][1][1] = vpx_scaled_avg_2d;
+//                sf->predict[1][0][0] = vpx_scaled_avg_2d;
+//                sf->predict[1][0][1] = vpx_scaled_avg_2d;
+            }
+            else {
+                sf->predict[0][0][0] = vpx_scaled_2d;
+                sf->predict[0][0][1] = vpx_scaled_avg_2d;
+                sf->predict[0][1][0] = vpx_scaled_2d;
+                sf->predict[0][1][1] = vpx_scaled_avg_2d;
+                sf->predict[1][0][0] = vpx_scaled_2d;
+                sf->predict[1][0][1] = vpx_scaled_avg_2d;
+            }
         }
     }
 

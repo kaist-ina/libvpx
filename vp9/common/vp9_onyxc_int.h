@@ -124,6 +124,8 @@ typedef struct VP9Common {
     YV12_BUFFER_CONFIG *frame_to_resize;
 
     struct scale_factors sf_upsample;
+    struct scale_factors sf_upsample_intra;
+    struct scale_factors sf_upsample_inter;
     int scale;
 
     //DEBUG_QUALITY

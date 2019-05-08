@@ -433,6 +433,9 @@ static void build_mc_border(const uint8_t *src, int src_stride, uint8_t *dst,
 
         copy = b_w - left - right;
 
+//        LOGD("dst_stride * b_h: %d, dst_stride: %d, b_h"
+//             ": %d left: %d, copy: %d, right:%d", dst_stride * b_h, dst_stride, b_h, left, copy, right);
+
         if (left) memset(dst, ref_row[0], left);
 
         if (copy) memcpy(dst + left, ref_row + x + left, copy);
@@ -520,16 +523,68 @@ static void extend_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
                                const InterpKernel *kernel,
                                const struct scale_factors *sf, int w, int h,
                                int ref, int xs, int ys) {
-    DECLARE_ALIGNED(16, uint8_t, mc_buf[80 * 2 * 80 * 2]);
+    //DECLARE_ALIGNED(16, uint8_t, mc_buf[80 * 2 * 80 * 2]);
+    DECLARE_ALIGNED(16, uint8_t, mc_buf[160 * 2 * 160 *
+                                        2]); //TODO (hyunho): check whether extending this array size can occur abnormal behavior
     const uint8_t *buf_ptr;
 
+    //LOGD("b_w: %d, b_h: %d, frame_width: %d, frame_height: %d, pre_buf_stride: %d, border_offset: %d", b_w, b_h, frame_width, frame_height, pre_buf_stride, border_offset);
     build_mc_border(buf_ptr1, pre_buf_stride, mc_buf, b_w, x0, y0, b_w, b_h,
                     frame_width, frame_height);
+
     buf_ptr = mc_buf + border_offset;
 
-    inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y, sf, w,
-                    h, ref, kernel, xs, ys);
+//   inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y, sf, w,
+//                    h, ref, kernel, xs, ys);
+
+    /*******************Hyunho************************/
+    int proc_size = 64, height, width;
+    if (w > 64 && h > 64) {
+        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+            for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+                //calculate height, width
+                height = (h_offset + proc_size <= h ? proc_size :
+                          (h - h_offset));
+                width = (w_offset + proc_size <= w ? proc_size :
+                         (w - w_offset));
+
+                inter_predictor(&buf_ptr[h_offset * b_w + w_offset], b_w,
+                                &dst[h_offset * dst_buf_stride + w_offset], dst_buf_stride,
+                                subpel_x, subpel_y,
+                                sf, width, height, ref, kernel, xs, ys);
+            }
+
+        }
+    } else if (w > proc_size) {
+        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+            //calculate height, width
+            height = h;
+            width = (w_offset + proc_size <= w ? proc_size :
+                     (w - w_offset));
+
+            inter_predictor(&buf_ptr[w_offset], b_w, &dst[w_offset], dst_buf_stride, subpel_x,
+                            subpel_y,
+                            sf, width, height, ref, kernel, xs, ys);
+        }
+
+    } else if (h > proc_size) {
+        for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+            //calculate height, width
+            height = (h_offset + proc_size <= h ? proc_size :
+                      (h - h_offset));
+            width = w;
+
+            inter_predictor(&buf_ptr[h_offset * b_w], b_w, &dst[h_offset * dst_buf_stride],
+                            dst_buf_stride, subpel_x, subpel_y,
+                            sf, width, height, ref, kernel, xs, ys);
+        }
+
+    } else {
+        inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y,
+                        sf, w, h, ref, kernel, xs, ys);
+    }
 }
+
 
 #endif  // CONFIG_VP9_HIGHBITDEPTH
 
@@ -540,7 +595,9 @@ static void dec_build_inter_predictors(
         struct buf_2d *dst_buf, const MV *mv, RefCntBuffer *ref_frame_buf,
         int is_scaled, int ref) {
     struct macroblockd_plane *const pd = &xd->plane[plane];
-    uint8_t *const dst = dst_buf->buf + dst_buf->stride * y + x;
+
+    uint8_t *const dst = dst_buf->buf + dst_buf->stride * 4 * y + 4 * x; //TODO (hyunho): put mode, scale variable in macroblock, and set only in DECODE_CACHE mode + change to scale
+    //uint8_t *const dst = dst_buf->buf + dst_buf->stride * y + x;
     MV32 scaled_mv;
     int xs, ys, x0, y0, x0_16, y0_16, frame_width, frame_height, buf_stride,
             subpel_x, subpel_y;
@@ -559,8 +616,10 @@ static void dec_build_inter_predictors(
     }
 
     if (is_scaled) {
-        const MV mv_q4 = clamp_mv_to_umv_border_sb(
-                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
+        MV mv_q4 = clamp_mv_to_umv_border_sb(
+              xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
+//        const MV mv_q4 = clamp_mv_to_umv_border_sb(
+//                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
         // Co-ordinate of containing block to pixel precision.
         int x_start = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x));
         int y_start = (-xd->mb_to_top_edge >> (3 + pd->subsampling_y));
@@ -585,9 +644,13 @@ static void dec_build_inter_predictors(
 
         // Scale the MV and incorporate the sub-pixel offset of the block
         // in the reference frame.
+
+        // if (mv_q4.row < 16 || mv_q4.row > -16) mv_q4.row = 0; //TODO (hyunho):
+
         scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
         xs = sf->x_step_q4;
         ys = sf->y_step_q4; //TODO (hyunho): set this to 16 because we only need to calculate resized coordinates
+
     } else {
         // Co-ordinate of containing block to pixel precision.
         x0 = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x)) + x;
@@ -601,8 +664,7 @@ static void dec_build_inter_predictors(
         scaled_mv.col = mv->col * (1 << (1 - pd->subsampling_x));
         xs = ys = 16; //Hyunho: 1/16th pixel precision으로 하는데, scaling factor가 들어가면 달라질 수 있는 것을 세팅하는 부분
     }
-    subpel_x =
-            scaled_mv.col & SUBPEL_MASK; //Hyunho: x coordinate을 다시 1 pixel precision으로 바꿨을 때 남는 부분
+    subpel_x = scaled_mv.col & SUBPEL_MASK; //Hyunho: x coordinate을 다시 1 pixel precision으로 바꿨을 때 남는 부분
     subpel_y = scaled_mv.row & SUBPEL_MASK;
 
     // Calculate the top left corner of the best matching block in the
@@ -616,6 +678,10 @@ static void dec_build_inter_predictors(
     // Get reference block pointer.
     buf_ptr = ref_frame + y0 * pre_buf->stride + x0;
     buf_stride = pre_buf->stride;
+
+    //TODO (hyunho): put mode, scale variable in macroblock, and set only in DECODE_CACHE mode + change to scale
+    w = w * 4;
+    h = h * 4;
 
     // Do border extension if there is motion or the
     // width/height is not a multiple of 8 pixels.
@@ -648,6 +714,7 @@ static void dec_build_inter_predictors(
             const int b_h = y1 - y0 + 1;
             const int border_offset = y_pad * 3 * b_w + x_pad * 3;
 
+            //if (mi_x == 0 && mi_y == 0) LOGD("extend");
             extend_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
                                frame_height, border_offset, dst, dst_buf->stride,
                                subpel_x, subpel_y, kernel, sf,
@@ -655,6 +722,7 @@ static void dec_build_inter_predictors(
                     xd,
 #endif
                                w, h, ref, xs, ys);
+
             return;
         }
     }
@@ -668,9 +736,62 @@ static void dec_build_inter_predictors(
                       subpel_y, sf, w, h, ref, kernel, xs, ys);
     }
 #else
-    inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
-                    sf, w, h, ref, kernel, xs, ys); //Hyunho: xs, ys, subpel_x, subpel_y
+
+//    inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
+//                    sf, w, h, ref, kernel, xs, ys); //Hyunho: xs, ys, subpel_x, subpel_y
+
+    /*******************Hyunho************************/
+    //if (mi_x == 0 && mi_y == 0) LOGD("no extend | w: %d,  h: %d", w, h);
+    int proc_size = 64, height, width;
+    if (w > proc_size && h > proc_size) {
+        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+            for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+                //calculate height, width
+                height = (h_offset + proc_size <= h ? proc_size :
+                          (h - h_offset));
+                width = (w_offset + proc_size <= w ? proc_size :
+                         (w - w_offset));
+
+                //if (mi_x == 0 && mi_y == 0) LOGD("no extend | w_offset: %d,  h_offset: %d, width: %d, height: %d, buf_stride: %d, dst_buf->stride: %d", w_offset, h_offset, width, height, buf_stride, dst_buf->stride);
+                inter_predictor(&buf_ptr[h_offset * buf_stride + w_offset], buf_stride,
+                                &dst[h_offset * dst_buf->stride + w_offset],
+                                dst_buf->stride, subpel_x, subpel_y,
+                                sf, width, height, ref, kernel, xs, ys);
+            }
+
+        }
+    } else if (w > proc_size) {
+        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+            //calculate height, width
+            height = h;
+            width = (w_offset + proc_size <= w ? proc_size :
+                     (w - w_offset));
+
+            inter_predictor(&buf_ptr[w_offset], buf_stride, &dst[w_offset], dst_buf->stride,
+                            subpel_x, subpel_y,
+                            sf, width, height, ref, kernel, xs, ys);
+        }
+
+    } else if (h > proc_size) {
+        for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+            //calculate height, width
+            height = (h_offset + proc_size <= h ? proc_size :
+                      (h - h_offset));
+            width = w;
+
+            inter_predictor(&buf_ptr[h_offset * buf_stride], buf_stride,
+                            &dst[h_offset * dst_buf->stride], dst_buf->stride,
+                            subpel_x, subpel_y,
+                            sf, width, height, ref, kernel, xs, ys);
+        }
+
+    } else {
+        inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
+                        sf, w, h, ref, kernel, xs, ys);
+    }
+        /*******************Hyunho************************/
 #endif  // CONFIG_VP9_HIGHBITDEPTH
+
 }
 
 static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
@@ -694,14 +815,18 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
         BufferPool *const pool = pbi->common.buffer_pool;
         RefCntBuffer *const ref_frame_buf = &pool->frame_bufs[idx];
 
-        if (!vp9_is_valid_scale(sf) && pbi->common.mode != DECODE_CACHE) //TODO (hyunho): how to check valid scale in DECODE_CACHE mode?
+        if (!vp9_is_valid_scale(sf) && pbi->common.mode !=
+                                       DECODE_CACHE) //TODO (hyunho): how to check valid scale in DECODE_CACHE mode?
             vpx_internal_error(xd->error_info, VPX_CODEC_UNSUP_BITSTREAM,
                                "Reference frame has invalid dimensions");
 
         is_scaled = vp9_is_scaled(sf);
+        //LOGD("is_scaled: %d", is_scaled);
         vp9_setup_pre_planes(xd, ref, ref_buf->buf, mi_row, mi_col,
                              is_scaled ? sf : NULL);
         xd->block_refs[ref] = ref_buf;
+
+        //if (mi_col == 0 && mi_col == 0) LOGD("sb_type: %d", sb_type);
 
         if (sb_type < BLOCK_8X8) {
             for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
@@ -711,8 +836,7 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 struct buf_2d *dst_buf = &pd->dst;
                 if (pbi->common.mode == DECODE_CACHE) {
                     dst_buf = &pd->sr;
-                }
-                else {
+                } else {
                     dst_buf = &pd->dst;
                 }
                 /*******************Hyunho************************/
@@ -722,6 +846,7 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 const int n4h_x4 = 4 * num_4x4_h;
                 struct buf_2d *const pre_buf = &pd->pre[ref];
                 int i = 0, x, y;
+                //LOGD("num_4x4_h: %d, num_4x4_w: %d", num_4x4_h, num_4x4_w);
                 for (y = 0; y < num_4x4_h; ++y) {
                     for (x = 0; x < num_4x4_w; ++x) {
                         const MV mv = average_split_mvs(pd, mi, ref, i++);
@@ -735,14 +860,14 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
         } else {
             const MV mv = mi->mv[ref].as_mv;
             for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+                //LOGD("here: plane %d, block: %d", plane, pbi->common.inter_count);
                 struct macroblockd_plane *const pd = &xd->plane[plane];
                 /*******************Hyunho************************/
                 //struct buf_2d *const dst_buf = &pd->dst;
                 struct buf_2d *dst_buf = &pd->dst;
                 if (pbi->common.mode == DECODE_CACHE) {
                     dst_buf = &pd->sr;
-                }
-                else {
+                } else {
                     dst_buf = &pd->dst;
                 }
                 /*******************Hyunho************************/
@@ -813,10 +938,9 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
     set_mi_row_col(xd, tile, mi_row, bh, mi_col, bw, cm->mi_rows, cm->mi_cols);
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE){
+    if (cm->mode == DECODE_CACHE) {
         vp9_setup_dst_planes(xd->plane, cm->tmp_frame, mi_row, mi_col);
-    }
-    else{
+    } else {
         vp9_setup_dst_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col);
     }
     /*******************Hyunho************************/
@@ -824,9 +948,10 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
     return xd->mi[0];
 }
 
-//TODO: check dst plane, pred plane setup
-//TODO: copy to intermediate buffer
-//TODO: resize to output buffer
+//TODO (hyunho): intra-prediction requires docoded block of inter-prediction (or just apply resize)
+//TODO (hyunho): save intra-prediction and residual in seperate buffer & apply loopfiltering
+//TODO (hyunho): save a decoded frame for later intra-prediction
+
 static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                          int mi_col, BLOCK_SIZE bsize, int bwl,
                          int bhl) { //TODO (hyunho): understand bwl, bhl semantics
@@ -858,7 +983,11 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         dec_reset_skip_context(xd);
     }
 
+    //if (mi_col == 0) LOGD("[%d %d] mi_row: %d, num_4x4_w: %d, num_4x4_h: %d, is_inter_block(mi): %d", pbi->common.current_video_frame, pbi->common.current_super_frame, mi_row, xd->plane[0].n4_w, xd->plane[0].n4_h, is_inter_block(mi));
+
     if (!is_inter_block(mi)) {
+        //LOGD("[%d %d] mi_col: %d mi_row: %d, num_4x4_w: %d, num_4x4_h: %d, is_inter_block(mi): %d", pbi->common.current_video_frame, pbi->common.current_super_frame, mi_col, mi_row, xd->plane[0].n4_w, xd->plane[0].n4_h, is_inter_block(mi));
+
         cm->intra_count++; //hyunho: debug
         int plane;
         for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
@@ -889,71 +1018,84 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         /*******************Hyunho************************/
         if (cm->mode == DECODE_CACHE) {
             vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
-                                    mi_row,
-                                    mi_col,
-                                    &cm->sf_upsample);
+                                mi_row,
+                                mi_col,
+                                &cm->sf_upsample_intra);
 
             int plane;
             for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
                 int max_col = xd->plane[plane].n4_w;
                 int max_row = xd->plane[plane].n4_h;
+
+
                 int proc_size = 4; //unit is 4x4
                 int height, width;
 
                 if (max_col > proc_size && max_row > proc_size) {
-                    for (int mi_row_offset = 0; mi_row_offset < max_row; mi_row_offset += proc_size) {
-                        for (int mi_col_offset = 0; mi_col_offset < max_col; mi_col_offset += proc_size) {
+                    for (int mi_row_offset = 0;
+                         mi_row_offset < max_row; mi_row_offset += proc_size) {
+                        for (int mi_col_offset = 0;
+                             mi_col_offset < max_col; mi_col_offset += proc_size) {
                             //calculate height, width
-                            height = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
+                            width = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
                                       (max_col - mi_col_offset) * 4);
-                            width = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
+                            height = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
                                      (max_row - mi_row_offset) * 4);
 
                             width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
                             height = (plane == 0 ? height : height
                                     >> pbi->common.subsampling_y);
 
-                            inter_predictor(&xd->plane[plane].dst.buf[4 * mi_row_offset * xd->plane[plane].dst.stride + 4 * mi_col_offset],
+                            LOGD("stride 1: %d, stride 2: %d", xd->plane[plane].dst.stride, xd->plane[plane].sr.stride);
+                            inter_predictor(&xd->plane[plane].dst.buf[
+                                                    4 * mi_row_offset * xd->plane[plane].dst.stride +
+                                                    4 * mi_col_offset],
                                             xd->plane[plane].dst.stride,
-                                            &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale * xd->plane[plane].dst.stride + 4 * mi_col_offset * cm->scale],
+                                            &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale *
+                                                                     xd->plane[plane].dst.stride + //TODO (hyunho): bug
+                                                                     4 * mi_col_offset * cm->scale],
                                             xd->plane[plane].sr.stride,
                                             0, 0,
-                                            &cm->sf_upsample, width * cm->scale,
+                                            &cm->sf_upsample_intra, width * cm->scale,
                                             height * cm->scale, 0,
                                             vp9_filter_kernels[mi->interp_filter],
-                                            cm->sf_upsample.x_step_q4,
-                                            cm->sf_upsample.y_step_q4);
+                                            cm->sf_upsample_intra.x_step_q4,
+                                            cm->sf_upsample_intra.y_step_q4);
                         }
 
                     }
                 } else if (max_row > proc_size) {
-                    for (int mi_row_offset = 0; mi_row_offset < max_row; mi_row_offset += proc_size) {
+                    for (int mi_row_offset = 0;
+                         mi_row_offset < max_row; mi_row_offset += proc_size) {
                         //calculate height, width
-                        height = max_col * 4;
-                        width = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
-                                 (max_row - mi_row_offset) * 4);
+                        width = max_col * 4;
+                        height = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
+                                  (max_row - mi_row_offset) * 4);
 
                         width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
                         height = (plane == 0 ? height : height >> pbi->common.subsampling_y);
 
-                        inter_predictor(&xd->plane[plane].dst.buf[4 * mi_row_offset * xd->plane[plane].dst.stride],
+                        inter_predictor(&xd->plane[plane].dst.buf[
+                                                4 * mi_row_offset * xd->plane[plane].dst.stride],
                                         xd->plane[plane].dst.stride,
-                                        &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale * xd->plane[plane].dst.stride],
+                                        &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale *
+                                                                 xd->plane[plane].dst.stride],
                                         xd->plane[plane].sr.stride,
                                         0, 0,
-                                        &cm->sf_upsample, width * cm->scale,
+                                        &cm->sf_upsample_intra, width * cm->scale,
                                         height * cm->scale, 0,
                                         vp9_filter_kernels[mi->interp_filter],
-                                        cm->sf_upsample.x_step_q4,
-                                        cm->sf_upsample.y_step_q4);
+                                        cm->sf_upsample_intra.x_step_q4,
+                                        cm->sf_upsample_intra.y_step_q4);
                     }
 
                 } else if (max_col > proc_size) {
-                    for (int mi_col_offset = 0; mi_col_offset < max_col; mi_col_offset += proc_size) {
+                    for (int mi_col_offset = 0;
+                         mi_col_offset < max_col; mi_col_offset += proc_size) {
                         //calculate height, width
-                        height = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
-                                  (max_col - mi_col_offset) * 4);
-                        width = max_row * 4;
+                        width = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
+                                 (max_col - mi_col_offset) * 4);
+                        height = max_row * 4;
 
                         width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
                         height = (plane == 0 ? height : height >> pbi->common.subsampling_y);
@@ -963,21 +1105,22 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                         &xd->plane[plane].sr.buf[4 * mi_col_offset * cm->scale],
                                         xd->plane[plane].sr.stride,
                                         0, 0,
-                                        &cm->sf_upsample, width * cm->scale,
+                                        &cm->sf_upsample_intra, width * cm->scale,
                                         height * cm->scale, 0,
                                         vp9_filter_kernels[mi->interp_filter],
-                                        cm->sf_upsample.x_step_q4,
-                                        cm->sf_upsample.y_step_q4);
+                                        cm->sf_upsample_intra.x_step_q4,
+                                        cm->sf_upsample_intra.y_step_q4);
                     }
 
                 } else {
                     inter_predictor(xd->plane[plane].dst.buf, xd->plane[plane].dst.stride,
                                     xd->plane[plane].sr.buf, xd->plane[plane].sr.stride,
                                     0, 0,
-                                    &cm->sf_upsample, xd->plane[plane].n4_w * 4 * cm->scale,
+                                    &cm->sf_upsample_intra, xd->plane[plane].n4_w * 4 * cm->scale,
                                     xd->plane[plane].n4_h * 4 * cm->scale, 0,
-                                    vp9_filter_kernels[mi->interp_filter], cm->sf_upsample.x_step_q4,
-                                    cm->sf_upsample.y_step_q4);
+                                    vp9_filter_kernels[mi->interp_filter],
+                                    cm->sf_upsample_intra.x_step_q4,
+                                    cm->sf_upsample_intra.y_step_q4);
                 }
             }
         }
@@ -1103,8 +1246,10 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
                                 mi_row,
                                 mi_col,
-                                &cm->sf_upsample);
+                                &cm->sf_upsample_inter);
         }
+        //LOGD("cm mi_row: %d, cm mi_col: %d", cm->mi_rows, cm->mi_cols);
+        //LOGD("x_scale_fp: %d, y_scale_fp: %d", cm->sf_upsample_inter.x_scale_fp >> (REF_SCALE_SHIFT - 4), cm->sf_upsample_inter.y_scale_fp >> (REF_SCALE_SHIFT - 4));
         /*******************Hyunho************************/
 
         // Prediction
@@ -1143,66 +1288,84 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 
             /*******************Hyunho************************/
             if (cm->mode == DECODE_CACHE) {
+                vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
+                                    mi_row,
+                                    mi_col,
+                                    &cm->sf_upsample_inter);
+
                 int plane;
                 for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
                     int max_col = xd->plane[plane].n4_w;
                     int max_row = xd->plane[plane].n4_h;
+
+
                     int proc_size = 4; //unit is 4x4
-                    int height, width, row, col;
+                    int height, width;
 
                     if (max_col > proc_size && max_row > proc_size) {
-                        for (int mi_row_offset = 0; mi_row_offset < max_row; mi_row_offset += proc_size) {
-                            for (int mi_col_offset = 0; mi_col_offset < max_col; mi_col_offset += proc_size) {
+                        for (int mi_row_offset = 0;
+                             mi_row_offset < max_row; mi_row_offset += proc_size) {
+                            for (int mi_col_offset = 0;
+                                 mi_col_offset < max_col; mi_col_offset += proc_size) {
                                 //calculate height, width
-                                height = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
-                                          (max_col - mi_col_offset) * 4);
-                                width = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
-                                         (max_row - mi_row_offset) * 4);
+                                width = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
+                                         (max_col - mi_col_offset) * 4);
+                                height = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
+                                          (max_row - mi_row_offset) * 4);
 
                                 width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
                                 height = (plane == 0 ? height : height
                                         >> pbi->common.subsampling_y);
 
-                                inter_predictor(&xd->plane[plane].sr.buf[4 * mi_row_offset * xd->plane[plane].dst.stride + 4 * mi_col_offset],
-                                                xd->plane[plane].sr.stride,
-                                                &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale * xd->plane[plane].dst.stride + 4 * mi_col_offset * cm->scale],
+                                inter_predictor(&xd->plane[plane].dst.buf[
+                                                        4 * mi_row_offset * xd->plane[plane].dst.stride +
+                                                        4 * mi_col_offset],
+                                                xd->plane[plane].dst.stride,
+                                                &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale *
+                                                                         xd->plane[plane].dst.stride +
+                                                                         4 * mi_col_offset * cm->scale],
                                                 xd->plane[plane].sr.stride,
                                                 0, 0,
-                                                &cm->sf_upsample, width * cm->scale,
+                                                &cm->sf_upsample_inter, width * cm->scale,
                                                 height * cm->scale, 0,
                                                 vp9_filter_kernels[mi->interp_filter],
-                                                cm->sf_upsample.x_step_q4,
-                                                cm->sf_upsample.y_step_q4);
+                                                cm->sf_upsample_inter.x_step_q4,
+                                                cm->sf_upsample_inter.y_step_q4);
                             }
+
                         }
                     } else if (max_row > proc_size) {
-                        for (int mi_row_offset = 0; mi_row_offset < max_row; mi_row_offset += proc_size) {
+                        for (int mi_row_offset = 0;
+                             mi_row_offset < max_row; mi_row_offset += proc_size) {
                             //calculate height, width
-                            height = max_col * 4;
-                            width = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
-                                     (max_row - mi_row_offset) * 4);
+                            width = max_col * 4;
+                            height = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
+                                      (max_row - mi_row_offset) * 4);
 
                             width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
                             height = (plane == 0 ? height : height >> pbi->common.subsampling_y);
 
-                            inter_predictor(&xd->plane[plane].dst.buf[4 * mi_row_offset * xd->plane[plane].dst.stride],
+                            inter_predictor(&xd->plane[plane].dst.buf[
+                                                    4 * mi_row_offset * xd->plane[plane].dst.stride],
                                             xd->plane[plane].dst.stride,
-                                            &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale * xd->plane[plane].dst.stride],
+                                            &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale *
+                                                                     xd->plane[plane].dst.stride],
                                             xd->plane[plane].sr.stride,
                                             0, 0,
-                                            &cm->sf_upsample, width * cm->scale,
+                                            &cm->sf_upsample_inter, width * cm->scale,
                                             height * cm->scale, 0,
                                             vp9_filter_kernels[mi->interp_filter],
-                                            cm->sf_upsample.x_step_q4,
-                                            cm->sf_upsample.y_step_q4);
+                                            cm->sf_upsample_inter.x_step_q4,
+                                            cm->sf_upsample_inter.y_step_q4);
                         }
 
                     } else if (max_col > proc_size) {
-                        for (int mi_col_offset = 0; mi_col_offset < max_col; mi_col_offset += proc_size) {
+                        for (int mi_col_offset = 0;
+                             mi_col_offset < max_col; mi_col_offset += proc_size) {
                             //calculate height, width
-                            height = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
-                                      (max_col - mi_col_offset) * 4);
-                            width = max_row * 4;
+                            width = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
+                                     (max_col - mi_col_offset) * 4);
+                            height = max_row * 4;
 
                             width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
                             height = (plane == 0 ? height : height >> pbi->common.subsampling_y);
@@ -1212,21 +1375,22 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                             &xd->plane[plane].sr.buf[4 * mi_col_offset * cm->scale],
                                             xd->plane[plane].sr.stride,
                                             0, 0,
-                                            &cm->sf_upsample, width * cm->scale,
+                                            &cm->sf_upsample_inter, width * cm->scale,
                                             height * cm->scale, 0,
                                             vp9_filter_kernels[mi->interp_filter],
-                                            cm->sf_upsample.x_step_q4,
-                                            cm->sf_upsample.y_step_q4);
+                                            cm->sf_upsample_inter.x_step_q4,
+                                            cm->sf_upsample_inter.y_step_q4);
                         }
 
                     } else {
                         inter_predictor(xd->plane[plane].dst.buf, xd->plane[plane].dst.stride,
                                         xd->plane[plane].sr.buf, xd->plane[plane].sr.stride,
                                         0, 0,
-                                        &cm->sf_upsample, xd->plane[plane].n4_w * 4 * cm->scale,
+                                        &cm->sf_upsample_inter, xd->plane[plane].n4_w * 4 * cm->scale,
                                         xd->plane[plane].n4_h * 4 * cm->scale, 0,
-                                        vp9_filter_kernels[mi->interp_filter], cm->sf_upsample.x_step_q4,
-                                        cm->sf_upsample.y_step_q4);
+                                        vp9_filter_kernels[mi->interp_filter],
+                                        cm->sf_upsample_inter.x_step_q4,
+                                        cm->sf_upsample_inter.y_step_q4);
                     }
                 }
             }
@@ -1366,6 +1530,117 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 
             if (!less8x8 && eobtotal == 0) mi->skip = 1;  // skip loopfilter
         }
+        /*******************Hyunho************************/
+        /*
+        if (cm->mode == DECODE_CACHE) {
+            vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
+                                mi_row,
+                                mi_col,
+                                &cm->sf_upsample_inter);
+
+            int plane;
+            for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+                int max_col = xd->plane[plane].n4_w;
+                int max_row = xd->plane[plane].n4_h;
+
+
+                int proc_size = 4; //unit is 4x4
+                int height, width;
+
+                if (max_col > proc_size && max_row > proc_size) {
+                    for (int mi_row_offset = 0;
+                         mi_row_offset < max_row; mi_row_offset += proc_size) {
+                        for (int mi_col_offset = 0;
+                             mi_col_offset < max_col; mi_col_offset += proc_size) {
+                            //calculate height, width
+                            width = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
+                                     (max_col - mi_col_offset) * 4);
+                            height = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
+                                      (max_row - mi_row_offset) * 4);
+
+                            width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
+                            height = (plane == 0 ? height : height
+                                    >> pbi->common.subsampling_y);
+
+                            inter_predictor(&xd->plane[plane].dst.buf[
+                                                    4 * mi_row_offset * xd->plane[plane].dst.stride +
+                                                    4 * mi_col_offset],
+                                            xd->plane[plane].dst.stride,
+                                            &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale *
+                                                                     xd->plane[plane].dst.stride +
+                                                                     4 * mi_col_offset * cm->scale],
+                                            xd->plane[plane].sr.stride,
+                                            0, 0,
+                                            &cm->sf_upsample_inter, width * cm->scale,
+                                            height * cm->scale, 0,
+                                            vp9_filter_kernels[mi->interp_filter],
+                                            cm->sf_upsample_inter.x_step_q4,
+                                            cm->sf_upsample_inter.y_step_q4);
+                        }
+
+                    }
+                } else if (max_row > proc_size) {
+                    for (int mi_row_offset = 0;
+                         mi_row_offset < max_row; mi_row_offset += proc_size) {
+                        //calculate height, width
+                        width = max_col * 4;
+                        height = (mi_row_offset + proc_size <= max_row ? proc_size * 4 :
+                                  (max_row - mi_row_offset) * 4);
+
+                        width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
+                        height = (plane == 0 ? height : height >> pbi->common.subsampling_y);
+
+                        inter_predictor(&xd->plane[plane].dst.buf[
+                                                4 * mi_row_offset * xd->plane[plane].dst.stride],
+                                        xd->plane[plane].dst.stride,
+                                        &xd->plane[plane].sr.buf[4 * mi_row_offset * cm->scale *
+                                                                 xd->plane[plane].dst.stride],
+                                        xd->plane[plane].sr.stride,
+                                        0, 0,
+                                        &cm->sf_upsample_inter, width * cm->scale,
+                                        height * cm->scale, 0,
+                                        vp9_filter_kernels[mi->interp_filter],
+                                        cm->sf_upsample_inter.x_step_q4,
+                                        cm->sf_upsample_inter.y_step_q4);
+                    }
+
+                } else if (max_col > proc_size) {
+                    for (int mi_col_offset = 0;
+                         mi_col_offset < max_col; mi_col_offset += proc_size) {
+                        //calculate height, width
+                        width = (mi_col_offset + proc_size <= max_col ? proc_size * 4 :
+                                 (max_col - mi_col_offset) * 4);
+                        height = max_row * 4;
+
+                        width = (plane == 0 ? width : width >> pbi->common.subsampling_x);
+                        height = (plane == 0 ? height : height >> pbi->common.subsampling_y);
+
+                        inter_predictor(&xd->plane[plane].dst.buf[4 * mi_col_offset],
+                                        xd->plane[plane].dst.stride,
+                                        &xd->plane[plane].sr.buf[4 * mi_col_offset * cm->scale],
+                                        xd->plane[plane].sr.stride,
+                                        0, 0,
+                                        &cm->sf_upsample_inter, width * cm->scale,
+                                        height * cm->scale, 0,
+                                        vp9_filter_kernels[mi->interp_filter],
+                                        cm->sf_upsample_inter.x_step_q4,
+                                        cm->sf_upsample_inter.y_step_q4);
+                    }
+
+                } else {
+                    inter_predictor(xd->plane[plane].dst.buf, xd->plane[plane].dst.stride,
+                                    xd->plane[plane].sr.buf, xd->plane[plane].sr.stride,
+                                    0, 0,
+                                    &cm->sf_upsample_inter, xd->plane[plane].n4_w * 4 * cm->scale,
+                                    xd->plane[plane].n4_h * 4 * cm->scale, 0,
+                                    vp9_filter_kernels[mi->interp_filter],
+                                    cm->sf_upsample_inter.x_step_q4,
+                                    cm->sf_upsample_inter.y_step_q4);
+                }
+            }
+        }
+        */
+        /*******************Hyunho************************/
     }
 
     xd->corrupted |= vpx_reader_has_error(r);
@@ -1726,11 +2001,11 @@ static void setup_resize_frame_size(VP9_COMMON *cm) {
     };
 }
 
-static void setup_compare_reference_frame_size(VP9_COMMON *cm)
-{
+static void setup_compare_reference_frame_size(VP9_COMMON *cm) {
     //("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
     if (vpx_realloc_frame_buffer(
-            cm->frame_to_compare_0, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
+            cm->frame_to_compare_0, cm->width * cm->scale, cm->height * cm->scale,
+            cm->subsampling_x,
             cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
             cm->use_highbitdepth,
@@ -1743,7 +2018,8 @@ static void setup_compare_reference_frame_size(VP9_COMMON *cm)
 
     //("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
     if (vpx_realloc_frame_buffer(
-            cm->frame_to_compare_1, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
+            cm->frame_to_compare_1, cm->width * cm->scale, cm->height * cm->scale,
+            cm->subsampling_x,
             cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
             cm->use_highbitdepth,
@@ -1756,7 +2032,8 @@ static void setup_compare_reference_frame_size(VP9_COMMON *cm)
 
     //("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
     if (vpx_realloc_frame_buffer(
-            cm->frame_to_reference, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
+            cm->frame_to_reference, cm->width * cm->scale, cm->height * cm->scale,
+            cm->subsampling_x,
             cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
             cm->use_highbitdepth,
@@ -1777,26 +2054,29 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
 
     /*******************Hyunho************************/
     if (cm->mode == DECODE_CACHE) {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width * cm->scale,
+                                     cm->height * cm->scale, cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
                 cm->use_highbitdepth,
 #endif
                                      VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer, pool->get_fb_cb,
+                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                     pool->get_fb_cb,
                                      pool->cb_priv)) {
             vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                                "Failed to allocate frame buffer");
         }
-    }
-    else {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height, cm->subsampling_x,
+    } else {
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height,
+                                     cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
                 cm->use_highbitdepth,
 #endif
                                      VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer, pool->get_fb_cb,
+                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                     pool->get_fb_cb,
                                      pool->cb_priv)) {
             vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                                "Failed to allocate frame buffer");
@@ -1834,10 +2114,10 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                 YV12_BUFFER_CONFIG *const buf = cm->frame_refs[i].buf;
 
                 /*******************Hyunho************************/
-                if (cm->mode == DECODE_CACHE){
+                if (cm->mode == DECODE_CACHE) {
                     width = buf->y_crop_width / cm->scale;
                     height = buf->y_crop_height / cm->scale;
-                } else{
+                } else {
                     width = buf->y_crop_width;
                     height = buf->y_crop_height;
                 }
@@ -1863,10 +2143,9 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     for (i = 0; i < REFS_PER_FRAME; ++i) {
         RefBuffer *const ref_frame = &cm->frame_refs[i];
         /*******************Hyunho************************/
-        if (cm->mode == DECODE_CACHE){
+        if (cm->mode == DECODE_CACHE) {
             has_valid_ref_frame = 1; //Hyunho: how to check valid frame size in DECODE_CACHE mode?
-        }
-        else{
+        } else {
             has_valid_ref_frame |=
                     (ref_frame->idx != INVALID_IDX &&
                      valid_ref_frame_size(ref_frame->buf->y_crop_width,
@@ -1892,9 +2171,10 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE){
+    if (cm->mode == DECODE_CACHE) {
         if (vpx_realloc_frame_buffer(
-                get_frame_new_buffer(cm), cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
+                get_frame_new_buffer(cm), cm->width * cm->scale, cm->height * cm->scale,
+                cm->subsampling_x,
                 cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
                 cm->use_highbitdepth,
@@ -1905,8 +2185,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
             vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                                "Failed to allocate frame buffer");
         }
-    }
-    else{
+    } else {
         if (vpx_realloc_frame_buffer(
                 get_frame_new_buffer(cm), cm->width, cm->height, cm->subsampling_x,
                 cm->subsampling_y,
@@ -2113,8 +2392,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                     }
                 }
                 */
-            }
-            else {
+            } else {
                 // Loopfilter one row.
                 if (cm->lf.filter_level && !cm->skip_loop_filter) {
                     const int lf_start = mi_row - MI_BLOCK_SIZE;
@@ -2151,8 +2429,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             winterface->execute(&pbi->lf_worker);
         }
         */
-    }
-    else{
+    } else {
         // Loopfilter remaining rows in the frame.
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
@@ -2532,7 +2809,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             }
 
             setup_frame_size_with_refs(cm, rb);
-            if (cm->mode == DECODE_CACHE){setup_tmp_frame_size(cm);} //Hyunho
+            if (cm->mode == DECODE_CACHE) { setup_tmp_frame_size(cm); } //Hyunho
 
             //TODO: understand frame scaling...
 
@@ -2548,12 +2825,12 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                     cm->use_highbitdepth);
 #else
                 /*******************Hyunho************************/
-                if (cm->mode == DECODE_CACHE){
+                //LOGD("y_crop_width: %d, cm->width: %d", ref_buf->buf->y_crop_width, cm->width);
+                if (cm->mode == DECODE_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf, ref_buf->buf->y_crop_width,
-                            ref_buf->buf->y_crop_height, cm->width, cm->height, false);
-                }
-                else{
+                            ref_buf->buf->y_crop_height, cm->width, cm->height, false, false);
+                } else {
                     vp9_setup_scale_factors_for_frame(
                             &ref_buf->sf, ref_buf->buf->y_crop_width,
                             ref_buf->buf->y_crop_height, cm->width, cm->height);
@@ -2628,12 +2905,19 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                            "Invalid header size");
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE)
-    {
+    //TODO (hyunho): /* wrong... */ (scale 역으로 설정할 수 있게 setting 하자, xs, ys, ...p)
+    if (cm->mode == DECODE_CACHE) {
         vp9_setup_scale_factors_for_sr_frame(
-                &cm->sf_upsample, 1,
-                1, cm->scale, cm->scale, true);
+                &cm->sf_upsample_intra, cm->scale,
+                cm->scale, 1, 1, true, false);
     }
+
+    if (cm->mode == DECODE_CACHE) {
+        vp9_setup_scale_factors_for_sr_frame(
+                &cm->sf_upsample_inter, cm->scale,
+                cm->scale, 1, 1, true, true);
+    }
+
 
 #if DEBUG_RESIZE
     setup_resize_frame_size(cm);
@@ -2827,20 +3111,23 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     cm->inter_count = 0;
 
     //LOGD("mode: %d, frame_type:%d, current_video_frame:%d, current_super_frame:%d", cm->mode, cm->frame_type, cm->current_video_frame, cm->current_super_frame);
-    if (cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) { //TODO (hyunho): share super-resolution frames by IPC, provided by user_priv
+    if (cm->mode == DECODE_CACHE && cm->frame_type ==
+                                    KEY_FRAME) { //TODO (hyunho): share super-resolution frames by IPC, provided by user_priv
         char frame_path[PATH_MAX];
         memset(frame_path, 0, sizeof(char) * PATH_MAX);
-        sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, cm->current_video_frame + 1, cm->current_super_frame);
+        sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->log_dir,
+                cm->decode_info->resolution * cm->decode_info->scale, cm->current_video_frame + 1,
+                cm->current_super_frame);
 
-        if (vpx_deserialize_copy(get_frame_new_buffer(cm), frame_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x,
+        if (vpx_deserialize_copy(get_frame_new_buffer(cm), frame_path, cm->width * cm->scale,
+                                 cm->height * cm->scale, cm->subsampling_x,
                                  cm->subsampling_y, cm->byte_alignment)) {
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                "Deseriazlie key frames failed.");
         }
 
         *p_data_end = data_end; //TODO (hyunho): check whether this approach is valid
-    }
-    else{
+    } else {
         if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
             // Multi-threaded tile decoder
             *p_data_end = decode_tiles_mt(pbi, data + first_partition_size, data_end);
@@ -2862,7 +3149,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-
     if (!xd->corrupted) {
         if (!cm->error_resilient_mode && !cm->frame_parallel_decoding_mode) {
             vp9_adapt_coef_probs(cm);
