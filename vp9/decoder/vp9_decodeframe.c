@@ -370,6 +370,7 @@ static void predict_and_reconstruct_intra_block(TileWorkerData *twd,
     struct macroblockd_plane *const pd = &xd->plane[plane];
     PREDICTION_MODE mode = (plane == 0) ? mi->mode : mi->uv_mode;
     uint8_t *dst;
+
     dst = &pd->dst.buf[4 * row * pd->dst.stride + 4 * col];
 
     if (mi->sb_type < BLOCK_8X8)
@@ -384,7 +385,7 @@ static void predict_and_reconstruct_intra_block(TileWorkerData *twd,
         const scan_order *sc = (plane || xd->lossless)
                                ? &vp9_default_scan_orders[tx_size]
                                : &vp9_scan_orders[tx_size][tx_type];
-        const int eob = vp9_decode_block_tokens(twd, plane, sc, col, row, tx_size,
+        const int eob = vp9_decode_block_tokens(twd, plane, sc, col, row, tx_size, //TODO (hyunho): affects whole decoder pipeline
                                                 mi->segment_id);
         if (eob > 0) {
             inverse_transform_block_intra(xd, plane, tx_type, tx_size, dst,
@@ -392,6 +393,184 @@ static void predict_and_reconstruct_intra_block(TileWorkerData *twd,
         }
     }
 }
+
+int *get_resolution(TX_SIZE tx_size)
+{
+    int resolution[2];
+    if (tx_size == TX_4X4) {
+        resolution[0] = 4;
+        resolution[1] = 4;
+    }
+    else if (tx_size == TX_8X8) {
+        resolution[0] = 8;
+        resolution[1] = 8;
+    }
+    else if (tx_size == TX_16X16) {
+        resolution[0] = 16;
+        resolution[1] = 16;
+    }
+    else if (tx_size == TX_32X32) {
+        resolution[0] = 32;
+        resolution[1] = 32;
+    }
+    return resolution;
+}
+
+static void predict_intra_block(TileWorkerData *twd, MODE_INFO *const mi, int plane, int row, int col, TX_SIZE tx_size, int scale, const struct scale_factors *sf) {
+    MACROBLOCKD *const xd = &twd->xd;
+    struct macroblockd_plane *const pd = &xd->plane[plane];
+    PREDICTION_MODE mode = (plane == 0) ? mi->mode : mi->uv_mode;
+    uint8_t *dst_residual, *dst_pred;
+
+    dst_pred = &pd->sr.buf[4 * row * pd->sr.stride * scale + 4 * col * scale];
+    vp9_predict_intra_block(xd, pd->n4_wl * scale, TX_32X32, mode, dst_pred, pd->sr.stride,
+                            dst_pred, pd->sr.stride, col * scale, row * scale, plane);
+}
+
+static void predict_and_reconstruct_and_resize_intra_block(TileWorkerData *twd,
+                                                MODE_INFO *const mi, int plane,
+                                                int row, int col,
+                                                TX_SIZE tx_size, int scale, const struct scale_factors *sf) {
+    MACROBLOCKD *const xd = &twd->xd;
+    struct macroblockd_plane *const pd = &xd->plane[plane];
+    PREDICTION_MODE mode = (plane == 0) ? mi->mode : mi->uv_mode;
+    uint8_t *dst_residual, *dst_pred;
+    PREDICTION_MODE mode_;
+
+    dst_residual = &pd->dst.buf[4 * row * pd->dst.stride + 4 * col];
+
+    if (mi->sb_type < BLOCK_8X8)
+        if (plane == 0) {
+            mode_ = mode;
+            mode = xd->mi[0]->bmi[(row << 1) + col].as_mode;
+        }
+
+
+    if (!mi->skip) {
+        const TX_TYPE tx_type =
+                (plane || xd->lossless) ? DCT_DCT : intra_mode_to_tx_type_lookup[mode];
+        const scan_order *sc = (plane || xd->lossless)
+                               ? &vp9_default_scan_orders[tx_size]
+                               : &vp9_scan_orders[tx_size][tx_type];
+        const int eob = vp9_decode_block_tokens(twd, plane, sc, col, row, tx_size, //TODO (hyunho): affects whole decoder pipeline
+                                                mi->segment_id);
+        if (eob > 0) {
+            inverse_transform_block_intra(xd, plane, tx_type, tx_size, dst_residual,
+                                          pd->dst.stride, eob);
+
+        }
+    }
+
+    //LOGD("tx_size: %d, row: %d, col: %d", tx_size, row, col);
+    mode = mode_;
+
+    if (scale == 4) {
+        if (tx_size == TX_32X32) {
+            for (int y = 0; y < 4; y++) {
+                for (int x = 0; x < 4; x++) {
+                    dst_residual = &pd->dst.buf[(4 * row + 8 * y) * pd->dst.stride + 4 * col + 8 * x];
+                    dst_pred = &pd->sr.buf[(4 * row  + 8 * y) * scale * pd->sr.stride  + (4 * col + 8 * x) * scale];
+                    vp9_predict_intra_block(xd, pd->n4_wl * scale, TX_32X32, mode, dst_pred, pd->sr.stride,
+                                            dst_pred, pd->sr.stride, col * scale + x * 8, row * scale + y * 8, plane); // 8 = 32 / 4
+
+                    if (!mi->skip) {
+                        inter_predictor(dst_residual,
+                                        xd->plane[plane].dst.stride,
+                                        dst_pred,
+                                        xd->plane[plane].sr.stride,
+                                        0, 0,
+                                        sf, 8 * scale,
+                                        8 * scale, 0,
+                                        vp9_filter_kernels[mi->interp_filter],
+                                        sf->x_step_q4,
+                                        sf->y_step_q4);
+                    }
+                }
+            }
+        }
+        else if (tx_size == TX_16X16) {
+            for (int y = 0; y < 2; y++) {
+                for (int x = 0; x < 2; x++) {
+                    dst_residual = &pd->dst.buf[(4 * row + 8 * y) * pd->dst.stride + 4 * col + 8 * x];
+                    dst_pred = &pd->sr.buf[(4 * row  + 8 * y) * scale * pd->sr.stride  + (4 * col + 8 * x) * scale];
+                    vp9_predict_intra_block(xd, pd->n4_wl * scale, TX_32X32, mode, dst_pred, pd->sr.stride,
+                                            dst_pred, pd->sr.stride, col * scale + x * 8, row * scale + y * 8, plane); // 8 = 32 / 4
+
+                    if (!mi->skip) {
+                        inter_predictor(dst_residual,
+                                        xd->plane[plane].dst.stride,
+                                        dst_pred,
+                                        xd->plane[plane].sr.stride,
+                                        0, 0,
+                                        sf, 8 * scale,
+                                        8 * scale, 0,
+                                        vp9_filter_kernels[mi->interp_filter],
+                                        sf->x_step_q4,
+                                        sf->y_step_q4);
+                    }
+                }
+            }
+        }
+        else if (tx_size == TX_8X8) {
+            dst_pred = &pd->sr.buf[4 * row * pd->sr.stride * scale + 4 * col * scale];
+            vp9_predict_intra_block(xd, pd->n4_wl * scale, TX_32X32, mode, dst_pred, pd->sr.stride,
+                                    dst_pred, pd->sr.stride, col * scale, row * scale, plane);
+
+            if (!mi->skip) {
+                inter_predictor(dst_residual,
+                                xd->plane[plane].dst.stride,
+                                dst_pred,
+                                xd->plane[plane].sr.stride,
+                                0, 0,
+                                sf, 32,
+                                32, 0,
+                                vp9_filter_kernels[mi->interp_filter],
+                                sf->x_step_q4,
+                                sf->y_step_q4);
+            }
+        }
+        else if (tx_size == TX_4X4) {
+            dst_pred = &pd->sr.buf[4 * row * pd->sr.stride * scale + 4 * col * scale];
+//            vp9_predict_intra_block(xd, pd->n4_wl * scale, TX_16X16, mode, dst_pred, pd->sr.stride,
+//                                    dst_pred, pd->sr.stride, col * scale, row * scale, plane);
+
+            if (!mi->skip) {
+                inter_predictor(dst_residual,
+                                xd->plane[plane].dst.stride,
+                                dst_pred,
+                                xd->plane[plane].sr.stride,
+                                0, 0,
+                                sf, 16,
+                                16, 0,
+                                vp9_filter_kernels[mi->interp_filter],
+                                sf->x_step_q4,
+                                sf->y_step_q4);
+            }
+        }
+    }
+    else {
+        vpx_internal_error(xd->error_info, VPX_MOBINAS_ERROR,
+                           "predict_and_reconstruct_and_resize_intra_block: not implemented");
+    }
+}
+
+
+/*static void predict_intra_block(TileWorkerData *twd,
+                                                MODE_INFO *const mi, int plane,
+                                                int row, int col,
+                                                TX_SIZE tx_size) {
+    MACROBLOCKD *const xd = &twd->xd;
+    struct macroblockd_plane *const pd = &xd->plane[plane];
+    PREDICTION_MODE mode = (plane == 0) ? mi->mode : mi->uv_mode;
+    uint8_t *dst;
+    dst = &pd->sr.buf[4 * row * pd->sr.stride + 4 * col];
+
+    if (mi->sb_type < BLOCK_8X8)
+        if (plane == 0) mode = xd->mi[0]->bmi[(row << 1) + col].as_mode;
+
+    vp9_predict_intra_block(xd, pd->n4_wl * 4, tx_size, mode, dst, pd->sr.stride,
+                            dst, pd->sr.stride, col, row, plane);
+}*/
 
 static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
                                    int plane, int row, int col,
@@ -402,11 +581,11 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
     const int eob = vp9_decode_block_tokens(twd, plane, sc, col, row, tx_size,
                                             mi->segment_id);
 
-    if (eob > 0) {
-        inverse_transform_block_inter(
-                xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
-                pd->dst.stride, eob);
-    }
+//    if (eob > 0) {
+//        inverse_transform_block_inter(
+//                xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
+//                pd->dst.stride, eob);
+//    }
     return eob;
 }
 
@@ -595,8 +774,147 @@ static void dec_build_inter_predictors(
         struct buf_2d *dst_buf, const MV *mv, RefCntBuffer *ref_frame_buf,
         int is_scaled, int ref) {
     struct macroblockd_plane *const pd = &xd->plane[plane];
+    uint8_t *const dst = dst_buf->buf + dst_buf->stride * y + x;
+    MV32 scaled_mv;
+    int xs, ys, x0, y0, x0_16, y0_16, frame_width, frame_height, buf_stride,
+            subpel_x, subpel_y;
+    uint8_t *ref_frame, *buf_ptr;
 
-    uint8_t *const dst = dst_buf->buf + dst_buf->stride * 4 * y + 4 * x; //TODO (hyunho): put mode, scale variable in macroblock, and set only in DECODE_CACHE mode + change to scale
+    // Get reference frame pointer, width and height.
+    if (plane == 0) {
+        frame_width = ref_frame_buf->buf.y_crop_width;
+        frame_height = ref_frame_buf->buf.y_crop_height;
+        ref_frame = ref_frame_buf->buf.y_buffer;
+    } else {
+        frame_width = ref_frame_buf->buf.uv_crop_width;
+        frame_height = ref_frame_buf->buf.uv_crop_height;
+        ref_frame =
+                plane == 1 ? ref_frame_buf->buf.u_buffer : ref_frame_buf->buf.v_buffer;
+    }
+
+    if (is_scaled) {
+        const MV mv_q4 = clamp_mv_to_umv_border_sb(
+                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
+        // Co-ordinate of containing block to pixel precision.
+        int x_start = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x));
+        int y_start = (-xd->mb_to_top_edge >> (3 + pd->subsampling_y));
+#if 0  // CONFIG_BETTER_HW_COMPATIBILITY
+        assert(xd->mi[0]->sb_type != BLOCK_4X8 &&
+           xd->mi[0]->sb_type != BLOCK_8X4);
+    assert(mv_q4.row == mv->row * (1 << (1 - pd->subsampling_y)) &&
+           mv_q4.col == mv->col * (1 << (1 - pd->subsampling_x)));
+#endif
+        // Co-ordinate of the block to 1/16th pixel precision.
+        x0_16 = (x_start + x) << SUBPEL_BITS;
+        y0_16 = (y_start + y) << SUBPEL_BITS;
+
+        // Co-ordinate of current block in reference frame
+        // to 1/16th pixel precision.
+        x0_16 = sf->scale_value_x(x0_16, sf);
+        y0_16 = sf->scale_value_y(y0_16, sf);
+
+        // Map the top left corner of the block into the reference frame.
+        x0 = sf->scale_value_x(x_start + x, sf);
+        y0 = sf->scale_value_y(y_start + y, sf);
+
+        // Scale the MV and incorporate the sub-pixel offset of the block
+        // in the reference frame.
+        scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
+        xs = sf->x_step_q4;
+        ys = sf->y_step_q4;
+    } else {
+        // Co-ordinate of containing block to pixel precision.
+        x0 = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x)) + x;
+        y0 = (-xd->mb_to_top_edge >> (3 + pd->subsampling_y)) + y;
+
+        // Co-ordinate of the block to 1/16th pixel precision.
+        x0_16 = x0 << SUBPEL_BITS;
+        y0_16 = y0 << SUBPEL_BITS;
+
+        scaled_mv.row = mv->row * (1 << (1 - pd->subsampling_y));
+        scaled_mv.col = mv->col * (1 << (1 - pd->subsampling_x));
+        xs = ys = 16;
+    }
+    subpel_x = scaled_mv.col & SUBPEL_MASK;
+    subpel_y = scaled_mv.row & SUBPEL_MASK;
+
+    // Calculate the top left corner of the best matching block in the
+    // reference frame.
+    x0 += scaled_mv.col >> SUBPEL_BITS;
+    y0 += scaled_mv.row >> SUBPEL_BITS;
+    x0_16 += scaled_mv.col;
+    y0_16 += scaled_mv.row;
+
+    // Get reference block pointer.
+    buf_ptr = ref_frame + y0 * pre_buf->stride + x0;
+    buf_stride = pre_buf->stride;
+
+    // Do border extension if there is motion or the
+    // width/height is not a multiple of 8 pixels.
+    if (is_scaled || scaled_mv.col || scaled_mv.row || (frame_width & 0x7) ||
+        (frame_height & 0x7)) {
+        int y1 = ((y0_16 + (h - 1) * ys) >> SUBPEL_BITS) + 1;
+
+        // Get reference block bottom right horizontal coordinate.
+        int x1 = ((x0_16 + (w - 1) * xs) >> SUBPEL_BITS) + 1;
+        int x_pad = 0, y_pad = 0;
+
+        if (subpel_x || (sf->x_step_q4 != SUBPEL_SHIFTS)) {
+            x0 -= VP9_INTERP_EXTEND - 1;
+            x1 += VP9_INTERP_EXTEND;
+            x_pad = 1;
+        }
+
+        if (subpel_y || (sf->y_step_q4 != SUBPEL_SHIFTS)) {
+            y0 -= VP9_INTERP_EXTEND - 1;
+            y1 += VP9_INTERP_EXTEND;
+            y_pad = 1;
+        }
+
+        // Skip border extension if block is inside the frame.
+        if (x0 < 0 || x0 > frame_width - 1 || x1 < 0 || x1 > frame_width - 1 ||
+            y0 < 0 || y0 > frame_height - 1 || y1 < 0 || y1 > frame_height - 1) {
+            // Extend the border.
+            const uint8_t *const buf_ptr1 = ref_frame + y0 * buf_stride + x0;
+            const int b_w = x1 - x0 + 1;
+            const int b_h = y1 - y0 + 1;
+            const int border_offset = y_pad * 3 * b_w + x_pad * 3;
+
+            extend_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
+                               frame_height, border_offset, dst, dst_buf->stride,
+                               subpel_x, subpel_y, kernel, sf,
+#if CONFIG_VP9_HIGHBITDEPTH
+                    xd,
+#endif
+                               w, h, ref, xs, ys);
+            return;
+        }
+    }
+#if CONFIG_VP9_HIGHBITDEPTH
+    if (xd->cur_buf->flags & YV12_FLAG_HIGHBITDEPTH) {
+    highbd_inter_predictor(CONVERT_TO_SHORTPTR(buf_ptr), buf_stride,
+                           CONVERT_TO_SHORTPTR(dst), dst_buf->stride, subpel_x,
+                           subpel_y, sf, w, h, ref, kernel, xs, ys, xd->bd);
+  } else {
+    inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x,
+                    subpel_y, sf, w, h, ref, kernel, xs, ys);
+  }
+#else
+    inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
+                    sf, w, h, ref, kernel, xs, ys);
+#endif  // CONFIG_VP9_HIGHBITDEPTH
+}
+
+static void dec_build_resize_inter_predictors(
+        MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
+        int mi_x, int mi_y, const InterpKernel *kernel,
+        const struct scale_factors *sf, struct buf_2d *pre_buf,
+        struct buf_2d *dst_buf, const MV *mv, RefCntBuffer *ref_frame_buf,
+        int is_scaled, int ref) {
+    struct macroblockd_plane *const pd = &xd->plane[plane];
+
+    int scale = (sf->x_scale_fp >> REF_SCALE_SHIFT);
+    uint8_t *const dst = dst_buf->buf + dst_buf->stride * scale * y + scale * x; //TODO (hyunho): put mode, scale variable in macroblock, and set only in DECODE_CACHE mode + change to scale
     //uint8_t *const dst = dst_buf->buf + dst_buf->stride * y + x;
     MV32 scaled_mv;
     int xs, ys, x0, y0, x0_16, y0_16, frame_width, frame_height, buf_stride,
@@ -617,7 +935,7 @@ static void dec_build_inter_predictors(
 
     if (is_scaled) {
         MV mv_q4 = clamp_mv_to_umv_border_sb(
-              xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
+                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
 //        const MV mv_q4 = clamp_mv_to_umv_border_sb(
 //                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
         // Co-ordinate of containing block to pixel precision.
@@ -679,9 +997,8 @@ static void dec_build_inter_predictors(
     buf_ptr = ref_frame + y0 * pre_buf->stride + x0;
     buf_stride = pre_buf->stride;
 
-    //TODO (hyunho): put mode, scale variable in macroblock, and set only in DECODE_CACHE mode + change to scale
-    w = w * 4;
-    h = h * 4;
+    w = w * scale;
+    h = h * scale;
 
     // Do border extension if there is motion or the
     // width/height is not a multiple of 8 pixels.
@@ -789,7 +1106,7 @@ static void dec_build_inter_predictors(
         inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
                         sf, w, h, ref, kernel, xs, ys);
     }
-        /*******************Hyunho************************/
+    /*******************Hyunho************************/
 #endif  // CONFIG_VP9_HIGHBITDEPTH
 
 }
@@ -850,10 +1167,18 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 for (y = 0; y < num_4x4_h; ++y) {
                     for (x = 0; x < num_4x4_w; ++x) {
                         const MV mv = average_split_mvs(pd, mi, ref, i++);
-                        dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
-                                                   4, 4, mi_x, mi_y, kernel, sf, pre_buf,
-                                                   dst_buf, &mv, ref_frame_buf, is_scaled,
-                                                   ref);
+                        if (pbi->common.mode == DECODE_CACHE) {
+                            dec_build_resize_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
+                                                       4, 4, mi_x, mi_y, kernel, sf, pre_buf,
+                                                       dst_buf, &mv, ref_frame_buf, is_scaled,
+                                                       ref);
+                        }
+                        else {
+                            dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
+                                                       4, 4, mi_x, mi_y, kernel, sf, pre_buf,
+                                                       dst_buf, &mv, ref_frame_buf, is_scaled,
+                                                       ref);
+                        }
                     }
                 }
             }
@@ -883,10 +1208,16 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 //    int is_scaled, int ref)
                 //  MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
                 //LOGD("pre_buf: %p, dst_buf: %p, x_step_q4: %d, predict[0][0][0]: %p", pre_buf, dst_buf, sf->x_step_q4, sf->predict[0][0][0]);
-
-                dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
-                                           n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
-                                           dst_buf, &mv, ref_frame_buf, is_scaled, ref);
+                if (pbi->common.mode == DECODE_CACHE) {
+                    dec_build_resize_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
+                                                      n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
+                                                      dst_buf, &mv, ref_frame_buf, is_scaled, ref);
+                }
+                else {
+                    dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
+                                               n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
+                                               dst_buf, &mv, ref_frame_buf, is_scaled, ref);
+                }
             }
         }
     }
@@ -949,7 +1280,7 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
 }
 
 //TODO (hyunho): intra-prediction requires docoded block of inter-prediction (or just apply resize)
-//TODO (hyunho): save intra-prediction and residual in seperate buffer & apply loopfiltering
+//TODO (hyunho): save intra-prediction and residual in seperate buffer & apply loopfiltering (not sure)
 //TODO (hyunho): save a decoded frame for later intra-prediction
 
 static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
@@ -986,7 +1317,15 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
     //if (mi_col == 0) LOGD("[%d %d] mi_row: %d, num_4x4_w: %d, num_4x4_h: %d, is_inter_block(mi): %d", pbi->common.current_video_frame, pbi->common.current_super_frame, mi_row, xd->plane[0].n4_w, xd->plane[0].n4_h, is_inter_block(mi));
 
     if (!is_inter_block(mi)) {
+        //LOGD("%d %d mi_row: %d, mi_col: %d", cm->current_video_frame, cm->current_super_frame, mi_row, mi_col);
+
         //LOGD("[%d %d] mi_col: %d mi_row: %d, num_4x4_w: %d, num_4x4_h: %d, is_inter_block(mi): %d", pbi->common.current_video_frame, pbi->common.current_super_frame, mi_col, mi_row, xd->plane[0].n4_w, xd->plane[0].n4_h, is_inter_block(mi));
+        if (cm->mode == DECODE_CACHE) {
+            vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
+                                mi_row,
+                                mi_col,
+                                &cm->sf_upsample_inter);
+        }
 
         cm->intra_count++; //hyunho: debug
         int plane;
@@ -1011,11 +1350,16 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 
             for (row = 0; row < max_blocks_high; row += step)
                 for (col = 0; col < max_blocks_wide; col += step)
-                    predict_and_reconstruct_intra_block(twd, mi, plane, row, col,
-                                                        tx_size);
+//                    predict_and_reconstruct_intra_block(twd, mi, plane, row, col, tx_size);
+                    if (cm->mode == DECODE_CACHE) predict_and_reconstruct_and_resize_intra_block(twd, mi, plane, row, col, tx_size, cm->scale, &cm->sf_upsample_inter);
+                    else predict_and_reconstruct_intra_block(twd, mi, plane, row, col, tx_size);
+
         }
 
+
+
         /*******************Hyunho************************/
+        /*
         if (cm->mode == DECODE_CACHE) {
             vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
                                 mi_row,
@@ -1124,6 +1468,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                 }
             }
         }
+        */
         /*******************Hyunho************************/
 
 
@@ -1248,8 +1593,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                 mi_col,
                                 &cm->sf_upsample_inter);
         }
-        //LOGD("cm mi_row: %d, cm mi_col: %d", cm->mi_rows, cm->mi_cols);
-        //LOGD("x_scale_fp: %d, y_scale_fp: %d", cm->sf_upsample_inter.x_scale_fp >> (REF_SCALE_SHIFT - 4), cm->sf_upsample_inter.y_scale_fp >> (REF_SCALE_SHIFT - 4));
         /*******************Hyunho************************/
 
         // Prediction
@@ -2909,7 +3252,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
     if (cm->mode == DECODE_CACHE) {
         vp9_setup_scale_factors_for_sr_frame(
                 &cm->sf_upsample_intra, cm->scale,
-                cm->scale, 1, 1, true, false);
+                cm->scale, 1, 1, true, true); //TODO (hyunho): need to recover
     }
 
     if (cm->mode == DECODE_CACHE) {
@@ -3110,9 +3453,10 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     cm->intra_count = 0;
     cm->inter_count = 0;
 
-    //LOGD("mode: %d, frame_type:%d, current_video_frame:%d, current_super_frame:%d", cm->mode, cm->frame_type, cm->current_video_frame, cm->current_super_frame);
+//    //LOGD("mode: %d, frame_type:%d, current_video_frame:%d, current_super_frame:%d", cm->mode, cm->frame_type, cm->current_video_frame, cm->current_super_frame);
     if (cm->mode == DECODE_CACHE && cm->frame_type ==
                                     KEY_FRAME) { //TODO (hyunho): share super-resolution frames by IPC, provided by user_priv
+//    if ((cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) || (cm->current_video_frame == 1)){
         char frame_path[PATH_MAX];
         memset(frame_path, 0, sizeof(char) * PATH_MAX);
         sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->log_dir,

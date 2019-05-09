@@ -604,7 +604,9 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         vpx_calc_psnr(get_frame_new_buffer(&ctx->pbi->common), ctx->pbi->common.reference_frame, &psnr_original);
         vpx_calc_psnr(ctx->pbi->common.compare_frame, ctx->pbi->common.reference_frame, &psnr_compare);
 
-        LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[0], psnr_compare.psnr[0]);
+        LOGI("Y-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[1], psnr_compare.psnr[1]);
+//        LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[2], psnr_compare.psnr[2]);
+//        LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[3], psnr_compare.psnr[3]);
 
         memset(file_path, 0, PATH_MAX);
         sprintf(file_path, "%s/log", decode_info->log_dir);
