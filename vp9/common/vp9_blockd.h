@@ -119,7 +119,8 @@ struct macroblockd_plane {
   int subsampling_y;
   struct buf_2d dst;
   /*******************Hyunho************************/
-  struct buf_2d sr;
+  struct buf_2d sr; //used for generating super-resolutioned cached frame
+  struct buf_2d residual; //used for resizing residual frame
   struct buf_2d resize; //DEBUG_RESIZE
   struct buf_2d input; //DEBUG_RESIZE
   /*******************Hyunho************************/
@@ -144,7 +145,9 @@ typedef struct RefBuffer {
   // is used in vp9_onyxd_if.c
   int idx;
   YV12_BUFFER_CONFIG *buf;
+  YV12_BUFFER_CONFIG *buf_lr; //hyunho: used for intra-prediction blocks
   struct scale_factors sf;
+  struct scale_factors sf_lr;
 } RefBuffer;
 
 typedef struct macroblockd {

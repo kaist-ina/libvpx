@@ -422,6 +422,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                     {
                         LOGE("save a serialized frame fail");
                     }
+
+                    if (decode_info->upsample == 1) return VPX_CODEC_CORRUPT_FRAME;
+                    else sprintf(file_path, "%s/%dp_%d_%d_lr", decode_info->log_dir, decode_info->resolution, current_video_frame, ctx->pbi->common.current_super_frame);
+
+                    if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
+                    {
+                        LOGE("save a serialized frame fail");
+                    }
                 }
                 else {
                     memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -442,6 +450,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                     else sprintf(file_path, "%s/%dp_%d_%d_resize.y", decode_info->log_dir, decode_info->resolution * decode_info->scale, current_video_frame, ctx->pbi->common.current_super_frame);
 
                     if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
+                    {
+                        LOGE("save a decoded frame fail");
+                    }
+
+                    if (decode_info->upsample == 1) return VPX_CODEC_CORRUPT_FRAME;
+                    else sprintf(file_path, "%s/%dp_%d_%d_lr.y", decode_info->log_dir, decode_info->resolution, current_video_frame, ctx->pbi->common.current_super_frame);
+
+                    if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
                     {
                         LOGE("save a decoded frame fail");
                     }
@@ -494,6 +510,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                     {
                         LOGE("save a serialized frame fail");
                     };
+
+                    if (decode_info->upsample == 1) return VPX_CODEC_CORRUPT_FRAME;
+                    else sprintf(file_path, "%s/%dp_%d_%d_lr", decode_info->log_dir, decode_info->resolution, ctx->pbi->common.current_video_frame, ctx->pbi->common.current_super_frame);
+
+                    if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
+                    {
+                        LOGE("save a serialized frame fail");
+                    }
                 }
                 else {
                     memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -517,6 +541,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                     {
                         LOGE("save a decoded frame fail");
                     };
+
+                    if (decode_info->upsample == 1) return VPX_CODEC_CORRUPT_FRAME;
+                    else sprintf(file_path, "%s/%dp_%d_%d_lr.y", decode_info->log_dir, decode_info->resolution, ctx->pbi->common.current_video_frame, ctx->pbi->common.current_super_frame);
+
+                    if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
+                    {
+                        LOGE("save a decoded frame fail");
+                    }
                 }
                 else {
                     memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -546,6 +578,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             {
                 LOGE("save a serialized frame fail");
             };
+
+            if (decode_info->upsample == 1) return VPX_CODEC_CORRUPT_FRAME;
+            else sprintf(file_path, "%s/%dp_%d_lr.frame", decode_info->log_dir, decode_info->resolution, ctx->pbi->common.current_video_frame);
+
+            if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
+            {
+                LOGE("save a serialized frame fail");
+            };
         }
         else {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -569,6 +609,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             {
                 LOGE("save a decoded frame fail");
             };
+
+            if (decode_info->upsample == 1) return VPX_CODEC_CORRUPT_FRAME;
+            else sprintf(file_path, "%s/%dp_%d_lr.frame.y", decode_info->log_dir, decode_info->resolution, ctx->pbi->common.current_video_frame);
+
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
+            {
+                LOGE("save a decoded frame fail");
+            };
         }
         else {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -583,7 +631,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     }
     if (ctx->pbi->common.decode_info->save_quality)
     {
-        memset(file_path, 0, sizeof(char) * PATH_MAX);
+/*        memset(file_path, 0, sizeof(char) * PATH_MAX);
         sprintf(file_path, "%s/%dp_%d_upsample.frame", decode_info->log_dir, decode_info->resolution * decode_info->scale, ctx->pbi->common.current_video_frame);
         if(vpx_deserialize_load(ctx->pbi->common.compare_frame, file_path,ctx->pbi->common.width * ctx->pbi->common.scale, ctx->pbi->common.height * ctx->pbi->common.scale,
                                 ctx->pbi->common.subsampling_x, ctx->pbi->common.subsampling_y, ctx->pbi->common.byte_alignment))
@@ -604,7 +652,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         vpx_calc_psnr(get_frame_new_buffer(&ctx->pbi->common), ctx->pbi->common.reference_frame, &psnr_original);
         vpx_calc_psnr(ctx->pbi->common.compare_frame, ctx->pbi->common.reference_frame, &psnr_compare);
 
-        LOGI("Y-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[1], psnr_compare.psnr[1]);
+//        LOGI("Y-channel (Cache): %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[1], psnr_compare.psnr[1]);
 //        LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[2], psnr_compare.psnr[2]);
 //        LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[3], psnr_compare.psnr[3]);
 
@@ -617,7 +665,24 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         }
         else {
             LOGE("log file open error");
+        }*/
+
+        //TODO (hyunho): validate lr pipeline
+
+        memset(file_path, 0, sizeof(char) * PATH_MAX);
+        sprintf(file_path, "%s/%dp_%d_original.frame", decode_info->log_dir, decode_info->resolution, ctx->pbi->common.current_video_frame);
+        if(vpx_deserialize_load(ctx->pbi->common.reference_frame, file_path,ctx->pbi->common.width * ctx->pbi->common.scale, ctx->pbi->common.height * ctx->pbi->common.scale,
+                                ctx->pbi->common.subsampling_x, ctx->pbi->common.subsampling_y, ctx->pbi->common.byte_alignment))
+        {
+            LOGE("deserailize fail");
+            goto QUALITY_EXIT;
         }
+
+        vpx_calc_psnr(get_frame_new_buffer_lr(&ctx->pbi->common), ctx->pbi->common.reference_frame, &psnr_original);
+
+        LOGI("YCbCr (LR): %d: original %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[0]);
+        //LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[2], psnr_compare.psnr[2]);
+        //LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[3], psnr_compare.psnr[3]);
     }
 
     QUALITY_EXIT:

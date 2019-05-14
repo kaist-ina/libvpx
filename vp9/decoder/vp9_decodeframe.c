@@ -693,7 +693,6 @@ static void extend_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
   }
 }
 #else
-
 static void extend_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
                                int x0, int y0, int b_w, int b_h,
                                int frame_width, int frame_height,
@@ -702,7 +701,29 @@ static void extend_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
                                const InterpKernel *kernel,
                                const struct scale_factors *sf, int w, int h,
                                int ref, int xs, int ys) {
-    //DECLARE_ALIGNED(16, uint8_t, mc_buf[80 * 2 * 80 * 2]);
+    DECLARE_ALIGNED(16, uint8_t, mc_buf[80 * 2 * 80 * 2]);
+    const uint8_t *buf_ptr;
+
+    build_mc_border(buf_ptr1, pre_buf_stride, mc_buf, b_w, x0, y0, b_w, b_h,
+                    frame_width, frame_height);
+    buf_ptr = mc_buf + border_offset;
+
+    inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y, sf, w,
+                    h, ref, kernel, xs, ys);
+}
+
+#endif  // CONFIG_VP9_HIGHBITDEPTH
+
+//TODO (hyunho): support CONFIG_VP9_HIGHBITDEPTH
+static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
+                               int x0, int y0, int b_w, int b_h,
+                               int frame_width, int frame_height,
+                               int border_offset, uint8_t *const dst,
+                               int dst_buf_stride, int subpel_x, int subpel_y,
+                               const InterpKernel *kernel,
+                               const struct scale_factors *sf, int w, int h,
+                               int ref, int xs, int ys) {
+    //DECLARE_ALIGNED(16, uint8_t, mc_buf[80 * 2 * 80 * 2]); //hyunho: insufficient buffer size for cache mode
     DECLARE_ALIGNED(16, uint8_t, mc_buf[160 * 2 * 160 *
                                         2]); //TODO (hyunho): check whether extending this array size can occur abnormal behavior
     const uint8_t *buf_ptr;
@@ -712,9 +733,6 @@ static void extend_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
                     frame_width, frame_height);
 
     buf_ptr = mc_buf + border_offset;
-
-//   inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y, sf, w,
-//                    h, ref, kernel, xs, ys);
 
     /*******************Hyunho************************/
     int proc_size = 64, height, width;
@@ -763,9 +781,6 @@ static void extend_and_predict(const uint8_t *buf_ptr1, int pre_buf_stride,
                         sf, w, h, ref, kernel, xs, ys);
     }
 }
-
-
-#endif  // CONFIG_VP9_HIGHBITDEPTH
 
 static void dec_build_inter_predictors(
         MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
@@ -880,6 +895,8 @@ static void dec_build_inter_predictors(
             const int b_h = y1 - y0 + 1;
             const int border_offset = y_pad * 3 * b_w + x_pad * 3;
 
+            //LOGD("buf_ptr1: %p, dst: %p", buf_ptr, dst);
+
             extend_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
                                frame_height, border_offset, dst, dst_buf->stride,
                                subpel_x, subpel_y, kernel, sf,
@@ -905,33 +922,53 @@ static void dec_build_inter_predictors(
 #endif  // CONFIG_VP9_HIGHBITDEPTH
 }
 
-static void dec_build_resize_inter_predictors(
+static void dec_build_sr_inter_predictors(
         MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
         int mi_x, int mi_y, const InterpKernel *kernel,
         const struct scale_factors *sf, struct buf_2d *pre_buf,
         struct buf_2d *dst_buf, const MV *mv, RefCntBuffer *ref_frame_buf,
-        int is_scaled, int ref) {
+        int is_scaled, int ref, int is_sr) {
     struct macroblockd_plane *const pd = &xd->plane[plane];
 
     int scale = (sf->x_scale_fp >> REF_SCALE_SHIFT);
-    uint8_t *const dst = dst_buf->buf + dst_buf->stride * scale * y + scale * x; //TODO (hyunho): put mode, scale variable in macroblock, and set only in DECODE_CACHE mode + change to scale
+
+    /*******************Hyunho************************/
+    uint8_t *const dst = is_sr ? dst_buf->buf + dst_buf->stride * scale * y + scale * x : dst_buf->buf + dst_buf->stride * y + x;
+    //dst = dst_buf->buf + dst_buf->stride * scale * y + scale * x;
     //uint8_t *const dst = dst_buf->buf + dst_buf->stride * y + x;
+    /*******************Hyunho************************/
     MV32 scaled_mv;
     int xs, ys, x0, y0, x0_16, y0_16, frame_width, frame_height, buf_stride,
             subpel_x, subpel_y;
     uint8_t *ref_frame, *buf_ptr;
 
     // Get reference frame pointer, width and height.
-    if (plane == 0) {
-        frame_width = ref_frame_buf->buf.y_crop_width;
-        frame_height = ref_frame_buf->buf.y_crop_height;
-        ref_frame = ref_frame_buf->buf.y_buffer;
-    } else {
-        frame_width = ref_frame_buf->buf.uv_crop_width;
-        frame_height = ref_frame_buf->buf.uv_crop_height;
-        ref_frame =
-                plane == 1 ? ref_frame_buf->buf.u_buffer : ref_frame_buf->buf.v_buffer;
+    /*******************Hyunho************************/
+    if (is_sr) {
+        if (plane == 0) {
+            frame_width = ref_frame_buf->buf.y_crop_width;
+            frame_height = ref_frame_buf->buf.y_crop_height;
+            ref_frame = ref_frame_buf->buf.y_buffer;
+        } else {
+            frame_width = ref_frame_buf->buf.uv_crop_width;
+            frame_height = ref_frame_buf->buf.uv_crop_height;
+            ref_frame =
+                    plane == 1 ? ref_frame_buf->buf.u_buffer : ref_frame_buf->buf.v_buffer;
+        }
     }
+    else {
+        if (plane == 0) {
+            frame_width = ref_frame_buf->buf_lr.y_crop_width;
+            frame_height = ref_frame_buf->buf_lr.y_crop_height;
+            ref_frame = ref_frame_buf->buf_lr.y_buffer;
+        } else {
+            frame_width = ref_frame_buf->buf_lr.uv_crop_width;
+            frame_height = ref_frame_buf->buf_lr.uv_crop_height;
+            ref_frame =
+                    plane == 1 ? ref_frame_buf->buf_lr.u_buffer : ref_frame_buf->buf_lr.v_buffer;
+        }
+    }
+    /*******************Hyunho************************/
 
     if (is_scaled) {
         MV mv_q4 = clamp_mv_to_umv_border_sb(
@@ -963,11 +1000,11 @@ static void dec_build_resize_inter_predictors(
         // Scale the MV and incorporate the sub-pixel offset of the block
         // in the reference frame.
 
-        // if (mv_q4.row < 16 || mv_q4.row > -16) mv_q4.row = 0; //TODO (hyunho):
+        // if (mv_q4.row < 16 || mv_q4.row > -16) mv_q4.row = 0;
 
         scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
         xs = sf->x_step_q4;
-        ys = sf->y_step_q4; //TODO (hyunho): set this to 16 because we only need to calculate resized coordinates
+        ys = sf->y_step_q4;
 
     } else {
         // Co-ordinate of containing block to pixel precision.
@@ -987,8 +1024,7 @@ static void dec_build_resize_inter_predictors(
 
     // Calculate the top left corner of the best matching block in the
     // reference frame.
-    x0 += scaled_mv.col
-            >> SUBPEL_BITS; //Hyunho: 1/16pixel precision으로 계산한 coordinate 값을 다시 1 pixel precision으로 변환하는 부분
+    x0 += scaled_mv.col >> SUBPEL_BITS; //Hyunho: 1/16pixel precision으로 계산한 coordinate 값을 다시 1 pixel precision으로 변환하는 부분
     y0 += scaled_mv.row >> SUBPEL_BITS;
     x0_16 += scaled_mv.col;
     y0_16 += scaled_mv.row;
@@ -997,8 +1033,12 @@ static void dec_build_resize_inter_predictors(
     buf_ptr = ref_frame + y0 * pre_buf->stride + x0;
     buf_stride = pre_buf->stride;
 
-    w = w * scale;
-    h = h * scale;
+    /*******************Hyunho************************/
+    if (is_sr) {
+        w = w * scale;
+        h = h * scale;
+    }
+    /*******************Hyunho************************/
 
     // Do border extension if there is motion or the
     // width/height is not a multiple of 8 pixels.
@@ -1031,14 +1071,26 @@ static void dec_build_resize_inter_predictors(
             const int b_h = y1 - y0 + 1;
             const int border_offset = y_pad * 3 * b_w + x_pad * 3;
 
-            //if (mi_x == 0 && mi_y == 0) LOGD("extend");
-            extend_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
-                               frame_height, border_offset, dst, dst_buf->stride,
-                               subpel_x, subpel_y, kernel, sf,
+            /*******************Hyunho************************/
+            if (is_sr) {
+                extend_and_resize_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
+                                              frame_height, border_offset, dst, dst_buf->stride,
+                                              subpel_x, subpel_y, kernel, sf,
 #if CONFIG_VP9_HIGHBITDEPTH
-                    xd,
+                        xd,
 #endif
-                               w, h, ref, xs, ys);
+                                              w, h, ref, xs, ys);
+            }
+            else {
+                extend_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
+                                              frame_height, border_offset, dst, dst_buf->stride,
+                                              subpel_x, subpel_y, kernel, sf,
+#if CONFIG_VP9_HIGHBITDEPTH
+                        xd,
+#endif
+                                              w, h, ref, xs, ys);
+            }
+            /*******************Hyunho************************/
 
             return;
         }
@@ -1054,62 +1106,66 @@ static void dec_build_resize_inter_predictors(
     }
 #else
 
-//    inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
-//                    sf, w, h, ref, kernel, xs, ys); //Hyunho: xs, ys, subpel_x, subpel_y
-
     /*******************Hyunho************************/
-    //if (mi_x == 0 && mi_y == 0) LOGD("no extend | w: %d,  h: %d", w, h);
-    int proc_size = 64, height, width;
-    if (w > proc_size && h > proc_size) {
-        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+    if (is_sr) {
+        int proc_size = 64, height, width;
+        if (w > proc_size && h > proc_size) {
+            for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+                for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+                    //calculate height, width
+                    height = (h_offset + proc_size <= h ? proc_size :
+                              (h - h_offset));
+                    width = (w_offset + proc_size <= w ? proc_size :
+                             (w - w_offset));
+
+                    //if (mi_x == 0 && mi_y == 0) LOGD("no extend | w_offset: %d,  h_offset: %d, width: %d, height: %d, buf_stride: %d, dst_buf->stride: %d", w_offset, h_offset, width, height, buf_stride, dst_buf->stride);
+                    inter_predictor(&buf_ptr[h_offset * buf_stride + w_offset], buf_stride,
+                                    &dst[h_offset * dst_buf->stride + w_offset],
+                                    dst_buf->stride, subpel_x, subpel_y,
+                                    sf, width, height, ref, kernel, xs, ys);
+                }
+
+            }
+        } else if (w > proc_size) {
+            for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+                //calculate height, width
+                height = h;
+                width = (w_offset + proc_size <= w ? proc_size :
+                         (w - w_offset));
+
+                inter_predictor(&buf_ptr[w_offset], buf_stride, &dst[w_offset], dst_buf->stride,
+                                subpel_x, subpel_y,
+                                sf, width, height, ref, kernel, xs, ys);
+            }
+
+        } else if (h > proc_size) {
             for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
                 //calculate height, width
                 height = (h_offset + proc_size <= h ? proc_size :
                           (h - h_offset));
-                width = (w_offset + proc_size <= w ? proc_size :
-                         (w - w_offset));
+                width = w;
 
-                //if (mi_x == 0 && mi_y == 0) LOGD("no extend | w_offset: %d,  h_offset: %d, width: %d, height: %d, buf_stride: %d, dst_buf->stride: %d", w_offset, h_offset, width, height, buf_stride, dst_buf->stride);
-                inter_predictor(&buf_ptr[h_offset * buf_stride + w_offset], buf_stride,
-                                &dst[h_offset * dst_buf->stride + w_offset],
-                                dst_buf->stride, subpel_x, subpel_y,
+                inter_predictor(&buf_ptr[h_offset * buf_stride], buf_stride,
+                                &dst[h_offset * dst_buf->stride], dst_buf->stride,
+                                subpel_x, subpel_y,
                                 sf, width, height, ref, kernel, xs, ys);
             }
 
+        } else {
+            inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
+                            sf, w, h, ref, kernel, xs, ys);
         }
-    } else if (w > proc_size) {
-        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
-            //calculate height, width
-            height = h;
-            width = (w_offset + proc_size <= w ? proc_size :
-                     (w - w_offset));
-
-            inter_predictor(&buf_ptr[w_offset], buf_stride, &dst[w_offset], dst_buf->stride,
-                            subpel_x, subpel_y,
-                            sf, width, height, ref, kernel, xs, ys);
-        }
-
-    } else if (h > proc_size) {
-        for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
-            //calculate height, width
-            height = (h_offset + proc_size <= h ? proc_size :
-                      (h - h_offset));
-            width = w;
-
-            inter_predictor(&buf_ptr[h_offset * buf_stride], buf_stride,
-                            &dst[h_offset * dst_buf->stride], dst_buf->stride,
-                            subpel_x, subpel_y,
-                            sf, width, height, ref, kernel, xs, ys);
-        }
-
-    } else {
-        inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
-                        sf, w, h, ref, kernel, xs, ys);
     }
+    else {
+        inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
+                        sf, w, h, ref, kernel, xs, ys); //Hyunho: xs, ys, subpel_x, subpel_y
+    }
+
     /*******************Hyunho************************/
 #endif  // CONFIG_VP9_HIGHBITDEPTH
-
 }
+
+//TODO (hyunho): reset dec_build_inter_predictors_sb and make a seperate function for DECODE_CACHE pipeline
 
 static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                                           MACROBLOCKD *xd, int mi_row,
@@ -1127,10 +1183,101 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
     for (ref = 0; ref < 1 + is_compound; ++ref) {
         const MV_REFERENCE_FRAME frame = mi->ref_frame[ref];
         RefBuffer *ref_buf = &pbi->common.frame_refs[frame - LAST_FRAME];
-        const struct scale_factors *const sf = &ref_buf->sf;
+        const struct scale_factors *const sf = &ref_buf->sf_lr;
         const int idx = ref_buf->idx;
         BufferPool *const pool = pbi->common.buffer_pool;
         RefCntBuffer *const ref_frame_buf = &pool->frame_bufs[idx];
+
+        if (!vp9_is_valid_scale(sf))
+            vpx_internal_error(xd->error_info, VPX_CODEC_UNSUP_BITSTREAM,
+                               "Reference frame has invalid dimensions");
+
+        is_scaled = vp9_is_scaled(sf);
+        vp9_setup_pre_planes(xd, ref, ref_buf->buf_lr, mi_row, mi_col,
+                             is_scaled ? sf : NULL);
+        xd->block_refs[ref] = ref_buf;
+
+        if (sb_type < BLOCK_8X8) {
+            for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+                struct macroblockd_plane *const pd = &xd->plane[plane];
+                struct buf_2d *const dst_buf = &pd->dst;
+                const int num_4x4_w = pd->n4_w;
+                const int num_4x4_h = pd->n4_h;
+                const int n4w_x4 = 4 * num_4x4_w;
+                const int n4h_x4 = 4 * num_4x4_h;
+                struct buf_2d *const pre_buf = &pd->pre[ref];
+                int i = 0, x, y;
+                for (y = 0; y < num_4x4_h; ++y) {
+                    for (x = 0; x < num_4x4_w; ++x) {
+                        const MV mv = average_split_mvs(pd, mi, ref, i++);
+                        dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
+                                                   4, 4, mi_x, mi_y, kernel, sf, pre_buf,
+                                                   dst_buf, &mv, ref_frame_buf, is_scaled,
+                                                   ref);
+                    }
+                }
+            }
+        } else {
+            const MV mv = mi->mv[ref].as_mv;
+            for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
+                struct macroblockd_plane *const pd = &xd->plane[plane];
+                struct buf_2d *const dst_buf = &pd->dst;
+                const int num_4x4_w = pd->n4_w;
+                const int num_4x4_h = pd->n4_h;
+                const int n4w_x4 = 4 * num_4x4_w;
+                const int n4h_x4 = 4 * num_4x4_h;
+                struct buf_2d *const pre_buf = &pd->pre[ref];
+                dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
+                                           n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
+                                           dst_buf, &mv, ref_frame_buf, is_scaled, ref);
+            }
+        }
+    }
+}
+
+static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
+                                          MACROBLOCKD *xd, int mi_row,
+                                          int mi_col, int is_sr) {
+    int plane;
+    const int mi_x = mi_col * MI_SIZE;
+    const int mi_y = mi_row * MI_SIZE;
+    const MODE_INFO *mi = xd->mi[0];
+    const InterpKernel *kernel = vp9_filter_kernels[mi->interp_filter];
+    const BLOCK_SIZE sb_type = mi->sb_type;
+    const int is_compound = has_second_ref(mi);
+    int ref;
+    int is_scaled;
+
+    for (ref = 0; ref < 1 + is_compound; ++ref) {
+        const MV_REFERENCE_FRAME frame = mi->ref_frame[ref];
+        RefBuffer *ref_buf = &pbi->common.frame_refs[frame - LAST_FRAME];
+        /*******************Hyunho************************/
+        const struct scale_factors *sf;
+        if (is_sr) sf = &ref_buf->sf;
+        else sf = &ref_buf->sf_lr;
+        /*******************Hyunho************************/
+        //const struct scale_factors *const sf = &ref_buf->sf_lr;
+        const int idx = ref_buf->idx;
+        BufferPool *const pool = pbi->common.buffer_pool;
+        RefCntBuffer *const ref_frame_buf = &pool->frame_bufs[idx];
+
+        if (!is_sr) {
+            LOGD("sf_lr: %d %d", sf->x_scale_fp >> REF_SCALE_SHIFT, sf->x_step_q4);
+
+            char file_path[PATH_MAX];
+            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(file_path, "%s/test_buf_lr_%d_%d_.y", pbi->common.decode_info->log_dir, pbi->common.current_video_frame, pbi->common.current_super_frame);
+            if (vpx_write_y_frame(file_path, ref_buf->buf_lr))
+            {
+                LOGE("save a decoded frame fail");
+            }
+
+//            sprintf(file_path, "%s/test_buf_%d_%d.y", pbi->common.decode_info->log_dir, pbi->common.current_video_frame, pbi->common.current_super_frame);
+//            if (vpx_write_y_frame(file_path, ref_buf->buf))
+//            {
+//                LOGE("save a decoded frame fail");
+//            }
+        }
 
         if (!vp9_is_valid_scale(sf) && pbi->common.mode !=
                                        DECODE_CACHE) //TODO (hyunho): how to check valid scale in DECODE_CACHE mode?
@@ -1138,9 +1285,10 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                                "Reference frame has invalid dimensions");
 
         is_scaled = vp9_is_scaled(sf);
-        //LOGD("is_scaled: %d", is_scaled);
-        vp9_setup_pre_planes(xd, ref, ref_buf->buf, mi_row, mi_col,
-                             is_scaled ? sf : NULL);
+        /*******************Hyunho************************/
+        if (is_sr) vp9_setup_pre_planes(xd, ref, ref_buf->buf, mi_row, mi_col, is_scaled ? sf : NULL);
+        else vp9_setup_pre_planes(xd, ref, ref_buf->buf_lr, mi_row, mi_col, is_scaled ? sf : NULL);
+        /*******************Hyunho************************/
         xd->block_refs[ref] = ref_buf;
 
         //if (mi_col == 0 && mi_col == 0) LOGD("sb_type: %d", sb_type);
@@ -1150,8 +1298,8 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 struct macroblockd_plane *const pd = &xd->plane[plane];
                 /*******************Hyunho************************/
                 //struct buf_2d *const dst_buf = &pd->dst;
-                struct buf_2d *dst_buf = &pd->dst;
-                if (pbi->common.mode == DECODE_CACHE) {
+                struct buf_2d *dst_buf;
+                if (is_sr) {
                     dst_buf = &pd->sr;
                 } else {
                     dst_buf = &pd->dst;
@@ -1167,18 +1315,12 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 for (y = 0; y < num_4x4_h; ++y) {
                     for (x = 0; x < num_4x4_w; ++x) {
                         const MV mv = average_split_mvs(pd, mi, ref, i++);
-                        if (pbi->common.mode == DECODE_CACHE) {
-                            dec_build_resize_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
-                                                       4, 4, mi_x, mi_y, kernel, sf, pre_buf,
-                                                       dst_buf, &mv, ref_frame_buf, is_scaled,
-                                                       ref);
-                        }
-                        else {
-                            dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
-                                                       4, 4, mi_x, mi_y, kernel, sf, pre_buf,
-                                                       dst_buf, &mv, ref_frame_buf, is_scaled,
-                                                       ref);
-                        }
+                        /*******************Hyunho************************/
+                        dec_build_sr_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
+                                                      4, 4, mi_x, mi_y, kernel, sf, pre_buf,
+                                                      dst_buf, &mv, ref_frame_buf, is_scaled,
+                                                          ref, is_sr);
+                        /*******************Hyunho************************/
                     }
                 }
             }
@@ -1189,8 +1331,8 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 struct macroblockd_plane *const pd = &xd->plane[plane];
                 /*******************Hyunho************************/
                 //struct buf_2d *const dst_buf = &pd->dst;
-                struct buf_2d *dst_buf = &pd->dst;
-                if (pbi->common.mode == DECODE_CACHE) {
+                struct buf_2d *dst_buf;
+                if (is_sr) {
                     dst_buf = &pd->sr;
                 } else {
                     dst_buf = &pd->dst;
@@ -1201,23 +1343,11 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
                 const int n4w_x4 = 4 * num_4x4_w;
                 const int n4h_x4 = 4 * num_4x4_h;
                 struct buf_2d *const pre_buf = &pd->pre[ref];
-                //MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
-                //    int mi_x, int mi_y, const InterpKernel *kernel,
-                //    const struct scale_factors *sf, struct buf_2d *pre_buf,
-                //    struct buf_2d *dst_buf, const MV *mv, RefCntBuffer *ref_frame_buf,
-                //    int is_scaled, int ref)
-                //  MACROBLOCKD *xd, int plane, int bw, int bh, int x, int y, int w, int h,
-                //LOGD("pre_buf: %p, dst_buf: %p, x_step_q4: %d, predict[0][0][0]: %p", pre_buf, dst_buf, sf->x_step_q4, sf->predict[0][0][0]);
-                if (pbi->common.mode == DECODE_CACHE) {
-                    dec_build_resize_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
-                                                      n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
-                                                      dst_buf, &mv, ref_frame_buf, is_scaled, ref);
-                }
-                else {
-                    dec_build_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
-                                               n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
-                                               dst_buf, &mv, ref_frame_buf, is_scaled, ref);
-                }
+                /*******************Hyunho************************/
+                dec_build_sr_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
+                                              n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
+                                              dst_buf, &mv, ref_frame_buf, is_scaled, ref, is_sr);
+                /*******************Hyunho************************/
             }
         }
     }
@@ -1270,7 +1400,11 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
 
     /*******************Hyunho************************/
     if (cm->mode == DECODE_CACHE) {
-        vp9_setup_dst_planes(xd->plane, cm->tmp_frame, mi_row, mi_col);
+        //vp9_setup_dst_planes(xd->plane, cm->tmp_frame, mi_row, mi_col);
+        vp9_setup_dst_planes(xd->plane, get_frame_new_buffer_lr(cm), mi_row, mi_col);
+        vp9_setup_residual_planes(xd->plane, cm->tmp_frame, mi_row, mi_col);
+        //LOGD("get_frame_new_buffer_lr: %p", get_frame_new_buffer_lr(cm)->y_buffer);
+
     } else {
         vp9_setup_dst_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col);
     }
@@ -1315,17 +1449,18 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
     }
 
     //if (mi_col == 0) LOGD("[%d %d] mi_row: %d, num_4x4_w: %d, num_4x4_h: %d, is_inter_block(mi): %d", pbi->common.current_video_frame, pbi->common.current_super_frame, mi_row, xd->plane[0].n4_w, xd->plane[0].n4_h, is_inter_block(mi));
-
     if (!is_inter_block(mi)) {
         //LOGD("%d %d mi_row: %d, mi_col: %d", cm->current_video_frame, cm->current_super_frame, mi_row, mi_col);
 
         //LOGD("[%d %d] mi_col: %d mi_row: %d, num_4x4_w: %d, num_4x4_h: %d, is_inter_block(mi): %d", pbi->common.current_video_frame, pbi->common.current_super_frame, mi_col, mi_row, xd->plane[0].n4_w, xd->plane[0].n4_h, is_inter_block(mi));
+/*
         if (cm->mode == DECODE_CACHE) {
             vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
                                 mi_row,
                                 mi_col,
                                 &cm->sf_upsample_inter);
         }
+*/
 
         cm->intra_count++; //hyunho: debug
         int plane;
@@ -1350,13 +1485,11 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 
             for (row = 0; row < max_blocks_high; row += step)
                 for (col = 0; col < max_blocks_wide; col += step)
-//                    predict_and_reconstruct_intra_block(twd, mi, plane, row, col, tx_size);
-                    if (cm->mode == DECODE_CACHE) predict_and_reconstruct_and_resize_intra_block(twd, mi, plane, row, col, tx_size, cm->scale, &cm->sf_upsample_inter);
-                    else predict_and_reconstruct_intra_block(twd, mi, plane, row, col, tx_size);
+                    predict_and_reconstruct_intra_block(twd, mi, plane, row, col, tx_size);
+                    //if (cm->mode == DECODE_CACHE) predict_and_reconstruct_and_resize_intra_block(twd, mi, plane, row, col, tx_size, cm->scale, &cm->sf_upsample_inter);
+                    //else predict_and_reconstruct_intra_block(twd, mi, plane, row, col, tx_size);
 
         }
-
-
 
         /*******************Hyunho************************/
         /*
@@ -1596,7 +1729,14 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         /*******************Hyunho************************/
 
         // Prediction
-        dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
+        if (cm->mode == DECODE_CACHE) {
+            //dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
+            dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, false);
+            dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
+        }
+        else {
+            dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
+        }
 
         // Reconstruction
         if (!mi->skip) {
@@ -1630,6 +1770,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             }
 
             /*******************Hyunho************************/
+            /*
             if (cm->mode == DECODE_CACHE) {
                 vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm),
                                     mi_row,
@@ -1737,10 +1878,10 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                     }
                 }
             }
+            */
             /*******************Hyunho************************/
 
 #if DEBUG_RESIZE
-            //TODO (hyunho): we test here because ...
             for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
                 int max_col = xd->plane[plane].n4_h;
                 int max_row = xd->plane[plane].n4_w;
@@ -2410,6 +2551,20 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
             vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                                "Failed to allocate frame buffer");
         }
+
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
+                                     cm->height, cm->subsampling_x,
+                                     cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+                cm->use_highbitdepth,
+#endif
+                                     VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                     pool->get_fb_cb,
+                                     pool->cb_priv)) {
+            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
+                               "Failed to allocate frame buffer");
+        }
     } else {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height,
                                      cm->subsampling_x,
@@ -2487,7 +2642,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
         RefBuffer *const ref_frame = &cm->frame_refs[i];
         /*******************Hyunho************************/
         if (cm->mode == DECODE_CACHE) {
-            has_valid_ref_frame = 1; //Hyunho: how to check valid frame size in DECODE_CACHE mode?
+            has_valid_ref_frame = 1; //TODO (hyunho): Hyunho: how to check valid frame size in DECODE_CACHE mode?
         } else {
             has_valid_ref_frame |=
                     (ref_frame->idx != INVALID_IDX &&
@@ -2525,6 +2680,20 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                 VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
                 &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer, pool->get_fb_cb,
                 pool->cb_priv)) {
+            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
+                               "Failed to allocate frame buffer");
+        }
+
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
+                                     cm->height, cm->subsampling_x,
+                                     cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+                cm->use_highbitdepth,
+#endif
+                                     VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                     pool->get_fb_cb,
+                                     pool->cb_priv)) {
             vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                                "Failed to allocate frame buffer");
         }
@@ -2625,6 +2794,8 @@ static void get_tile_buffers(VP9Decoder *pbi, const uint8_t *data,
 }
 
 //Hyunho: data is copied to tile_buffers
+//TODO (hyunho): apply loop filters to super-resolutioned frame, cm is needed to be reconfigured or related functions
+//TODO (hyunho): apply loop filters to lr frame, frame buffer is needed to set properly // postproc (?)
 static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                    const uint8_t *data_end) {
     VP9_COMMON *const cm = &pbi->common;
@@ -2648,13 +2819,27 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         }
     }
 
-    if (cm->lf.filter_level && !cm->skip_loop_filter) {
-        LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
-        // Be sure to sync as we might be resuming after a failed frame decode.
-        winterface->sync(&pbi->lf_worker);
-        vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer(cm), cm,
-                                   pbi->mb.plane);
+    /*******************Hyunho************************/
+    //TODO (hyunho): apply loop filter on super-resolution frames
+    if (cm->mode == DECODE_CACHE) {
+        if (cm->lf.filter_level && !cm->skip_loop_filter) {
+            LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
+            // Be sure to sync as we might be resuming after a failed frame decode.
+            winterface->sync(&pbi->lf_worker);
+            vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer_lr(cm), cm,
+                                       pbi->mb.plane);
+        }
     }
+    else {
+        if (cm->lf.filter_level && !cm->skip_loop_filter) {
+            LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
+            // Be sure to sync as we might be resuming after a failed frame decode.
+            winterface->sync(&pbi->lf_worker);
+            vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer(cm), cm,
+                                       pbi->mb.plane);
+        }
+    }
+    /*******************Hyunho************************/
 
     assert(tile_rows <= 4);
     assert(tile_cols <= (1 << 6));
@@ -2711,9 +2896,9 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                        "Failed to decode tile data");
             }
 
+            /*******************Hyunho************************/
             if (cm->mode == DECODE_CACHE) {
                 //TODO (Hyunho): modify and apply loop filter for upsample frames - modify used cm member variables, also check multithread part
-                /*
                 // Loopfilter one row.
                 if (cm->lf.filter_level && !cm->skip_loop_filter) {
                     const int lf_start = mi_row - MI_BLOCK_SIZE;
@@ -2734,7 +2919,6 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                         winterface->execute(&pbi->lf_worker);
                     }
                 }
-                */
             } else {
                 // Loopfilter one row.
                 if (cm->lf.filter_level && !cm->skip_loop_filter) {
@@ -2757,12 +2941,14 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                     }
                 }
             }
+            /*******************Hyunho************************/
+
         }
     }
 
+    /*******************Hyunho************************/
     if (cm->mode == DECODE_CACHE) {
         //TODO (Hyunho): modify and apply loop filter for upsample frames - modify used cm member variables, also check multithread part
-        /*
         // Loopfilter remaining rows in the frame.
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
@@ -2771,7 +2957,6 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             lf_data->stop = cm->mi_rows;
             winterface->execute(&pbi->lf_worker);
         }
-        */
     } else {
         // Loopfilter remaining rows in the frame.
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
@@ -2782,6 +2967,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             winterface->execute(&pbi->lf_worker);
         }
     }
+    /*******************Hyunho************************/
 
     // Get last tile data.
     tile_data = pbi->tile_worker_data + tile_cols * tile_rows - 1;
@@ -3101,6 +3287,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
         for (i = 0; i < REFS_PER_FRAME; ++i) {
             cm->frame_refs[i].idx = INVALID_IDX;
             cm->frame_refs[i].buf = NULL;
+            cm->frame_refs[i].buf_lr = NULL;
         }
 
         setup_frame_size(cm, rb);
@@ -3148,6 +3335,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                 RefBuffer *const ref_frame = &cm->frame_refs[i];
                 ref_frame->idx = idx;
                 ref_frame->buf = &frame_bufs[idx].buf;
+                ref_frame->buf_lr = &frame_bufs[idx].buf_lr;
                 cm->ref_frame_sign_bias[LAST_FRAME + i] = vpx_rb_read_bit(rb);
             }
 
@@ -3173,6 +3361,9 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf, ref_buf->buf->y_crop_width,
                             ref_buf->buf->y_crop_height, cm->width, cm->height, false, false);
+                    vp9_setup_scale_factors_for_frame(
+                            &ref_buf->sf_lr, ref_buf->buf_lr->y_crop_width,
+                            ref_buf->buf_lr->y_crop_height, cm->width, cm->height);
                 } else {
                     vp9_setup_scale_factors_for_frame(
                             &ref_buf->sf, ref_buf->buf->y_crop_width,
@@ -3366,6 +3557,7 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
     return (BITSTREAM_PROFILE) profile;
 }
 
+//TODO (hyunho): current version only utilizes single thread by calling decode_tiles()
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
     VP9_COMMON *const cm = &pbi->common;
@@ -3453,10 +3645,9 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     cm->intra_count = 0;
     cm->inter_count = 0;
 
-//    //LOGD("mode: %d, frame_type:%d, current_video_frame:%d, current_super_frame:%d", cm->mode, cm->frame_type, cm->current_video_frame, cm->current_super_frame);
-    if (cm->mode == DECODE_CACHE && cm->frame_type ==
-                                    KEY_FRAME) { //TODO (hyunho): share super-resolution frames by IPC, provided by user_priv
-//    if ((cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) || (cm->current_video_frame == 1)){
+    //TODO (hyunho): share super-resolution frames by IPC, provided by user_priv
+    //TODO (hyunho): apply super-resolution in non key frames
+    if (cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) {
         char frame_path[PATH_MAX];
         memset(frame_path, 0, sizeof(char) * PATH_MAX);
         sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->log_dir,
@@ -3465,6 +3656,16 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
         if (vpx_deserialize_copy(get_frame_new_buffer(cm), frame_path, cm->width * cm->scale,
                                  cm->height * cm->scale, cm->subsampling_x,
+                                 cm->subsampling_y, cm->byte_alignment)) {
+            vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                               "Deseriazlie key frames failed.");
+        }
+
+        sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->log_dir,
+                cm->decode_info->resolution, cm->current_video_frame + 1,
+                cm->current_super_frame);
+        if (vpx_deserialize_copy(get_frame_new_buffer_lr(cm), frame_path, cm->width,
+                                 cm->height, cm->subsampling_x,
                                  cm->subsampling_y, cm->byte_alignment)) {
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                "Deseriazlie key frames failed.");
