@@ -31,6 +31,27 @@ extern "C" {
 
 #define MAX_MB_PLANE 3
 
+/*******************Hyunho************************/
+typedef struct DecodeBlockList{
+    struct DecodeBlock *cur;
+    struct DecodeBlock *head;
+    struct DecodeBlock *tail;
+} DecodeBlockList;
+
+typedef struct DecodeBlock{
+    int mi_row;
+    int mi_col;
+    int n4_w[3];
+    int n4_h[3];
+    INTERP_FILTER interp_filter;
+    struct DecodeBlock *next;
+} DecodeBlock;
+
+void createBlock(struct DecodeBlockList *L, int mi_col, int mi_row, int n4_w, int n4_h, INTERP_FILTER interp_filter);
+
+void setBlock(struct DecodeBlockList *L, int plane, int n4_w, int n4_h);
+/*******************Hyunho************************/
+
 typedef enum {
   KEY_FRAME = 0,
   INTER_FRAME = 1,
@@ -113,6 +134,11 @@ struct buf_2d {
   int stride;
 };
 
+struct residual_2d{
+    int16_t *buf;
+    int stride;
+};
+
 struct macroblockd_plane {
   tran_low_t *dqcoeff;
   int subsampling_x;
@@ -123,6 +149,8 @@ struct macroblockd_plane {
   struct buf_2d residual; //used for resizing residual frame
   struct buf_2d resize; //DEBUG_RESIZE
   struct buf_2d input; //DEBUG_RESIZE
+  struct residual_2d res;
+//  struct residual_2d res;
   /*******************Hyunho************************/
   struct buf_2d pre[2];
   ENTROPY_CONTEXT *above_context;

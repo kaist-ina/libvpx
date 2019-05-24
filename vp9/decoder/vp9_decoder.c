@@ -142,8 +142,22 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
     cm->error.setjmp = 0;
 
+    /*******************Hyunho************************/ //TODO (hyunho): should we move this to decode_one?
+    cm->intra_block_list = (DecodeBlockList *) vpx_calloc(1, sizeof(DecodeBlockList));
+    cm->intra_block_list->cur = NULL;
+    cm->intra_block_list->head = NULL;
+    cm->intra_block_list->tail = NULL;
+
+    cm->inter_block_list = (DecodeBlockList *) vpx_calloc(1, sizeof(DecodeBlockList));
+    cm->inter_block_list->cur = NULL;
+    cm->inter_block_list->head = NULL;
+    cm->inter_block_list->tail = NULL;
+
+    cm->compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    cm->reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    cm->tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    cm->residual = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
     /*******************Hyunho************************/
-    //cm->tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
 
 #if DEBUG_SERIALIZE
     cm->frame_to_deserialize = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
@@ -200,6 +214,19 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     if (pbi->num_tile_workers > 0) {
         vp9_loop_filter_dealloc(&pbi->lf_row_sync);
     }
+
+    /*******************Hyunho************************/
+    VP9_COMMON *cm = &pbi->common;
+    vpx_free((void *) cm->compare_frame);
+    vpx_free((void *) cm->reference_frame);
+    vpx_free((void *) cm->tmp_frame);
+    vpx_free((void *) cm->residual);
+
+    if (cm->mode == DECODE_CACHE) {
+        //TODO (hyunho): free YV12_BUFFER_CONFIG
+        //TODO (hyunho): free DECODE_LINKED_LIST
+    }
+    /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);
     vpx_free(pbi);

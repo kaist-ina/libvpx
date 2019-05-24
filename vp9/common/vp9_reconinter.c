@@ -343,6 +343,39 @@ void vp9_setup_residual_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
   }
 }
 
+//void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+//                               const YV12_BUFFER_CONFIG *src, int mi_row,
+//                               int mi_col) {
+//  int16_t *const buffers[MAX_MB_PLANE] = { src->y_residual, src->u_residual,
+//                                           src->v_residual };
+//  const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
+//                                      src->uv_stride };
+//  int i;
+//
+//  for (i = 0; i < MAX_MB_PLANE; ++i) {
+//    struct macroblockd_plane *const pd = &planes[i];
+//    setup_res_plane(&pd->res, buffers[i], strides[i], mi_row, mi_col, NULL,
+//                     pd->subsampling_x, pd->subsampling_y);
+//  }
+//}
+
+void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                               const YV12_BUFFER_CONFIG *src, int mi_row,
+                               int mi_col) {
+  int16_t *const buffers[MAX_MB_PLANE] = { src->y_residual, src->u_residual,
+                                           src->v_residual};
+  const int strides[MAX_MB_PLANE] = { src->y_stride / 2, src->uv_stride / 2,
+                                      src->uv_stride / 2};
+  int i;
+
+  for (i = 0; i < MAX_MB_PLANE; ++i) {
+    struct macroblockd_plane *const pd = &planes[i];
+    setup_res_plane(&pd->res, buffers[i], strides[i], mi_row, mi_col, NULL, //hyunho: int16_t
+                     pd->subsampling_x, pd->subsampling_y);
+  }
+}
+
+
 void vp9_setup_dst_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col) {

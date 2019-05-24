@@ -360,8 +360,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     if (ctx->svc_decoding && ctx->svc_spatial_layer < frame_count - 1)
         frame_count = ctx->svc_spatial_layer + 1;
 
-    int past_video_frame;
-
     /*******************Hyunho************************/
     char file_path[PATH_MAX];
     int current_video_frame;
@@ -375,19 +373,22 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
     FILE *log_file;
 
-    if (decode_info->save_quality == 1) {
-        ctx->pbi->common.compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-        ctx->pbi->common.reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-    }
-    if (decode_info->mode == DECODE_CACHE)
-        ctx->pbi->common.tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+//    @deprecated
+//    if (decode_info->save_quality == 1) {
+//        ctx->pbi->common.compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+//        ctx->pbi->common.reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+//    }
+//    if (decode_info->mode == DECODE_CACHE) {
+//        ctx->pbi->common.tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+//        ctx->pbi->common.residual = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+//    }
+//    ctx->pbi->common.tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+//    ctx->pbi->common.residual = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
     /*******************Hyunho************************/
 
     if (frame_count > 0) {
         int i;
         for (i = 0; i < frame_count; ++i) {
-            past_video_frame = ctx->pbi->common.current_video_frame;
-
             const uint8_t *data_start_copy = data_start;
             const uint32_t frame_size = frame_sizes[i];
             vpx_codec_err_t res;
@@ -687,12 +688,18 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
     QUALITY_EXIT:
 
-    if (decode_info->save_quality == 1) {
-        vpx_free((void *) ctx->pbi->common.compare_frame);
-        vpx_free((void *) ctx->pbi->common.reference_frame);
-    }
-    if (decode_info->mode == DECODE_CACHE)
-        vpx_free((void *) ctx->pbi->common.tmp_frame);
+//    @deprecated
+//    if (decode_info->save_quality == 1) {
+//        vpx_free((void *) ctx->pbi->common.compare_frame);
+//        vpx_free((void *) ctx->pbi->common.reference_frame);
+//    }
+//    if (decode_info->mode == DECODE_CACHE) {
+//        vpx_free((void *) ctx->pbi->common.tmp_frame);
+//        vpx_free((void *) ctx->pbi->common.residual);
+//    }
+//    vpx_free((void *) ctx->pbi->common.tmp_frame);
+//    vpx_free((void *) ctx->pbi->common.residual);
+
     if (log_file)
         fclose(log_file);
     /*******************Hyunho************************/

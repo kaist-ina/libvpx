@@ -49,6 +49,10 @@ static INLINE uint8_t clip_pixel(int val) {
   return (val > 255) ? 255 : (val < 0) ? 0 : val;
 }
 
+static INLINE int16_t clip_pixel_int16(int32_t val) {
+  return (val > INT16_MAX) ? INT16_MAX : (val < INT16_MIN) ? INT16_MIN : val;
+}
+
 static INLINE int clamp(int value, int low, int high) {
   return value < low ? low : (value > high ? high : value);
 }

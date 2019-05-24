@@ -45,13 +45,14 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
                                        int other_h, int this_w, int this_h,
                                        int use_high);
 #else
+void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
+                                       int other_h, int this_w, int this_h);
+#endif
 
 void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
                                           int other_h, int this_w, int this_h, bool upsample, bool add);
 
-void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
-                                       int other_h, int this_w, int this_h);
-#endif
+void vp9_setup_scale_factors_for_tmp_frame(struct scale_factors *sf);
 
 static INLINE int vp9_is_valid_scale(const struct scale_factors *sf) {
   return sf->x_scale_fp != REF_INVALID_SCALE &&

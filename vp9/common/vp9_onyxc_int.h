@@ -124,7 +124,7 @@ typedef struct VP9Common {
     YV12_BUFFER_CONFIG *frame_to_input;
     YV12_BUFFER_CONFIG *frame_to_resize;
 
-    struct scale_factors sf_upsample;
+    struct scale_factors sf_copy;
     struct scale_factors sf_upsample_intra;
     struct scale_factors sf_upsample_inter;
     int scale;
@@ -138,8 +138,12 @@ typedef struct VP9Common {
     decode_info_t *decode_info;
     DECODE_MODE mode;
     YV12_BUFFER_CONFIG *tmp_frame; //only used for internal process
+    YV12_BUFFER_CONFIG *residual;
     YV12_BUFFER_CONFIG *compare_frame;
     YV12_BUFFER_CONFIG *reference_frame;
+
+    DecodeBlockList *intra_block_list;
+    DecodeBlockList *inter_block_list;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;
