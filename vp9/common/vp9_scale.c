@@ -146,26 +146,26 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
         } else {
             // Must always scale in both directions. //TODO (hyunho): handle all case
             if (add) {
-                sf->predict[0][0][0] = vpx_scaled_add_2d;
-                sf->predict[0][0][1] = vpx_scaled_avg_2d;
-                sf->predict[0][1][0] = vpx_scaled_add_2d;
-                sf->predict[0][1][1] = vpx_scaled_avg_2d;
-                sf->predict[1][0][0] = vpx_scaled_add_2d;
-                sf->predict[1][0][1] = vpx_scaled_avg_2d;
-//                sf->predict[0][0][0] = vpx_scaled_avg_2d;
+                sf->predict[0][0][0] = vpx_bilinear_interp_add;
+                sf->predict[0][0][1] = vpx_bilinear_interp_add;
+                sf->predict[0][1][0] = vpx_bilinear_interp_add;
+                sf->predict[0][1][1] = vpx_bilinear_interp_add;
+                sf->predict[1][0][0] = vpx_bilinear_interp_add;
+                sf->predict[1][0][1] = vpx_bilinear_interp_add;
+//                sf->predict[0][0][0] = vpx_scaled_2d;
 //                sf->predict[0][0][1] = vpx_scaled_avg_2d;
-//                sf->predict[0][1][0] = vpx_scaled_avg_2d;
+//                sf->predict[0][1][0] = vpx_scaled_2d;
 //                sf->predict[0][1][1] = vpx_scaled_avg_2d;
-//                sf->predict[1][0][0] = vpx_scaled_avg_2d;
+//                sf->predict[1][0][0] = vpx_scaled_2d;
 //                sf->predict[1][0][1] = vpx_scaled_avg_2d;
             }
             else {
-                sf->predict[0][0][0] = vpx_scaled_2d;
-                sf->predict[0][0][1] = vpx_scaled_avg_2d;
-                sf->predict[0][1][0] = vpx_scaled_2d;
-                sf->predict[0][1][1] = vpx_scaled_avg_2d;
-                sf->predict[1][0][0] = vpx_scaled_2d;
-                sf->predict[1][0][1] = vpx_scaled_avg_2d;
+                sf->predict[0][0][0] = vpx_bilinear_interp;
+                sf->predict[0][0][1] = vpx_bilinear_interp;
+                sf->predict[0][1][0] = vpx_bilinear_interp;
+                sf->predict[0][1][1] = vpx_bilinear_interp;
+                sf->predict[1][0][0] = vpx_bilinear_interp;
+                sf->predict[1][0][1] = vpx_bilinear_interp;
             }
         }
     }
@@ -310,6 +310,77 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
         sf->predict[1][1][0] = vpx_convolve8;
         sf->predict[1][1][1] = vpx_convolve8_avg;
     }
+
+#if CONFIG_VP9_HIGHBITDEPTH
+    if (use_highbd) {
+      if (sf->x_step_q4 == 16) {
+        if (sf->y_step_q4 == 16) {
+          // No scaling in either direction.
+          sf->highbd_predict[0][0][0] = vpx_highbd_convolve_copy;
+          sf->highbd_predict[0][0][1] = vpx_highbd_convolve_avg;
+          sf->highbd_predict[0][1][0] = vpx_highbd_convolve8_vert;
+          sf->highbd_predict[0][1][1] = vpx_highbd_convolve8_avg_vert;
+          sf->highbd_predict[1][0][0] = vpx_highbd_convolve8_horiz;
+          sf->highbd_predict[1][0][1] = vpx_highbd_convolve8_avg_horiz;
+        } else {
+          // No scaling in x direction. Must always scale in the y direction.
+          sf->highbd_predict[0][0][0] = vpx_highbd_convolve8_vert;
+          sf->highbd_predict[0][0][1] = vpx_highbd_convolve8_avg_vert;
+          sf->highbd_predict[0][1][0] = vpx_highbd_convolve8_vert;
+          sf->highbd_predict[0][1][1] = vpx_highbd_convolve8_avg_vert;
+          sf->highbd_predict[1][0][0] = vpx_highbd_convolve8;
+          sf->highbd_predict[1][0][1] = vpx_highbd_convolve8_avg;
+        }
+      } else {
+        if (sf->y_step_q4 == 16) {
+          // No scaling in the y direction. Must always scale in the x direction.
+          sf->highbd_predict[0][0][0] = vpx_highbd_convolve8_horiz;
+          sf->highbd_predict[0][0][1] = vpx_highbd_convolve8_avg_horiz;
+          sf->highbd_predict[0][1][0] = vpx_highbd_convolve8;
+          sf->highbd_predict[0][1][1] = vpx_highbd_convolve8_avg;
+          sf->highbd_predict[1][0][0] = vpx_highbd_convolve8_horiz;
+          sf->highbd_predict[1][0][1] = vpx_highbd_convolve8_avg_horiz;
+        } else {
+          // Must always scale in both directions.
+          sf->highbd_predict[0][0][0] = vpx_highbd_convolve8;
+          sf->highbd_predict[0][0][1] = vpx_highbd_convolve8_avg;
+          sf->highbd_predict[0][1][0] = vpx_highbd_convolve8;
+          sf->highbd_predict[0][1][1] = vpx_highbd_convolve8_avg;
+          sf->highbd_predict[1][0][0] = vpx_highbd_convolve8;
+          sf->highbd_predict[1][0][1] = vpx_highbd_convolve8_avg;
+        }
+      }
+      // 2D subpel motion always gets filtered in both directions.
+      sf->highbd_predict[1][1][0] = vpx_highbd_convolve8;
+      sf->highbd_predict[1][1][1] = vpx_highbd_convolve8_avg;
+    }
+#endif
+}
+#if CONFIG_VP9_HIGHBITDEPTH
+void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
+                                       int other_h, int this_w, int this_h,
+                                       int use_highbd) {
+#else
+void vp9_setup_scale_factors_for_tmp_frame(struct scale_factors *sf) {
+#endif
+    sf->x_scale_fp = 1 << REF_SCALE_SHIFT;
+    sf->y_scale_fp = 1 << REF_SCALE_SHIFT;
+
+    sf->x_step_q4 = 16;
+    sf->y_step_q4 = 16;
+
+    sf->scale_value_x = unscaled_value;
+    sf->scale_value_y = unscaled_value;
+
+    // TODO(agrange): Investigate the best choice of functions to use here
+    // for EIGHTTAP_SMOOTH. Since it is not interpolating, need to choose what
+    // to do at full-pel offsets. The current selection, where the filter is
+    // applied in one direction only, and not at all for 0,0, seems to give the
+    // best quality, but it may be worth trying an additional mode that does
+    // do the filtering on full-pel.
+
+    // No scaling in either direction.
+    sf->predict[0][0][0] = vpx_convolve_copy_add;
 
 #if CONFIG_VP9_HIGHBITDEPTH
     if (use_highbd) {

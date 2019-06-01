@@ -109,6 +109,7 @@ typedef struct VP9Common {
     int count;
     int intra_count;
     int inter_count;
+    int inter_count_noskip;
 
 #if CONFIG_VP9_HIGHBITDEPTH
     int use_highbitdepth;  // Marks if we need to use 16bit frame buffers.
@@ -117,24 +118,24 @@ typedef struct VP9Common {
     struct scale_factors sf;
 
     /*******************Hyunho************************/
-    //DEBUG_SERIALIZE
+    //DEBUG_SERIALIZE - deprecated
     YV12_BUFFER_CONFIG *frame_to_deserialize;
 
-    //DEBUG_RESIZE
+    //DEBUG_RESIZE - deprecated
     YV12_BUFFER_CONFIG *frame_to_input;
     YV12_BUFFER_CONFIG *frame_to_resize;
 
-    struct scale_factors sf_copy;
-    struct scale_factors sf_upsample_intra;
-    struct scale_factors sf_upsample_inter;
-    int scale;
-
-    //DEBUG_QUALITY
+    //DEBUG_QUALITY - deprecated
     YV12_BUFFER_CONFIG *frame_to_compare_0;
     YV12_BUFFER_CONFIG *frame_to_compare_1;
     YV12_BUFFER_CONFIG *frame_to_reference;
 
     //General
+    struct scale_factors sf_copy;
+    struct scale_factors sf_upsample_intra;
+    struct scale_factors sf_upsample_inter;
+    int scale;
+
     decode_info_t *decode_info;
     DECODE_MODE mode;
     YV12_BUFFER_CONFIG *tmp_frame; //only used for internal process

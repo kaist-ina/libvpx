@@ -153,41 +153,10 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     cm->inter_block_list->head = NULL;
     cm->inter_block_list->tail = NULL;
 
-    cm->compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-    cm->reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-    cm->tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    cm->compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    cm->reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    cm->tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
     cm->residual = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-    /*******************Hyunho************************/
-
-#if DEBUG_SERIALIZE
-    cm->frame_to_deserialize = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    memset(cm->frame_to_deserialize, 0, sizeof(YV12_BUFFER_CONFIG));
-    //vpx_free_frame_buffer(cm->frame_to_deserialize); //TODO (hyunho): die when 480p video comes
-#endif
-
-#if DEBUG_RESIZE
-    cm->frame_to_resize = (YV12_BUFFER_CONFIG *) malloc(sizeof(YV12_BUFFER_CONFIG));
-    memset(cm->frame_to_resize, 0, sizeof(YV12_BUFFER_CONFIG));
-    //vpx_free_frame_buffer(cm->frame_to_resize);
-    cm->frame_to_input = (YV12_BUFFER_CONFIG *) malloc(sizeof(YV12_BUFFER_CONFIG));
-    memset(cm->frame_to_input, 0, sizeof(YV12_BUFFER_CONFIG));
-    //vpx_free_frame_buffer(cm->frame_to_input);
-#endif
-
-#if DEBUG_QUALITY
-    cm->frame_to_compare_0 = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    memset(cm->frame_to_compare_0, 0, sizeof(YV12_BUFFER_CONFIG));
-    //vpx_free_frame_buffer(cm->frame_to_compare_0);
-    cm->frame_to_compare_1 = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    memset(cm->frame_to_compare_1, 0, sizeof(YV12_BUFFER_CONFIG));
-    //vpx_free_frame_buffer(cm->frame_to_compare_1);
-    cm->frame_to_reference = (YV12_BUFFER_CONFIG *)malloc(sizeof(YV12_BUFFER_CONFIG));
-    memset(cm->frame_to_reference, 0, sizeof(YV12_BUFFER_CONFIG));
-    //vpx_free_frame_buffer(cm->frame_to_reference);
-#endif
-    cm->count = 0;
-    cm->intra_count = 0;
-    cm->inter_count = 0;
     /*******************Hyunho************************/
 
     vpx_get_worker_interface()->init(&pbi->lf_worker);
@@ -223,8 +192,33 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     vpx_free((void *) cm->residual);
 
     if (cm->mode == DECODE_CACHE) {
-        //TODO (hyunho): free YV12_BUFFER_CONFIG
-        //TODO (hyunho): free DECODE_LINKED_LIST
+        //free decode block lists
+        DecodeBlock *intra_block = cm->intra_block_list->head;
+        DecodeBlock *prev_block = NULL;
+        while (intra_block != NULL) {
+            prev_block = intra_block;
+            intra_block = intra_block->next;
+            vpx_free(prev_block);
+        }
+        vpx_free(cm->intra_block_list);
+
+        DecodeBlock *inter_block = cm->inter_block_list->head;
+        while (inter_block != NULL) {
+            prev_block = inter_block;
+            inter_block = inter_block->next;
+            vpx_free(prev_block);
+        }
+        vpx_free(cm->inter_block_list);
+
+        //free frames
+        vpx_free_frame_buffer(cm->compare_frame);
+        vpx_free_frame_buffer(cm->reference_frame);
+        vpx_free_frame_buffer(cm->tmp_frame);
+        vpx_free_frame_buffer(cm->residual);
+        vpx_free(cm->compare_frame);
+        vpx_free(cm->reference_frame);
+        vpx_free(cm->tmp_frame);
+        vpx_free(cm->residual);
     }
     /*******************Hyunho************************/
 
@@ -445,162 +439,6 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     vp9_decode_frame(pbi, source, source + size, psource);
 
     swap_frame_buffers(pbi);
-
-    //TODO (hyunho): move to outer loop because super-frame may be different in 240p and 960p, should compare quality only on visible frames
-#if DEBUG_RESIZE || DEBUG_SERIALIZE || DEBUG_QUALITY
-    char name[PATH_MAX];
-    char file_path[PATH_MAX];
-#endif
-
-#if DEBUG_SERIALIZE && SAVE_SERIALIZE
-    //serialize and save
-    LOGD("serialization test start");
-    YV12_BUFFER_CONFIG *original_frame = cm->frame_to_show;
-    memset(name, 0, sizeof(char) * PATH_MAX);
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", cm->current_video_frame, cm->current_super_frame);
-    if (cm->decode_info->upsample == 1){sprintf(file_path, "%s/%dp_%s_upsample", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
-    else {sprintf(file_path, "%s/%dp_%s", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
-    LOGD("file_path: %s", file_path);
-
-    if (vpx_serialize_save(file_path, original_frame))
-    {
-        LOGE("serialization fail");
-        goto EXIT;
-    };
-
-    /*
-    //deserialize and load
-    LOGD("width: %d, height: %d, subsample_x: %d, subsample_y: %d, byte_alignment: %d", cm->height, cm->width, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment);
-    if (vpx_deserialize_load(cm->frame_to_deserialize, file_path, cm->width, cm->height, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
-    {
-        LOGE("deserialzation fail");
-        goto EXIT;
-    }
-
-    //validate
-    if(vpx_compare_frames(original_frame, cm->frame_to_deserialize))
-    {
-        LOGE("validation fail");
-        goto EXIT;
-    }
-     */
-
-    LOGD("serialization test sucesss");
-    EXIT:
-    LOGD("serialization test end");
-#endif
-
-#if DEBUG_SERIALIZE && SAVE_IMAGE
-    //save a y-channel image
-    memset(name, 0, sizeof(char) * PATH_MAX);
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", pbi->common.current_video_frame,
-            cm->current_super_frame);
-    if (cm->decode_info->upsample) {sprintf(file_path, "%s/%dp_%s_y_upsample.frame", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
-    else {sprintf(file_path, "%s/%dp_%s_y.frame", cm->decode_info->log_dir, cm->decode_info->resolution, name);}
-
-    if (vpx_write_y_frame(file_path, cm->frame_to_deserialize)) //TODO (hyunho): check whether using frame_to_show is valid or not
-    {
-        LOGE("vpx_write_y_frame fail");
-    }
-#endif
-
-#if DEBUG_RESIZE && SAVE_SERIALIZE
-    //serialize and save
-    LOGD("serialization test start");
-    memset(name, 0, sizeof(char) * PATH_MAX);
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", cm->current_video_frame, cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_resize", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
-
-    if (vpx_serialize_save(file_path, cm->frame_to_resize))
-    {
-        LOGE("serialization fail");
-    }
-#endif
-
-#if DEBUG_RESIZE && SAVE_IMAGE
-    memset(name, 0, sizeof(char) * PATH_MAX);
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d",  cm->current_video_frame,
-            cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_y_input.frame", cm->decode_info->log_dir, cm->decode_info->resolution, name);
-
-    if (vpx_write_y_frame(file_path, cm->frame_to_input))
-    {
-        LOGE("vpx_write_y_frame fail");
-    }
-
-    //save a resized frame
-    memset(name, 0, sizeof(char) * PATH_MAX);
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", cm->current_video_frame,
-            cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_y_resize.frame", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
-
-    if (vpx_write_y_frame(file_path, cm->frame_to_resize))
-    {
-        LOGE("vpx_write_y_frame fail");
-    }
-
-    //vpx_reset_frames(cm->frame_to_resize);
-#endif
-
-#if DEBUG_QUALITY
-    // 4) deserialize a reference frame, a compare frame
-    memset(&name, 0, sizeof(char) * PATH_MAX);
-    memset(&file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", cm->current_video_frame,
-            cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_upsample", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
-
-    LOGD("width: %d, height: %d", cm->width * cm->scale, cm->height * cm->scale);
-    if(vpx_deserialize_load(cm->frame_to_compare_0, file_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
-    {
-        LOGE("quality measurment fail");
-        goto EXIT;
-    }
-
-    memset(&name, 0, sizeof(char) * PATH_MAX);
-    memset(&file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", cm->current_video_frame,
-            cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
-
-    if(vpx_deserialize_load(cm->frame_to_reference, file_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
-    {
-        LOGE("quality measurment fail");
-        goto EXIT;
-    }
-
-    memset(&name, 0, sizeof(char) * PATH_MAX);
-    memset(&file_path, 0, sizeof(char) * PATH_MAX);
-    sprintf(name, "%d_%d", cm->current_video_frame,
-            cm->current_super_frame);
-    sprintf(file_path, "%s/%dp_%s_resize", cm->decode_info->log_dir, cm->decode_info->resolution * cm->decode_info->scale, name);
-    if(vpx_deserialize_load(cm->frame_to_compare_1, file_path, cm->width * cm->scale, cm->height * cm->scale, cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
-    {
-        LOGE("quality measurment fail");
-        goto EXIT;
-    }
-
-    // 5) measure psnr, ssim
-    PSNR_STATS psnr_resize;
-    PSNR_STATS pnsr_upsample;
-    vpx_calc_psnr(cm->frame_to_compare_1, cm->frame_to_reference, &psnr_resize);
-    vpx_calc_psnr(cm->frame_to_compare_0, cm->frame_to_reference, &pnsr_upsample);
-    //LOGD("resize frame %d_%d psnr (total): %f", cm->current_video_frame, cm->current_super_frame, psnr_resize.psnr[0]);
-    //LOGD("upsample frame %d_%d psnr (total): %f", cm->current_video_frame, cm->current_super_frame, pnsr_upsample.psnr[0]);
-    LOGD("resize frame %d_%d psnr (y): %f", cm->current_video_frame, cm->current_super_frame, psnr_resize.psnr[1]);
-    LOGD("upsample frame %d_%d psnr (y): %f", cm->current_video_frame, cm->current_super_frame, pnsr_upsample.psnr[1]);
-
-    LOGD("quality measurment success");
-
-    EXIT:
-    LOGD("quality measurment end");
-
-#endif
 
     vpx_clear_system_state();
 
