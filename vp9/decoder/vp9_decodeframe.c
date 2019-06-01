@@ -890,7 +890,6 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
                                 subpel_x, subpel_y,
                                 sf, width, height, ref, kernel, xs, ys);
             }
-
         }
     } else if (w > proc_size) {
         for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
@@ -903,7 +902,6 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
                             subpel_y,
                             sf, width, height, ref, kernel, xs, ys);
         }
-
     } else if (h > proc_size) {
         for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
             //calculate height, width
@@ -915,7 +913,6 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
                             dst_buf_stride, subpel_x, subpel_y,
                             sf, width, height, ref, kernel, xs, ys);
         }
-
     } else {
         inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y,
                         sf, w, h, ref, kernel, xs, ys);
@@ -2069,7 +2066,7 @@ static void setup_residual_size(VP9_COMMON *cm) {
 #if CONFIG_VP9_HIGHBITDEPTH
             cm->use_highbitdepth,
 #endif
-            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            VP9_DEC_BORDER_IN_PIXELS * 2, cm->byte_alignment,
             NULL, NULL, NULL)) {
         vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                            "Failed to allocate resized frame buffer");
@@ -2159,8 +2156,8 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
 
     /*******************Hyunho************************/
     if (cm->mode == DECODE_CACHE) {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width * cm->scale,
-                                     cm->height * cm->scale, cm->subsampling_x,
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
+                                     cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
                 cm->use_highbitdepth,
@@ -2173,13 +2170,14 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
                                "Failed to allocate frame buffer");
         }
 
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
-                                     cm->height, cm->subsampling_x,
+        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer_lr(cm);
+        if (vpx_realloc_scaled_frame_buffer(get_frame_new_buffer(cm), frame->y_width, frame->y_crop_width, frame->y_height, frame->y_crop_height, cm->scale,
+                                     cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
                 cm->use_highbitdepth,
 #endif
-                                     VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+                                     VP9_DEC_BORDER_IN_PIXELS * cm->scale, cm->byte_alignment,
                                      &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
                                      pool->get_fb_cb,
                                      pool->cb_priv)) {
@@ -2291,20 +2289,6 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     setup_render_size(cm, rb);
     /*******************Hyunho************************/
     if (cm->mode == DECODE_CACHE) {
-        if (vpx_realloc_frame_buffer(
-                get_frame_new_buffer(cm), cm->width * cm->scale, cm->height * cm->scale,
-                cm->subsampling_x,
-                cm->subsampling_y,
-#if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
-#endif
-                VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer, pool->get_fb_cb,
-                pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
-
         if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -2315,6 +2299,21 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                                      &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
                                      pool->get_fb_cb,
                                      pool->cb_priv)) {
+            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
+                               "Failed to allocate frame buffer");
+        }
+
+        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer_lr(cm);
+        if (vpx_realloc_scaled_frame_buffer(get_frame_new_buffer(cm), frame->y_width, frame->y_crop_width, frame->y_height, frame->y_crop_height, cm->scale,
+                                            cm->subsampling_x,
+                                            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+                cm->use_highbitdepth,
+#endif
+                                            VP9_DEC_BORDER_IN_PIXELS * cm->scale, cm->byte_alignment,
+                                            &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                            pool->get_fb_cb,
+                                            pool->cb_priv)) {
             vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
                                "Failed to allocate frame buffer");
         }
@@ -2843,7 +2842,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
     memset(cm->residual->buffer_alloc, 0, cm->residual->buffer_alloc_sz);
 
-    LOGD("total block: %d, intra_block: %d, inter_block, %d, inter_block (no-skip): %d", cm->count, cm->intra_count, cm->inter_count, cm->inter_count_noskip);
+//    LOGD("total block: %d, intra_block: %d, inter_block, %d, inter_block (no-skip): %d", cm->count, cm->intra_count, cm->inter_count, cm->inter_count_noskip);
     /*******************Hyunho************************/
 
     return vpx_reader_find_end(&tile_data->bit_reader);

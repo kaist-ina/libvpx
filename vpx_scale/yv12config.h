@@ -122,6 +122,16 @@ int vpx_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
                              int border, int byte_alignment,
                              vpx_codec_frame_buffer_t *fb,
                              vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv);
+
+int vpx_realloc_scaled_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int crop_width, int height, int crop_height, int scale,
+                                    int ss_x, int ss_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+        int use_highbitdepth,
+#endif
+                                    int border, int byte_alignment,
+                                    vpx_codec_frame_buffer_t *fb,
+                                    vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv);
+
 int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf);
 
 #ifdef __cplusplus

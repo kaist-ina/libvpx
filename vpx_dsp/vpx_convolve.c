@@ -425,6 +425,31 @@ void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *
 //            int sum = w1 * src[py * src_stride + px] +
 //                    w2 * src[py * src_stride + (px + 1)] +
 //                    w3 * src[(py + 1) * src_stride + px] +
+//                    w4 * src[(py + 1) * src_stride + (px + 1)]; //TODO (hyunho): performance bottleneck 1 - replace by fix-point
+//
+//            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + (sum >> 8)); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
+//
+//        }
+//    }
+
+//    for (y = 0; y < h; ++y) {
+//        for (x = 0; x < w; ++x) {
+//            int px = (int)(x / x_scale);
+//            int py = (int)(y / y_scale);
+//
+//            float fx1 = (float)x/x_scale - px;
+//            float fx2 = 1 - fx1;
+//            float fy1 = (float)y/y_scale - py;
+//            float fy2 = 1 - fy1;
+//
+//            int w1 = fx2 * fy2 * 256.0f;
+//            int w2 = fx1 * fy2 * 256.0f;
+//            int w3 = fx2 * fy1 * 256.0f;
+//            int w4 = fx1 * fy1 * 256.0f;
+//
+//            int sum = w1 * src[py * src_stride + px] +
+//                    w2 * src[py * src_stride + (px + 1)] +
+//                    w3 * src[(py + 1) * src_stride + px] +
 //                    w4 * src[(py + 1) * src_stride + (px + 1)]; //TODO (hyunho): save this on memory and apply neon instructions
 //
 //            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + (sum >> 8)); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?

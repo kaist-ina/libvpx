@@ -372,6 +372,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     PSNR_STATS psnr_compare;
     clock_t start, end;
     double cpu_time_used;
+    FILE *log_file;
     /*******************Hyunho************************/
     start = clock();
     if (frame_count > 0) {
@@ -620,10 +621,12 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             };
         }
     }
-    LOGD("Latency: %.2fmsec", cpu_time_used * 1000);
+//    LOGD("Latency: %.2fmsec", cpu_time_used * 1000);
 
 
     //TODO: save 1) latency, 2) quality (overall, y), 3) key-frame, 4) super-frame, 5) total block, 6) intra-block, 7) inter-block, 8) inter-block (non-skip)
+    // quality (1. bicubic, 2. cache, 3. baseline (2) / 1. Overall, 2. Y, 3. Cb, Cr), latency, other info.
+    // remove existing file in the first frame
     if (ctx->pbi->common.decode_info->save_quality)
     {
         memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -647,46 +650,16 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         vpx_calc_psnr(get_frame_new_buffer(&ctx->pbi->common), ctx->pbi->common.reference_frame, &psnr_original);
         vpx_calc_psnr(ctx->pbi->common.compare_frame, ctx->pbi->common.reference_frame, &psnr_compare);
 
+        //TODO (hyunho): add qualities of baseline 1, 2
+
         LOGD("YUV-channels: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[0], psnr_compare.psnr[0]);
         LOGD("Y-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[1], psnr_compare.psnr[1]);
         LOGD("U-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[2], psnr_compare.psnr[2]);
         LOGD("V-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[3], psnr_compare.psnr[3]);
 
-//        memset(file_path, 0, PATH_MAX);
-//        sprintf(file_path, "%s/log", decode_info->log_dir);
-//        log_file = fopen(file_path, "w");
-//        if (log_file) {
-//            fprintf(log_file, "%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", psnr_original.psnr[0], psnr_compare.psnr[0], psnr_original.psnr[1], psnr_compare.psnr[1],
-//                    psnr_original.psnr[2], psnr_compare.psnr[2], psnr_original.psnr[3], psnr_compare.psnr[3]);
-//        }
-//        else {
-//            LOGE("log file open error");
-//        }
+        //TODO (hyunho): add logs here
 
-//        //TODO (hyunho): validate lr pipeline
-//        memset(file_path, 0, sizeof(char) * PATH_MAX);
-//        sprintf(file_path, "%s/%dp_%d_original.frame", decode_info->log_dir, decode_info->resolution, ctx->pbi->common.current_video_frame);
-//        if(vpx_deserialize_load(ctx->pbi->common.reference_frame, file_path,ctx->pbi->common.width * ctx->pbi->common.scale, ctx->pbi->common.height * ctx->pbi->common.scale,
-//                                ctx->pbi->common.subsampling_x, ctx->pbi->common.subsampling_y, ctx->pbi->common.byte_alignment))
-//        {
-//            LOGE("deserailize fail");
-//            goto QUALITY_EXIT;
-//        }
-//
-//        vpx_calc_psnr(get_frame_new_buffer_lr(&ctx->pbi->common), ctx->pbi->common.reference_frame, &psnr_original);
-//
-//        LOGI("YCbCr (LR): %d: original %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[0]);
-        //LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[2], psnr_compare.psnr[2]);
-        //LOGI("%d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[3], psnr_compare.psnr[3]);
     }
-
-    //Logging
-    FILE *log_file;
-
-    //1. cpu_time_used (sec)
-
-    if (log_file)
-        fclose(log_file);
     /*******************Hyunho************************/
 
     return res;
