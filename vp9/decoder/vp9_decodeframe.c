@@ -3492,12 +3492,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
     //TODO (hyunho): share super-resolution frames by IPC, provided by user_priv
     //TODO (hyunho): apply super-resolution in non key frames
+    //TODO (hyunho): assert: assume key frames are not super-frames
     if (cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) {
         char frame_path[PATH_MAX];
         memset(frame_path, 0, sizeof(char) * PATH_MAX);
-        sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->serialize_dir,
-                cm->decode_info->resolution * cm->decode_info->scale, cm->current_video_frame + 1,
-                cm->current_super_frame);
+        sprintf(frame_path, "%s/%s_%d.serialize", cm->decode_info->serialize_dir, cm->decode_info->cache_file, cm->current_video_frame + 1);
 
         if (vpx_deserialize_copy(get_frame_new_buffer(cm), frame_path, cm->width * cm->scale,
                                  cm->height * cm->scale, cm->subsampling_x,
@@ -3505,10 +3504,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                "Deseriazlie key frames failed.");
         }
-
-        sprintf(frame_path, "%s/%dp_%d_%d_original", cm->decode_info->serialize_dir,
-                cm->decode_info->resolution, cm->current_video_frame + 1,
-                cm->current_super_frame);
+        sprintf(frame_path, "%s/%s_%d.serialize", cm->decode_info->serialize_dir, cm->decode_info->target_file, cm->current_video_frame + 1);
         if (vpx_deserialize_copy(get_frame_new_buffer_lr(cm), frame_path, cm->width,
                                  cm->height, cm->subsampling_x,
                                  cm->subsampling_y, cm->byte_alignment)) {

@@ -25,7 +25,7 @@ void vp9_read_frame_size(struct vpx_read_bit_buffer *rb, int *width,
                          int *height);
 BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb);
 
-void vp9_decode_frame(struct VP9Decoder *pbi, const uint8_t *data,
+void  vp9_decode_frame(struct VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end);
 
 #ifdef __cplusplus

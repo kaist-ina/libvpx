@@ -106,11 +106,6 @@ typedef struct VP9Common {
     int subsampling_x;
     int subsampling_y;
 
-    int count;
-    int intra_count;
-    int inter_count;
-    int inter_count_noskip;
-
 #if CONFIG_VP9_HIGHBITDEPTH
     int use_highbitdepth;  // Marks if we need to use 16bit frame buffers.
 #endif
@@ -145,6 +140,15 @@ typedef struct VP9Common {
 
     DecodeBlockList *intra_block_list;
     DecodeBlockList *inter_block_list;
+
+    FILE *quality_log;
+    FILE *latency_log;
+    FILE *metadata_log;
+
+    int count;
+    int intra_count;
+    int inter_count;
+    int inter_count_noskip;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;
