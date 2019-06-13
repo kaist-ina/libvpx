@@ -512,24 +512,6 @@ static void predict_and_reconstruct_intra_block_(TileWorkerData *twd,
     }
 }
 
-int *get_resolution(TX_SIZE tx_size) {
-    int resolution[2];
-    if (tx_size == TX_4X4) {
-        resolution[0] = 4;
-        resolution[1] = 4;
-    } else if (tx_size == TX_8X8) {
-        resolution[0] = 8;
-        resolution[1] = 8;
-    } else if (tx_size == TX_16X16) {
-        resolution[0] = 16;
-        resolution[1] = 16;
-    } else if (tx_size == TX_32X32) {
-        resolution[0] = 32;
-        resolution[1] = 32;
-    }
-    return resolution;
-}
-
 static void
 predict_intra_block(TileWorkerData *twd, MODE_INFO *const mi, int plane, int row, int col,
                     TX_SIZE tx_size, int scale, const struct scale_factors *sf) {
@@ -1113,6 +1095,7 @@ static void dec_build_sr_inter_predictors(
 //        const MV mv_q4 = clamp_mv_to_umv_border_sb(
 //                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
         // Co-ordinate of containing block to pixel precision.
+//        LOGD("mv_q4.x: %d, mv_q4.y: %d, mv_q4.x: %d, mv_q4.y: %d", mv_q4.row, mv_q4.col, mv_q4.row >> SUBPEL_BITS, mv_q4.col >> SUBPEL_BITS);
         int x_start = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x));
         int y_start = (-xd->mb_to_top_edge >> (3 + pd->subsampling_y));
 #if 0  // CONFIG_BETTER_HW_COMPATIBILITY
@@ -1137,12 +1120,15 @@ static void dec_build_sr_inter_predictors(
         // Scale the MV and incorporate the sub-pixel offset of the block
         // in the reference frame.
 
-        // if (mv_q4.row < 16 || mv_q4.row > -16) mv_q4.row = 0;
+        //TODO (hyunho: subpixel interpolation으로 인한 problem
+        //if (mv_q4.row > -16 && mv_q4.row < 0) mv_q4.row = 0;
+        //if (mv_q4.col > -16 && mv_q4.col < 0) mv_q4.col = 0;
 
         scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
         xs = sf->x_step_q4;
         ys = sf->y_step_q4;
 
+//        LOGD("[scaled] mv_q4.x: %d, mv_q4.y: %d, mv_q4.x: %d, mv_q4.y: %d", scaled_mv.row, scaled_mv.col, scaled_mv.row >> SUBPEL_BITS, scaled_mv.col >> SUBPEL_BITS);
     } else {
         // Co-ordinate of containing block to pixel precision.
         x0 = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x)) + x;
@@ -1256,7 +1242,7 @@ static void dec_build_sr_inter_predictors(
                     width = (w_offset + proc_size <= w ? proc_size :
                              (w - w_offset));
 
-                    //if (mi_x == 0 && mi_y == 0) LOGD("no extend | w_offset: %d,  h_offset: %d, width: %d, height: %d, buf_stride: %d, dst_buf->stride: %d", w_offset, h_offset, width, height, buf_stride, dst_buf->stride);
+//                    if (mi_x == 0 && mi_y == 0) LOGD("no extend | w_offset: %d,  h_offset: %d, width: %d, height: %d, buf_stride: %d, dst_buf->stride: %d", w_offset, h_offset, width, height, buf_stride, dst_buf->stride);
                     inter_predictor(&buf_ptr[h_offset * buf_stride + w_offset], buf_stride,
                                     &dst[h_offset * dst_buf->stride + w_offset],
                                     dst_buf->stride, subpel_x, subpel_y,
@@ -1621,12 +1607,12 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                  mi_col);
             dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, false);
             dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
+
         }
         else {
             dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
         }
         /*******************Hyunho************************/
-
         // Reconstruction
         if (!mi->skip) {
             cm->inter_count_noskip++;
@@ -1657,7 +1643,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                     for (col = 0; col < max_blocks_wide; col += step)
                         eobtotal +=
                                 reconstruct_inter_block(twd, mi, plane, row, col, tx_size, cm);
-
                 /*******************Hyunho************************/
                 if (cm->mode == DECODE_CACHE) {
                     if (plane == 0) {
@@ -2596,7 +2581,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         MACROBLOCKD *const xd = &tile_data->xd;
         DecodeBlock *intra_block = cm->intra_block_list->head;
         DecodeBlock *prev_block = NULL;
-
+//
         while (intra_block != NULL) {
 //            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", intra_block->mi_row,
 //                 intra_block->mi_col, intra_block->n4_w[0], intra_block->n4_h[0]);
@@ -2842,7 +2827,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
     memset(cm->residual->buffer_alloc, 0, cm->residual->buffer_alloc_sz);
 
-//    LOGD("total block: %d, intra_block: %d, inter_block, %d, inter_block (no-skip): %d", cm->count, cm->intra_count, cm->inter_count, cm->inter_count_noskip);
+    LOGD("total block: %d, intra_block: %d, inter_block, %d, inter_block (no-skip): %d", cm->count, cm->intra_count, cm->inter_count, cm->inter_count_noskip);
+
     /*******************Hyunho************************/
 
     return vpx_reader_find_end(&tile_data->bit_reader);
@@ -3484,6 +3470,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         pbi->total_tiles = tile_rows * tile_cols;
     }
 
+//    LOGD("hello world");
+
     /*******************Hyunho************************/
     cm->count = 0;
     cm->intra_count = 0;
@@ -3494,9 +3482,12 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     //TODO (hyunho): apply super-resolution in non key frames
     //TODO (hyunho): assert: assume key frames are not super-frames
     if (cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) {
+//    LOGD('%s', 'HELLO WORLD');
+//    if(cm->mode == DECODE_CACHE && cm->decode_info->apply_sr){
+//        LOGD("apply sr at video_frame %d super_frame %d frame_dtype %d", cm->current_video_frame, cm->current_super_frame, cm->frame_type);
         char frame_path[PATH_MAX];
         memset(frame_path, 0, sizeof(char) * PATH_MAX);
-        sprintf(frame_path, "%s/%s_%d.serialize", cm->decode_info->serialize_dir, cm->decode_info->cache_file, cm->current_video_frame + 1);
+        sprintf(frame_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame, cm->current_super_frame, cm->decode_info->cache_file);
 
         if (vpx_deserialize_copy(get_frame_new_buffer(cm), frame_path, cm->width * cm->scale,
                                  cm->height * cm->scale, cm->subsampling_x,
@@ -3504,7 +3495,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                "Deseriazlie key frames failed.");
         }
-        sprintf(frame_path, "%s/%s_%d.serialize", cm->decode_info->serialize_dir, cm->decode_info->target_file, cm->current_video_frame + 1);
+        sprintf(frame_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame, cm->current_super_frame, cm->decode_info->target_file);
         if (vpx_deserialize_copy(get_frame_new_buffer_lr(cm), frame_path, cm->width,
                                  cm->height, cm->subsampling_x,
                                  cm->subsampling_y, cm->byte_alignment)) {

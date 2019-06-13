@@ -61,7 +61,7 @@ static INLINE void inter_predictor_residual(const int16_t *src, int src_stride,
                                             const struct scale_factors *sf, int w, int h,
                                             int ref, const InterpKernel *kernel, int xs,
                                             int ys) {
-    sf->predict[subpel_x != 0][subpel_y != 0][ref](src, src_stride, dst,
+    sf->predict_residual[subpel_x != 0][subpel_y != 0][ref](src, src_stride, dst,
                                                    dst_stride, kernel, subpel_x,
                                                    xs, subpel_y, ys, w, h);
 }

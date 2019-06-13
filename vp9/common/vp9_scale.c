@@ -137,21 +137,21 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
     } else {
         if (sf->y_step_q4 == 16) {
             // No scaling in the y direction. Must always scale in the x direction.
-            sf->predict[0][0][0] = vpx_scaled_horiz;
-            sf->predict[0][0][1] = vpx_scaled_avg_horiz;
-            sf->predict[0][1][0] = vpx_scaled_2d;
-            sf->predict[0][1][1] = vpx_scaled_avg_2d;
-            sf->predict[1][0][0] = vpx_scaled_horiz;
-            sf->predict[1][0][1] = vpx_scaled_avg_horiz;
+//            sf->predict[0][0][0] = vpx_scaled_horiz;
+//            sf->predict[0][0][1] = vpx_scaled_avg_horiz;
+//            sf->predict[0][1][0] = vpx_scaled_2d;
+//            sf->predict[0][1][1] = vpx_scaled_avg_2d;
+//            sf->predict[1][0][0] = vpx_scaled_horiz;
+//            sf->predict[1][0][1] = vpx_scaled_avg_horiz;
         } else {
             // Must always scale in both directions. //TODO (hyunho): handle all case
             if (add) {
-                sf->predict[0][0][0] = vpx_bilinear_interp_add;
-                sf->predict[0][0][1] = vpx_bilinear_interp_add;
-                sf->predict[0][1][0] = vpx_bilinear_interp_add;
-                sf->predict[0][1][1] = vpx_bilinear_interp_add;
-                sf->predict[1][0][0] = vpx_bilinear_interp_add;
-                sf->predict[1][0][1] = vpx_bilinear_interp_add;
+                sf->predict_residual[0][0][0] = vpx_bilinear_interp_add;
+                sf->predict_residual[0][0][1] = vpx_bilinear_interp_add;
+                sf->predict_residual[0][1][0] = vpx_bilinear_interp_add;
+                sf->predict_residual[0][1][1] = vpx_bilinear_interp_add;
+                sf->predict_residual[1][0][0] = vpx_bilinear_interp_add;
+                sf->predict_residual[1][0][1] = vpx_bilinear_interp_add;
 //                sf->predict[0][0][0] = vpx_scaled_2d;
 //                sf->predict[0][0][1] = vpx_scaled_avg_2d;
 //                sf->predict[0][1][0] = vpx_scaled_2d;

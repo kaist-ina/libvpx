@@ -367,6 +367,7 @@ void vpx_convolve_avg_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
   }
 }
 
+//TODO (hyunho): applying at the boundary may cause memory sigfautl
 void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                              ptrdiff_t dst_stride, const InterpKernel *filter,
                              int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
@@ -388,6 +389,7 @@ void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *
             int py = (int)(y / y_scale);
 
             double fx1 = (double)x/x_scale - (double)px;
+//            LOGD("px: %d, py: %d", px, py);
             double fx2 = 1 - fx1;
             double fy1 = (double)y/y_scale - (double)py;
             double fy2 = 1 - fy1;
