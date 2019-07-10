@@ -55,15 +55,26 @@ static INLINE void inter_predictor(const uint8_t *src, int src_stride,
                                                  xs, subpel_y, ys, w, h);
 }
 
-static INLINE void inter_predictor_residual(const int16_t *src, int src_stride,
-                                            uint8_t *dst, int dst_stride,
-                                            const int subpel_x, const int subpel_y,
-                                            const struct scale_factors *sf, int w, int h,
-                                            int ref, const InterpKernel *kernel, int xs,
-                                            int ys) {
+static INLINE void intra_upsample(const uint8_t *src, int src_stride,
+                                        uint8_t *dst, int dst_stride,
+                                        const int subpel_x, const int subpel_y,
+                                        const struct scale_factors *sf, int w, int h,
+                                        int ref, const InterpKernel *kernel, int x_scale,
+                                        int y_scale) {
+  sf->predict[subpel_x != 0][subpel_y != 0][ref](src, src_stride, dst,
+                                                          dst_stride, kernel, subpel_x,
+                                                          x_scale, subpel_y, y_scale, w, h);
+}
+
+static INLINE void inter_upsample(const int16_t *src, int src_stride,
+                                        uint8_t *dst, int dst_stride,
+                                        const int subpel_x, const int subpel_y,
+                                        const struct scale_factors *sf, int w, int h,
+                                        int ref, const InterpKernel *kernel, int x_scale,
+                                        int y_scale) {
     sf->predict_residual[subpel_x != 0][subpel_y != 0][ref](src, src_stride, dst,
                                                    dst_stride, kernel, subpel_x,
-                                                   xs, subpel_y, ys, w, h);
+                                                   x_scale, subpel_y, y_scale, w, h);
 }
 
 #if CONFIG_VP9_HIGHBITDEPTH

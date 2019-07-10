@@ -543,7 +543,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                         LOGE("save a decoded frame fail");
                     };
 
-                    sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
+                    sprintf(file_path, "%s/%d_%d_lr_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
                     if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
                     {
                         LOGE("save a decoded frame fail");

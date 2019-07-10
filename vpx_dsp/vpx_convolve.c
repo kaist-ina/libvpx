@@ -370,7 +370,7 @@ void vpx_convolve_avg_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
 //TODO (hyunho): applying at the boundary may cause memory sigfautl
 void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                              ptrdiff_t dst_stride, const InterpKernel *filter,
-                             int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
+                             int x0_q4, int x_scale, int y0_q4, int y_scale,
                              int w, int h) {
     int x, y;
 
@@ -378,20 +378,20 @@ void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *
     (void)x0_q4;
     (void)y0_q4;
 
-    double x_scale = x_step_q4;
-    double y_scale = y_step_q4;
+    double x_scale_ = x_scale;
+    double y_scale_ = y_scale;
 
     //LOGD("x_scale: %lf, y_scale: %lf", x_scale, y_scale);
 
     for (y = 0; y < h; ++y) {
         for (x = 0; x < w; ++x) {
-            int px = (int)(x / x_scale);
-            int py = (int)(y / y_scale);
+            int px = (int)(x / x_scale_);
+            int py = (int)(y / y_scale_);
 
-            double fx1 = (double)x/x_scale - (double)px;
+            double fx1 = (double)x/x_scale_ - (double)px;
 //            LOGD("px: %d, py: %d", px, py);
             double fx2 = 1 - fx1;
-            double fy1 = (double)y/y_scale - (double)py;
+            double fy1 = (double)y/y_scale_ - (double)py;
             double fy2 = 1 - fy1;
 
             double w1 = fx2 * fy2;
@@ -476,7 +476,7 @@ void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *
 
 void vpx_bilinear_interp(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                              ptrdiff_t dst_stride, const InterpKernel *filter,
-                             int x0_q4, int x_step_q4, int y0_q4, int y_step_q4,
+                             int x0_q4, int x_scale, int y0_q4, int y_scale,
                              int w, int h) {
     int x, y;
 
@@ -484,19 +484,19 @@ void vpx_bilinear_interp(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
     (void)x0_q4;
     (void)y0_q4;
 
-    double x_scale = x_step_q4;
-    double y_scale = y_step_q4;
+    double x_scale_ = x_scale;
+    double y_scale_ = y_scale;
 
     //LOGD("x_scale: %lf, y_scale: %lf", x_scale, y_scale);
 
     for (y = 0; y < h; ++y) {
         for (x = 0; x < w; ++x) {
-            int px = (int)(x / x_scale);
-            int py = (int)(y / y_scale);
+            int px = (int)(x / x_scale_);
+            int py = (int)(y / y_scale_);
 
-            double fx1 = (double)x/x_scale - (double)px;
+            double fx1 = (double)x/x_scale_ - (double)px;
             double fx2 = 1 - fx1;
-            double fy1 = (double)y/y_scale - (double)py;
+            double fy1 = (double)y/y_scale_ - (double)py;
             double fy2 = 1 - fy1;
 
             double w1 = fx2 * fy2;

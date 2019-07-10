@@ -28,6 +28,7 @@ struct scale_factors {
   int y_scale_fp;  // vertical fixed point scale factor
   int x_step_q4;
   int y_step_q4;
+  int scale;
 
   int (*scale_value_x)(int val, const struct scale_factors *sf);
   int (*scale_value_y)(int val, const struct scale_factors *sf);
@@ -40,6 +41,7 @@ struct scale_factors {
 };
 
 MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf);
+MV32 vp9_scale_mv_(const MV *mv, int x, int y, const struct scale_factors *sf);
 
 #if CONFIG_VP9_HIGHBITDEPTH
 void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
@@ -51,7 +53,7 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
 #endif
 
 void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
-                                          int other_h, int this_w, int this_h, bool upsample, bool add);
+                                          int other_h, int this_w, int this_h, bool upsample, bool add, int scale);
 
 void vp9_setup_scale_factors_for_tmp_frame(struct scale_factors *sf);
 

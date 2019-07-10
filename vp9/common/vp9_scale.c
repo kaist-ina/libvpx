@@ -66,6 +66,24 @@ MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf) {
     return res;
 }
 
+static INLINE int scaled_x_(int val, const struct scale_factors *sf) {
+    return (int) ((int64_t) val * sf->scale >> REF_SCALE_SHIFT);
+}
+
+static INLINE int scaled_y_(int val, const struct scale_factors *sf) {
+    return (int) ((int64_t) val * sf->scale >> REF_SCALE_SHIFT);
+}
+
+MV32 vp9_scale_mv_(const MV *mv, int x, int y, const struct scale_factors *sf) {
+    const int x_off_q4 = scaled_x_(x << SUBPEL_BITS, sf) & SUBPEL_MASK;
+    const int y_off_q4 = scaled_y_(y << SUBPEL_BITS, sf) & SUBPEL_MASK;
+    const MV32 res = {scaled_y_(mv->row, sf) + y_off_q4,
+                      scaled_x_(mv->col, sf) + x_off_q4};
+
+    //LOGD("mv->row: %d, y_off_q4: %d, res.row: %d", mv->row, y_off_q4, res.row);
+    return res;
+}
+
 #if CONFIG_VP9_HIGHBITDEPTH
 void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
                                        int other_h, int this_w, int this_h,
@@ -73,7 +91,7 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
 #else
 
 void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
-                                          int other_h, int this_w, int this_h, bool upsample, bool add) {
+                                          int other_h, int this_w, int this_h, bool upsample, bool add, int scale) {
 #endif
     //TODO (Hyunho): how to check valid frame size?
     /*
@@ -83,6 +101,7 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
         return;
     }
     */
+    sf->scale = scale;
 
     if (upsample) { //hyunho: both scale x_scale_fp, x_step_q4
         sf->x_scale_fp = get_fixed_point_scale_factor(this_w, other_w);
