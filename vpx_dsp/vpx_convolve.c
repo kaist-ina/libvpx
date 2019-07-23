@@ -367,8 +367,9 @@ void vpx_convolve_avg_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
   }
 }
 
-//TODO (hyunho): applying at the boundary may cause memory sigfautl
-void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
+//TODO (hyunho): optimize by neon instructions (for on-device decoder), ARM v8a
+//TODO (hyunho): optimize by SIMD instructions (for cache optimizer), x86
+void vpx_bilinear_interp_add_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                              ptrdiff_t dst_stride, const InterpKernel *filter,
                              int x0_q4, int x_scale, int y0_q4, int y_scale,
                              int w, int h) {
@@ -474,7 +475,9 @@ void vpx_bilinear_interp_add(const int16_t *src, ptrdiff_t src_stride, uint8_t *
 //    }
 }
 
-void vpx_bilinear_interp(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
+//TODO (hyunho): optimize by neon instructions (for on-device decoder), ARM v8a
+//TODO (hyunho): optimize by SIMD instructions (for cache optimizer), x86
+void vpx_bilinear_interp_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                              ptrdiff_t dst_stride, const InterpKernel *filter,
                              int x0_q4, int x_scale, int y0_q4, int y_scale,
                              int w, int h) {

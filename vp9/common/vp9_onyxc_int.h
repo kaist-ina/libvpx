@@ -136,7 +136,8 @@ typedef struct VP9Common {
     YV12_BUFFER_CONFIG *tmp_frame; //only used for internal process
     YV12_BUFFER_CONFIG *residual;
     YV12_BUFFER_CONFIG *compare_frame;
-    YV12_BUFFER_CONFIG *reference_frame;
+    YV12_BUFFER_CONFIG *reference_frame_hr;
+    YV12_BUFFER_CONFIG *reference_frame_lr;
 
     DecodeBlockList *intra_block_list;
     DecodeBlockList *inter_block_list;

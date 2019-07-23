@@ -34,14 +34,13 @@ struct scale_factors {
   int (*scale_value_y)(int val, const struct scale_factors *sf);
 
   convolve_fn_t predict[2][2][2];  // horiz, vert, avg
-  convolve_fn_t_residual predict_residual[2][2][2];  // horiz, vert, avg
+  convolve_fn_t_residual predict_residual[2][2][2];  // horiz, vert, avg //TODO (hyunho): start from here, check whether convolution is implemented correctly
 #if CONFIG_VP9_HIGHBITDEPTH
   highbd_convolve_fn_t highbd_predict[2][2][2];  // horiz, vert, avg
 #endif
 };
 
 MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf);
-MV32 vp9_scale_mv_(const MV *mv, int x, int y, const struct scale_factors *sf);
 
 #if CONFIG_VP9_HIGHBITDEPTH
 void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
@@ -54,8 +53,6 @@ void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,
 
 void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
                                           int other_h, int this_w, int this_h, bool upsample, bool add, int scale);
-
-void vp9_setup_scale_factors_for_tmp_frame(struct scale_factors *sf);
 
 static INLINE int vp9_is_valid_scale(const struct scale_factors *sf) {
   return sf->x_scale_fp != REF_INVALID_SCALE &&

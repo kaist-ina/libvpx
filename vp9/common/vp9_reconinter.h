@@ -148,11 +148,16 @@ static INLINE void setup_res_plane(struct residual_2d *dst, int16_t *src,
   dst->stride = stride;
 }
 
-void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+void vp9_setup_dst_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col);
 
-void vp9_setup_dst_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+
+void vp9_setup_pre_planes(MACROBLOCKD *xd, int idx,
+                          const YV12_BUFFER_CONFIG *src, int mi_row, int mi_col,
+                          const struct scale_factors *sf);
+
+void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col);
 
@@ -160,25 +165,21 @@ void vp9_setup_sr_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                          const YV12_BUFFER_CONFIG *src, int mi_row,
                          int mi_col, const struct scale_factors *sf);
 
+void vp9_setup_ref_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                          const YV12_BUFFER_CONFIG *src, int mi_row,
+                          int mi_col, const struct scale_factors *sf);
+
+void vp9_setup_compare_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                              const YV12_BUFFER_CONFIG *src, int mi_row,
+                              int mi_col, const struct scale_factors *sf);
+
 void vp9_setup_residual_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                                const YV12_BUFFER_CONFIG *src, int mi_row,
-                               int mi_col);
+                               int mi_col, const struct scale_factors *sf);
 
 void vp9_setup_input_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col);
-
-void vp9_setup_residual_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
-                               const YV12_BUFFER_CONFIG *src, int mi_row,
-                               int mi_col);
-
-void vp9_setup_resize_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
-                             const YV12_BUFFER_CONFIG *src, int mi_row,
-                             int mi_col);
-
-void vp9_setup_pre_planes(MACROBLOCKD *xd, int idx,
-                          const YV12_BUFFER_CONFIG *src, int mi_row, int mi_col,
-                          const struct scale_factors *sf);
 
 #ifdef __cplusplus
 }  // extern "C"

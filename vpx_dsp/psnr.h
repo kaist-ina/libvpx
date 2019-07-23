@@ -46,6 +46,8 @@ void vpx_calc_highbd_psnr(const YV12_BUFFER_CONFIG *a,
 #endif
 void vpx_calc_psnr(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
                    PSNR_STATS *psnr);
+void vpx_calc_psnr_block(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
+                         PSNR_STATS *psnr, int width, int height, int mi_col, int mi_row);
 
 double vpx_psnrhvs(const YV12_BUFFER_CONFIG *source,
                    const YV12_BUFFER_CONFIG *dest, double *phvs_y,
