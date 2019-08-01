@@ -217,7 +217,7 @@ void vpx_idct4x4_16_copy_add_c(const tran_low_t *input, uint8_t *dest, int strid
             dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
                                                   ROUND_POWER_OF_TWO(temp_out[j], 4));
             residual[j * res_stride + i] = clip_pixel_int16(ROUND_POWER_OF_TWO(temp_out[j], 4));
-//            LOGD("temp_out[j]: %d, residual[j * res_stride +i] : %d", ROUND_POWER_OF_TWO(temp_out[j], 4), residual[j * res_stride + i]);
+//            LOGD("temp_out[j]: %d, lr_resiudal[j * res_stride +i] : %d", ROUND_POWER_OF_TWO(temp_out[j], 4), lr_resiudal[j * res_stride + i]);
         }
     }
 //    int i, j;
@@ -239,7 +239,7 @@ void vpx_idct4x4_16_copy_add_c(const tran_low_t *input, uint8_t *dest, int strid
 //        for (j = 0; j < 4; ++j) {
 //            dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
 //                                                  ROUND_POWER_OF_TWO(temp_out[j], 4));
-//            residual[j * res_stride + i] = ROUND_POWER_OF_TWO(temp_out[j], 4);
+//            lr_resiudal[j * res_stride + i] = ROUND_POWER_OF_TWO(temp_out[j], 4);
 //        }
 //    }
 }
@@ -306,7 +306,7 @@ void vpx_idct4x4_1_copy_add_c(const tran_low_t *input, uint8_t *dest, int stride
 ////        residual[3] = (int16_t) a1;
 //
 //        dest += stride;
-//        residual += res_stride;
+//        lr_resiudal += res_stride;
 //    }
 }
 
@@ -927,7 +927,7 @@ void vpx_idct16x16_256_add_c(const tran_low_t *input, uint8_t *dest,
     for (j = 0; j < 16; ++j) {
       dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
                                             ROUND_POWER_OF_TWO(temp_out[j], 6));
-//      LOGD("residual: %d", ROUND_POWER_OF_TWO(temp_out[j], 6));
+//      LOGD("lr_resiudal: %d", ROUND_POWER_OF_TWO(temp_out[j], 6));
     }
   }
 }
@@ -955,7 +955,7 @@ void vpx_idct16x16_256_copy_add_c(const tran_low_t *input, uint8_t *dest,
             dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
                                                   ROUND_POWER_OF_TWO(temp_out[j], 6));
             residual[j * res_stride + i] = clip_pixel_int16(ROUND_POWER_OF_TWO(temp_out[j], 6));
-//      LOGD("residual: %d", ROUND_POWER_OF_TWO(temp_out[j], 6));
+//      LOGD("lr_resiudal: %d", ROUND_POWER_OF_TWO(temp_out[j], 6));
         }
     }
 }

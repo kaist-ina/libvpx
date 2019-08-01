@@ -12,7 +12,7 @@
 #include "vpx_util/vpx_write_yuv_frame.h"
 
 #include <android/log.h>
-#define TAG "vp9_dx_iface.c JNI"
+#define TAG "vpx_write_yuv_frame.c JNI"
 #define _UNKNOWN   0
 #define _DEFAULT   1
 #define _VERBOSE   2
@@ -39,6 +39,8 @@ int vpx_write_y_frame(char *file_path, YV12_BUFFER_CONFIG *s){
         LOGE("file open fail: %s", file_path);
         return -1;
     }
+
+//    LOGD("y_crop_height: %d, y_crop_width: %d", s->y_crop_height, s->y_crop_width);
 
     unsigned char *src = s->y_buffer;
     int h = s->y_crop_height;

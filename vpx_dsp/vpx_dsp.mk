@@ -85,6 +85,12 @@ DSP_SRCS-$(HAVE_DSPR2)  += mips/common_dspr2.c
 DSP_SRCS-yes += vpx_convolve.c
 DSP_SRCS-yes += vpx_convolve.h
 DSP_SRCS-yes += vpx_filter.h
+DSP_SRCS-yes += vpx_bilinear.c
+DSP_SRCS-yes += vpx_bilinear.h
+DSP_SRCS-yes += vpx_constant.c
+DSP_SRCS-yes += vpx_constant.h
+DSP_SRCS-yes += vpx_copy.c
+DSP_SRCS-yes += vpx_copy.h
 
 DSP_SRCS-$(ARCH_X86)$(ARCH_X86_64) += x86/convolve.h
 DSP_SRCS-$(ARCH_X86)$(ARCH_X86_64) += x86/vpx_asm_stubs.c

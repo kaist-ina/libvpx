@@ -32,6 +32,7 @@
 #include <android/log.h>
 #include <vpx_dsp/psnr.h>
 #include <vpx_util/vpx_write_yuv_frame.h>
+#include <vpx_dsp/ssim.h>
 
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
@@ -331,6 +332,186 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
     return VPX_CODEC_OK;
 }
 
+static void save_serialized_intermediate_frame(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
+{
+    char file_path[PATH_MAX];
+    if (cm->mode == DECODE_CACHE) {
+        memset(file_path, 0, sizeof(char) * PATH_MAX);
+        sprintf(file_path, "%s/%d_%d_hr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) {
+            LOGE("save a serialized frame fail");
+        }
+
+        sprintf(file_path, "%s/%d_%d_lr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
+        if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(cm))) {
+            LOGE("save a serialized frame fail");
+        }
+    }
+    else {
+        sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm)))
+        {
+            LOGE("save a serialized frame fail");
+        }
+    }
+}
+
+static void save_serialized_final_frame(VP9_COMMON *cm, int current_video_frame)
+{
+    char file_path[PATH_MAX];
+    if (cm->mode == DECODE_CACHE) {
+        memset(file_path, 0, sizeof(char) * PATH_MAX);
+        sprintf(file_path, "%s/%d_hr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->decode_info->prefix);
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) {
+            LOGE("save a serialized frame fail");
+        }
+
+        sprintf(file_path, "%s/%d_lr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->decode_info->prefix);
+        if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(cm))) {
+            LOGE("save a serialized frame fail");
+        }
+    }
+    else {
+        sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->decode_info->prefix);
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm)))
+        {
+            LOGE("save a serialized frame fail");
+        }
+    }
+}
+
+static void save_decoded_intermediate_frame(VP9_COMMON *cm, int current_video_frame,
+                                            int current_super_frame)
+{
+    char file_path[PATH_MAX];
+    if (cm->decode_info->save_decoded_frame && cm->decode_info->save_intermediate)
+    {
+        if (cm->mode == DECODE_CACHE) {
+            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->decode_info->frame_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            {
+                LOGE("save a decoded frame fail");
+            }
+
+            sprintf(file_path, "%s/%d_%d_lr_%s.y", cm->decode_info->frame_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(cm)))
+            {
+                LOGE("save a decoded frame fail");
+            }
+        }
+        else {
+            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(file_path, "%s/%d_%d_%s.y", cm->decode_info->frame_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            {
+                LOGE("save a decoded frame fail");
+            }
+        }
+    }
+}
+
+static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
+{
+    char file_path[PATH_MAX];
+    if (cm->decode_info->save_decoded_frame && cm->decode_info->save_intermediate)
+    {
+        if (cm->mode == DECODE_CACHE) {
+            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(file_path, "%s/%d_hr_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->decode_info->prefix);
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            {
+                LOGE("save a decoded frame fail");
+            }
+
+            sprintf(file_path, "%s/%d_lr_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->decode_info->prefix);
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(cm)))
+            {
+                LOGE("save a decoded frame fail");
+            }
+        }
+        else {
+            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(file_path, "%s/%d_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->decode_info->prefix);
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            {
+                LOGE("save a decoded frame fail");
+            }
+        }
+    }
+}
+
+
+static void save_decode_result(VP9_COMMON *cm, double cpu_time_used)
+{
+    char log[LOG_MAX];
+    //latency log
+    memset(log, 0, LOG_MAX);
+    sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, cpu_time_used * 1000);
+    fputs(log, cm->latency_log);
+
+    //metadata log
+    memset(log, 0, LOG_MAX);
+    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", cm->current_video_frame - 1, cm->current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_noskip_count, cm->adaptive_cache_count); //TODO: 추가...
+    fputs(log, cm->metadata_log);
+
+    //TODO: move fclose() to decoder_destroy()
+    if (cm->latency_log != NULL) fclose(cm->latency_log);
+    if (cm->metadata_log != NULL) fclose(cm->metadata_log);
+}
+
+static void save_quality_result(VP9_COMMON *cm)
+{
+    char file_path[PATH_MAX];
+    char log[LOG_MAX];
+    PSNR_STATS psnr;
+    memset(file_path, 0, sizeof(char) * PATH_MAX);
+    int width_ = get_frame_new_buffer(cm)->y_width;
+    int height_ = get_frame_new_buffer(cm)->y_height;
+    sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->compare_file);
+    if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width_, height_,
+                            cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+    {
+        vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                           "deserialize failed");
+    }
+
+    double weight;
+    double ssim = vpx_calc_ssim(get_frame_new_buffer(cm), cm->hr_reference_frame, &weight);
+    vpx_calc_psnr(get_frame_new_buffer(cm), cm->hr_reference_frame, &psnr);
+    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
+
+    //qualtiy log
+    memset(log, 0, LOG_MAX);
+    sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", cm->current_video_frame - 1, psnr.psnr[0], psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
+
+    fputs(log, cm->quality_log);
+
+    //TODO (hyunho): move fclose() to decoder_destroy()
+    if (cm->quality_log != NULL) fclose(cm->quality_log);
+}
+
+static void debug_lr_quality(VP9_COMMON *cm, int current_video_frame,
+                             int current_super_frame)
+{
+    char file_path[PATH_MAX];
+    PSNR_STATS psnr;
+    memset(file_path, 0, sizeof(char) * PATH_MAX);
+    int width_ = get_frame_new_buffer_lr(cm)->y_width;
+    int height_ = get_frame_new_buffer_lr(cm)->y_height;
+    sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->target_file);
+    if(vpx_deserialize_load(cm->lr_reference_frame, file_path, width_, height_,
+                            cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+    {
+        vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                           "deserialize failed");
+    }
+    vpx_calc_psnr(get_frame_new_buffer_lr(cm), cm->lr_reference_frame, &psnr);
+
+    LOGD("Low-resolution quality, %d, %d, %.2fdB", current_video_frame, current_super_frame, psnr.psnr[0]);
+}
+
+#define DEBUG_LR_QUALITY 0
 static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                       const uint8_t *data, unsigned int data_sz,
                                       void *user_priv, long deadline) {
@@ -370,13 +551,10 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     cm->current_super_frame = 0;
     cm->scale = cm->decode_info->scale;
     cm->mode = cm->decode_info->mode;
-    decode_info_t *decode_info = cm->decode_info;
-    PSNR_STATS psnr_original;
-    PSNR_STATS psnr_compare;
     clock_t start, end;
     double cpu_time_used;
 
-    //TODO (hyunho): add prefix for each video type from cm->decode_info
+    //TODO (hyunho): move to decoder_init()
     if (cm->decode_info->save_decode_result == 1) {
         if (cm->current_video_frame == 0) {
             memset(file_path, 0, PATH_MAX);
@@ -409,10 +587,12 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         }
     }
     /*******************Hyunho************************/
-    start = clock();
+
     if (frame_count > 0) {
         int i;
         for (i = 0; i < frame_count; ++i) {
+            start = clock();
+
             const uint8_t *data_start_copy = data_start;
             const uint32_t frame_size = frame_sizes[i];
             vpx_codec_err_t res;
@@ -421,82 +601,45 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                 return VPX_CODEC_CORRUPT_FRAME;
             }
 
-//            LOGD("current_video_frame: %d, current_super_frame: %d", cm->current_video_frame, cm->current_super_frame);
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
+
+            end = clock();
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 
             data_start += frame_size;
 
             /*******************Hyunho************************/
-//            LOGD("a) current_video_frame: %d, current_super_frame: %d, show_frame: %d, frame_type: %d, intra_only: %d, intra_count: %d, inter_count: %d",
-//                    cm->current_video_frame, cm->current_super_frame, cm->show_frame, cm->frame_type, cm->intra_only, cm->intra_count, cm->inter_count);
-            //hyunho: set super-frame index
             if (cm->show_frame == 0) current_video_frame = cm->current_video_frame;
             else current_video_frame = cm->current_video_frame - 1;
 
-            if (cm->decode_info->save_serialized_frame && cm->decode_info->save_intermediate)
-            {
-                if (cm->mode == DECODE_CACHE) {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%d_%d_hr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a serialized frame fail");
-                    }
-
-                    sprintf(file_path, "%s/%d_%d_lr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-                    {
-                        LOGE("save a serialized frame fail");
-                    }
-                }
-                else {
-                    sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a serialized frame fail");
-                    }
-                }
+            if (cm->decode_info->save_intermediate) {
+                if (cm->decode_info->save_serialized_frame)
+                    save_serialized_intermediate_frame(cm, current_video_frame,
+                                                       cm->current_super_frame);
+                if (cm->decode_info->save_decoded_frame)
+                    save_decoded_intermediate_frame(cm, current_video_frame,
+                                                    cm->current_super_frame);
             }
-            if (cm->decode_info->save_decoded_frame && cm->decode_info->save_intermediate)
-            {
-                if (cm->mode == DECODE_CACHE) {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a decoded frame fail");
-                    }
 
-                    sprintf(file_path, "%s/%d_%d_lr_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-                    {
-                        LOGE("save a decoded frame fail");
-                    }
-                }
-                else {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%d_%d_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a decoded frame fail");
-                    }
-                }
-            }
+            if (cm->decode_info->save_decode_result) save_decode_result(cm, cpu_time_used);
+
+#if DEBUG_LR_QUALITY
+            debug_lr_quality(cm, current_video_frame, cm->current_super_frame);
+#endif
 
             cm->current_super_frame++;
             /*******************Hyunho************************/
         }
     } else {
         while (data_start < data_end) {
+            start = clock();
             const uint32_t frame_size = (uint32_t) (data_end - data_start);
-//            LOGD("current_video_frame: %d, current_super_frame: %d", cm->current_video_frame, cm->current_super_frame);
-            const vpx_codec_err_t res =
-                    decode_one(ctx, &data_start, frame_size, user_priv, deadline);
-//            LOGD("b) current_video_frame: %d, current_super_frame: %d, show_frame: %d, frame_type: %d, intra_only: %d, intra_count: %d, inter_count: %d",
-//                 cm->current_video_frame, cm->current_super_frame, cm->show_frame, cm->frame_type, cm->intra_only, cm->intra_count, cm->inter_count);
+            const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv, deadline);
 
             if (res != VPX_CODEC_OK) return res;
+            end = clock();
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 
             // Account for suboptimal termination by the encoder.
             while (data_start < data_end) {
@@ -508,188 +651,36 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 
             /*******************Hyunho************************/
-            if (cm->decode_info->save_serialized_frame && cm->decode_info->save_intermediate)
-            {
-                if (cm->mode == DECODE_CACHE) {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%d_%d_hr_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a serialized frame fail");
-                    };
-
-                    sprintf(file_path, "%s/%d_%d_lr_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-                    {
-                        LOGE("save a serialized frame fail");
-                    }
-                }
-                else {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a serialized frame fail");
-                    };
-                }
+            if (cm->decode_info->save_intermediate) {
+                if (cm->decode_info->save_serialized_frame) save_serialized_intermediate_frame(cm,
+                                                                                               cm->current_video_frame -
+                                                                                               1,
+                                                                                               cm->current_super_frame);
+                if (cm->decode_info->save_decoded_frame) save_decoded_intermediate_frame(cm,
+                                                                                         cm->current_video_frame -
+                                                                                         1,
+                                                                                         cm->current_super_frame);
             }
-            if (cm->decode_info->save_decoded_frame && cm->decode_info->save_intermediate)
-            {
-                if (cm->mode == DECODE_CACHE) {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a decoded frame fail");
-                    };
 
-                    sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->current_super_frame, cm->decode_info->prefix);
-                    if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-                    {
-                        LOGE("save a decoded frame fail");
-                    }
-                }
-                else {
-                    memset(file_path, 0, sizeof(char) * PATH_MAX);
-                    sprintf(file_path, "%s/%s_%d_%d.y", cm->decode_info->frame_dir, cm->decode_info->target_file, cm->current_video_frame - 1, cm->current_super_frame);
+            if (cm->decode_info->save_decode_result) save_decode_result(cm, cpu_time_used);
 
-                    if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                    {
-                        LOGE("save a decoded frame fail");
-                    };
-                }
-            }
+#if DEBUG_LR_QUALITY
+            debug_lr_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
+#endif
             /*******************Hyunho************************/
         }
     }
-    end = clock();
-    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-    /*******************Hyunho************************/
-//    LOGD("current_video_frame: %d", cm->current_video_frame);
 
-//    LOGD("video frame: %d, key frame: %d, intra_only: %d, block: %d, inter_block: %d", cm->current_video_frame, cm->frame_type, cm->intra_only, cm->count, cm->inter_count);
+    /*******************Hyunho************************/
     if (cm->current_super_frame > 0) cm->current_super_frame--;
 
-    if (cm->decode_info->save_serialized_frame)
-    {
-        if (cm->mode == DECODE_CACHE) {
-            memset(file_path, 0, sizeof(char) * PATH_MAX);
-            sprintf(file_path, "%s/%d_hr_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-            if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-            {
-                LOGE("save a serialized frame fail");
-            };
+//    if (cm->decode_info->save_final) {
+//        if (cm->decode_info->save_serialized_frame) save_serialized_final_frame(cm, cm->current_video_frame - 1);
+//        if (cm->decode_info->save_decoded_frame) save_decoded_final_frame(cm, cm->current_video_frame -1);
+//    }
+//
+//    if (cm->decode_info->save_quality_result) save_quality_result(cm);
 
-            sprintf(file_path, "%s/%d_lr_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-            if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-            {
-                LOGE("save a serialized frame fail");
-            };
-        }
-        else {
-            memset(file_path, 0, sizeof(char) * PATH_MAX);
-            sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-            if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-            {
-                LOGE("save a serialized frame fail");
-            };
-        }
-    }
-    if (cm->decode_info->save_serialized_key_frame)
-    {
-        if(cm->frame_type == KEY_FRAME) {
-            if (cm->mode == DECODE_CACHE) {
-                memset(file_path, 0, sizeof(char) * PATH_MAX);
-                sprintf(file_path, "%s/%d_hr_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-                if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                {
-                    LOGE("save a serialized frame fail");
-                };
-
-                sprintf(file_path, "%s/%d_lr_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-                if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-                {
-                    LOGE("save a serialized frame fail");
-                };
-            }
-            else {
-                memset(file_path, 0, sizeof(char) * PATH_MAX);
-                sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-                if (vpx_serialize_save(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-                {
-                    LOGE("save a serialized frame fail");
-                };
-            }
-        }
-    }
-    if (cm->decode_info->save_decoded_frame)
-    {
-        if (cm->mode == DECODE_CACHE) {
-            memset(file_path, 0, sizeof(char) * PATH_MAX);
-            sprintf(file_path, "%s/%d_hr_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-            {
-                LOGE("save a decoded frame fail");
-            };
-
-            sprintf(file_path, "%s/%d_lr_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(&ctx->pbi->common)))
-            {
-                LOGE("save a decoded frame fail");
-            };
-        }
-        else {
-            memset(file_path, 0, sizeof(char) * PATH_MAX);
-            sprintf(file_path, "%s/%d_%s.y", cm->decode_info->frame_dir, cm->current_video_frame - 1, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(&ctx->pbi->common)))
-            {
-                LOGE("save a decoded frame fail");
-            };
-        }
-    }
-
-    if (cm->decode_info->save_decode_result) {
-        //latency log
-        memset(log, 0, LOG_MAX);
-        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, cpu_time_used * 1000);
-        fputs(log, cm->latency_log);
-
-        //metadata log
-        memset(log, 0, LOG_MAX);
-        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\n", cm->current_video_frame - 1, cm->current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_count_noskip);
-        fputs(log, cm->metadata_log);
-
-        if (cm->latency_log != NULL) fclose(cm->latency_log);
-        if (cm->metadata_log != NULL) fclose(cm->metadata_log);
-    }
-
-    if (cm->decode_info->save_quality_result)
-    {
-        memset(file_path, 0, sizeof(char) * PATH_MAX);
-        int width_ = get_frame_new_buffer(cm)->y_width;
-        int height_ = get_frame_new_buffer(cm)->y_height;
-        sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->compare_file);
-        if(vpx_deserialize_load(cm->reference_frame, file_path, width_, height_,
-                                cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
-        {
-            vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
-                               "deserialize failed");
-        }
-        vpx_calc_psnr(get_frame_new_buffer(&ctx->pbi->common), ctx->pbi->common.reference_frame, &psnr_original);
-
-//        LOGD("YUV-channels: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[0], psnr_compare.psnr[0]);
-//        LOGD("Y-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[1], psnr_compare.psnr[1]);
-//        LOGD("U-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[2], psnr_compare.psnr[2]);
-//        LOGD("V-channel: %d: original %.2fdB, compare %.2fdB", ctx->pbi->common.current_video_frame, psnr_original.psnr[3], psnr_compare.psnr[3]);
-
-        //qualtiy log
-        memset(log, 0, LOG_MAX);
-        sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", cm->current_video_frame - 1, psnr_original.psnr[0], psnr_original.psnr[1], psnr_original.psnr[2], psnr_original.psnr[3]);
-
-        fputs(log, cm->quality_log);
-
-        if (cm->quality_log != NULL) fclose(cm->quality_log);
-    }
     /*******************Hyunho************************/
 
     return res;

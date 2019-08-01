@@ -517,14 +517,14 @@ int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
 //        } else if (frame_size > (size_t) ybf->buffer_alloc_sz) {
 //            // Allocation to hold larger frame, or first allocation.
 //            //vpx_free(ybf->buffer_alloc);
-//            vpx_free(ybf->residual_alloc); //buffer->residual
+//            vpx_free(ybf->residual_alloc); //buffer->lr_resiudal
 //            //ybf->buffer_alloc = NULL;
-//            ybf->residual_alloc = NULL; //buffer->residual
+//            ybf->residual_alloc = NULL; //buffer->lr_resiudal
 //
 //            //ybf->buffer_alloc = (uint8_t *) vpx_memalign(32, (size_t) frame_size);
-//            ybf->residual_alloc = (int16_t *) vpx_memalign(32, (size_t) frame_size); //buffer->residual
+//            ybf->residual_alloc = (int16_t *) vpx_memalign(32, (size_t) frame_size); //buffer->lr_resiudal
 //            //if (!ybf->buffer_alloc) return -1;
-//            if (!ybf->residual_alloc) return -1; //buffer->residual
+//            if (!ybf->residual_alloc) return -1; //buffer->lr_resiudal
 //
 //            ybf->buffer_alloc_sz = (int) frame_size;
 //
@@ -532,7 +532,7 @@ int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
 //            // due to access uninitialized memory in frame border. It could be
 //            // removed if border is totally removed.
 //            //memset(ybf->buffer_alloc, 0, ybf->buffer_alloc_sz);
-//            memset(ybf->residual_alloc, 0, ybf->buffer_alloc_sz); //buffer->residual
+//            memset(ybf->residual_alloc, 0, ybf->buffer_alloc_sz); //buffer->lr_resiudal
 //        }
 //
 //        /* Only support allocating buffers that have a border that's a multiple
@@ -560,7 +560,7 @@ int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
 //        ybf->subsampling_y = ss_y;
 //
 //        //buf = ybf->buffer_alloc;
-//        buf = ybf->residual_alloc; //buf->residual
+//        buf = ybf->residual_alloc; //buf->lr_resiudal
 //#if CONFIG_VP9_HIGHBITDEPTH
 //        if (use_highbitdepth) {
 //          // Store uint16 addresses when using 16bit framebuffers
@@ -582,14 +582,14 @@ int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf) {
 ////                                            vp9_byte_align);
 //
 //        ybf->y_residual = (int16_t *) yv12_align_addr(
-//                buf + (border * y_stride) + border, vp9_byte_align); //buffer->residual
+//                buf + (border * y_stride) + border, vp9_byte_align); //buffer->lr_resiudal
 //        ybf->u_residual = (int16_t *) yv12_align_addr(
 //                buf + yplane_size + (uv_border_h * uv_stride) + uv_border_w,
-//                vp9_byte_align); //buffer->residual
+//                vp9_byte_align); //buffer->lr_resiudal
 //        ybf->v_residual =
 //                (int16_t *) yv12_align_addr(buf + yplane_size + uvplane_size +
 //                                            (uv_border_h * uv_stride) + uv_border_w,
-//                                            vp9_byte_align); //buffer->residual
+//                                            vp9_byte_align); //buffer->lr_resiudal
 //
 //        ybf->corrupted = 0; /* assume not corrupted by errors */
 //        return 0;

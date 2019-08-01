@@ -146,11 +146,12 @@ struct macroblockd_plane {
   struct buf_2d dst;
   /*******************Hyunho************************/
   struct buf_2d sr; //used for generating super-resolutioned cached frame
-  struct buf_2d residual; //used for resizing residual frame
-  struct buf_2d resize; //DEBUG_RESIZE
+  struct buf_2d residual; //used for resizing lr_resiudal frame
   struct buf_2d input; //DEBUG_RESIZE
+  struct buf_2d compare;
+  struct buf_2d reference;
+  struct buf_2d debug;
   struct residual_2d res;
-//  struct residual_2d res;
   /*******************Hyunho************************/
   struct buf_2d pre[2];
   ENTROPY_CONTEXT *above_context;

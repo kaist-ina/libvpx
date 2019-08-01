@@ -133,10 +133,12 @@ typedef struct VP9Common {
 
     decode_info_t *decode_info;
     DECODE_MODE mode;
-    YV12_BUFFER_CONFIG *tmp_frame; //only used for internal process
-    YV12_BUFFER_CONFIG *residual;
-    YV12_BUFFER_CONFIG *compare_frame;
-    YV12_BUFFER_CONFIG *reference_frame;
+
+    YV12_BUFFER_CONFIG *lr_reference_frame;
+    YV12_BUFFER_CONFIG *lr_resiudal;
+    YV12_BUFFER_CONFIG *hr_compare_frame;
+    YV12_BUFFER_CONFIG *hr_reference_frame;
+    YV12_BUFFER_CONFIG *hr_debug_frame; //only used for internal process
 
     DecodeBlockList *intra_block_list;
     DecodeBlockList *inter_block_list;
@@ -148,7 +150,8 @@ typedef struct VP9Common {
     int count;
     int intra_count;
     int inter_count;
-    int inter_count_noskip;
+    int inter_noskip_count;
+    int adaptive_cache_count;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;

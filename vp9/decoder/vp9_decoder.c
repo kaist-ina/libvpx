@@ -153,10 +153,11 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     cm->inter_block_list->head = NULL;
     cm->inter_block_list->tail = NULL;
 
-    cm->compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->tmp_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->residual = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    cm->hr_compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    cm->hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    cm->lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    cm->hr_debug_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    cm->lr_resiudal = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
     /*******************Hyunho************************/
 
     vpx_get_worker_interface()->init(&pbi->lf_worker);
@@ -186,40 +187,36 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
 
     /*******************Hyunho************************/
     VP9_COMMON *cm = &pbi->common;
-    vpx_free((void *) cm->compare_frame);
-    vpx_free((void *) cm->reference_frame);
-    vpx_free((void *) cm->tmp_frame);
-    vpx_free((void *) cm->residual);
 
-    if (cm->mode == DECODE_CACHE) {
-        //free decode block lists
-        DecodeBlock *intra_block = cm->intra_block_list->head;
-        DecodeBlock *prev_block = NULL;
-        while (intra_block != NULL) {
-            prev_block = intra_block;
-            intra_block = intra_block->next;
-            vpx_free(prev_block);
-        }
-        vpx_free(cm->intra_block_list);
-
-        DecodeBlock *inter_block = cm->inter_block_list->head;
-        while (inter_block != NULL) {
-            prev_block = inter_block;
-            inter_block = inter_block->next;
-            vpx_free(prev_block);
-        }
-        vpx_free(cm->inter_block_list);
-
-        //free frames
-        vpx_free_frame_buffer(cm->compare_frame);
-        vpx_free_frame_buffer(cm->reference_frame);
-        vpx_free_frame_buffer(cm->tmp_frame);
-        vpx_free_frame_buffer(cm->residual);
-        vpx_free(cm->compare_frame);
-        vpx_free(cm->reference_frame);
-        vpx_free(cm->tmp_frame);
-        vpx_free(cm->residual);
+    //free decode block lists
+    DecodeBlock *intra_block = cm->intra_block_list->head;
+    DecodeBlock *prev_block = NULL;
+    while (intra_block != NULL) {
+        prev_block = intra_block;
+        intra_block = intra_block->next;
+        vpx_free(prev_block);
     }
+    vpx_free(cm->intra_block_list);
+
+    DecodeBlock *inter_block = cm->inter_block_list->head;
+    while (inter_block != NULL) {
+        prev_block = inter_block;
+        inter_block = inter_block->next;
+        vpx_free(prev_block);
+    }
+    vpx_free(cm->inter_block_list);
+
+    //free frames
+    vpx_free_frame_buffer(cm->hr_compare_frame);
+    vpx_free_frame_buffer(cm->hr_reference_frame);
+    vpx_free_frame_buffer(cm->lr_reference_frame);
+    vpx_free_frame_buffer(cm->hr_debug_frame);
+    vpx_free_frame_buffer(cm->lr_resiudal);
+    vpx_free(cm->hr_compare_frame);
+    vpx_free(cm->hr_reference_frame);
+    vpx_free(cm->lr_reference_frame);
+    vpx_free(cm->hr_debug_frame);
+    vpx_free(cm->lr_resiudal);
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);

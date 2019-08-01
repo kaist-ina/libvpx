@@ -275,9 +275,9 @@ void vp9_build_inter_predictors_sb(MACROBLOCKD *xd, int mi_row, int mi_col,
                                     MAX_MB_PLANE - 1);
 }
 
-void vp9_setup_resize_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+void vp9_setup_compare_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
-                          int mi_col) {
+                          int mi_col, const struct scale_factors *sf) {
   uint8_t *const buffers[MAX_MB_PLANE] = { src->y_buffer, src->u_buffer,
                                            src->v_buffer };
   const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
@@ -287,7 +287,7 @@ void vp9_setup_resize_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
   for (i = 0; i < MAX_MB_PLANE; ++i) {
     //LOGD("stride: %d, mi_row: %d, mi_col: %d", strides[i], mi_row, mi_col);
     struct macroblockd_plane *const pd = &planes[i];
-    setup_pred_plane(&pd->resize, buffers[i], strides[i], mi_row, mi_col, NULL,
+    setup_pred_plane(&pd->compare, buffers[i], strides[i], mi_row, mi_col, sf,
                      pd->subsampling_x, pd->subsampling_y);
   }
 }
@@ -309,56 +309,54 @@ void vp9_setup_sr_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
   }
 }
 
+void vp9_setup_ref_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                          const YV12_BUFFER_CONFIG *src, int mi_row,
+                          int mi_col, const struct scale_factors *sf) {
+    uint8_t *const buffers[MAX_MB_PLANE] = { src->y_buffer, src->u_buffer,
+                                             src->v_buffer };
+    const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
+                                        src->uv_stride };
+    int i;
+
+    for (i = 0; i < MAX_MB_PLANE; ++i) {
+        struct macroblockd_plane *const pd = &planes[i];
+        setup_pred_plane(&pd->reference, buffers[i], strides[i], mi_row, mi_col, sf,
+                         pd->subsampling_x, pd->subsampling_y);
+    }
+}
+
+void vp9_setup_residual_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                               const YV12_BUFFER_CONFIG *src, int mi_row,
+                               int mi_col, const struct scale_factors *sf) {
+    uint8_t *const buffers[MAX_MB_PLANE] = { src->y_buffer, src->u_buffer,
+                                             src->v_buffer };
+    const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
+                                        src->uv_stride };
+    int i;
+
+    for (i = 0; i < MAX_MB_PLANE; ++i) {
+        struct macroblockd_plane *const pd = &planes[i];
+        setup_pred_plane(&pd->residual, buffers[i], strides[i], mi_row, mi_col, sf,
+                         pd->subsampling_x, pd->subsampling_y);
+    }
+}
 
 void vp9_setup_input_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
                           int mi_col) {
-  uint8_t *const buffers[MAX_MB_PLANE] = { src->y_buffer, src->u_buffer,
-                                           src->v_buffer };
-  const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
-                                      src->uv_stride };
-  int i;
+    uint8_t *const buffers[MAX_MB_PLANE] = {src->y_buffer, src->u_buffer,
+                                            src->v_buffer};
+    const int strides[MAX_MB_PLANE] = {src->y_stride, src->uv_stride,
+                                       src->uv_stride};
+    int i;
 
-  for (i = 0; i < MAX_MB_PLANE; ++i) {
-    //LOGD("stride: %d, mi_row: %d, mi_col: %d", strides[i], mi_row, mi_col);
-    struct macroblockd_plane *const pd = &planes[i];
-    setup_pred_plane(&pd->input, buffers[i], strides[i], mi_row, mi_col, NULL,
-                     pd->subsampling_x, pd->subsampling_y);
-  }
+    for (i = 0; i < MAX_MB_PLANE; ++i) {
+        //LOGD("stride: %d, mi_row: %d, mi_col: %d", strides[i], mi_row, mi_col);
+        struct macroblockd_plane *const pd = &planes[i];
+        setup_pred_plane(&pd->input, buffers[i], strides[i], mi_row, mi_col, NULL,
+                         pd->subsampling_x, pd->subsampling_y);
+    }
 }
-
-void vp9_setup_residual_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
-                          const YV12_BUFFER_CONFIG *src, int mi_row,
-                          int mi_col) {
-  uint8_t *const buffers[MAX_MB_PLANE] = { src->y_buffer, src->u_buffer,
-                                           src->v_buffer };
-  const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
-                                      src->uv_stride };
-  int i;
-
-  for (i = 0; i < MAX_MB_PLANE; ++i) {
-    struct macroblockd_plane *const pd = &planes[i];
-    setup_pred_plane(&pd->residual, buffers[i], strides[i], mi_row, mi_col, NULL,
-                     pd->subsampling_x, pd->subsampling_y);
-  }
-}
-
-//void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
-//                               const YV12_BUFFER_CONFIG *src, int mi_row,
-//                               int mi_col) {
-//  int16_t *const buffers[MAX_MB_PLANE] = { src->y_residual, src->u_residual,
-//                                           src->v_residual };
-//  const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
-//                                      src->uv_stride };
-//  int i;
-//
-//  for (i = 0; i < MAX_MB_PLANE; ++i) {
-//    struct macroblockd_plane *const pd = &planes[i];
-//    setup_res_plane(&pd->res, buffers[i], strides[i], mi_row, mi_col, NULL,
-//                     pd->subsampling_x, pd->subsampling_y);
-//  }
-//}
-
 void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                                const YV12_BUFFER_CONFIG *src, int mi_row,
                                int mi_col) {
@@ -375,6 +373,22 @@ void vp9_setup_res_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
   }
 }
 
+void vp9_setup_debug_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
+                               const YV12_BUFFER_CONFIG *src, int mi_row,
+                               int mi_col) {
+  uint8_t *const buffers[MAX_MB_PLANE] = { src->y_buffer, src->u_buffer,
+                                           src->v_buffer};
+//  LOGD("buffers: %p, %p, %p", buffers[0], src->u_buffer, src->v_buffer);
+  const int strides[MAX_MB_PLANE] = { src->y_stride, src->uv_stride,
+                                      src->uv_stride};
+  int i;
+
+  for (i = 0; i < MAX_MB_PLANE; ++i) {
+    struct macroblockd_plane *const pd = &planes[i];
+    setup_pred_plane(&pd->debug, buffers[i], strides[i], mi_row, mi_col, NULL, //hyunho: int16_t
+                     pd->subsampling_x, pd->subsampling_y);
+  }
+}
 
 void vp9_setup_dst_planes(struct macroblockd_plane planes[MAX_MB_PLANE],
                           const YV12_BUFFER_CONFIG *src, int mi_row,
