@@ -72,6 +72,10 @@
 #define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
+//Hyunho: for debuggin
+#define DEBUG_LATENCY 1
+#define DEBUG_ADAPTIVE_CACHE 0
+#define DEBUG_RESIDUAL 0
 
 static int is_compound_reference_allowed(const VP9_COMMON *cm) {
     int i;
@@ -482,7 +486,7 @@ static void predict_and_reconstruct_intra_block(TileWorkerData *twd,
     }
 }
 
-#define DEBUG_RESIDUAL 0
+
 static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
                                    int plane, int row, int col,
                                    TX_SIZE tx_size, VP9_COMMON *cm) {
@@ -1396,6 +1400,10 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
     const int y_mis = VPXMIN(bh, cm->mi_rows - mi_row);
     vpx_reader *r = &twd->bit_reader;
     MACROBLOCKD *const xd = &twd->xd;
+#if DEBUG_LATENCY
+    clock_t start, end;
+    double cpu_time_used;
+#endif
 
     cm->count++; //hyunho: debug
 
@@ -1419,6 +1427,9 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 //    if (cm->current_video_frame == 4 && mi_row == 28 && mi_col == 52) LOGD("is interblock: %d, mi_col: %d", is_inter_block(mi), mi_col); //28, 52
 
     if (!is_inter_block(mi)) {
+#if DEBUG_LATENCY
+        start = clock();
+#endif
         //LOGD("%d %d mi_row: %d, mi_col: %d", cm->current_video_frame, cm->current_super_frame, mi_row, mi_col);
         cm->intra_count++; //hyunho: debug
         int plane;
@@ -1448,31 +1459,47 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                                         tx_size);
             /*******************Hyunho************************/
             //TODO (hyunho): max block size를 넘어설수 있다.
-            if (cm->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) {
-                if (plane == 0) {
-                    createBlock(cm->intra_block_list, mi_col, mi_row, max_blocks_wide,
-                                max_blocks_high, mi->interp_filter);
-                } else {
-                    setBlock(cm->intra_block_list, plane, max_blocks_wide, max_blocks_high);
-                }
-            }
+//            if (cm->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) {
+//                if (plane == 0) {
+//                    createBlock(cm->intra_block_list, mi_col, mi_row, max_blocks_wide,
+//                                max_blocks_high, mi->interp_filter);
+//                } else {
+//                    setBlock(cm->intra_block_list, plane, max_blocks_wide, max_blocks_high);
+//                }
+//            }
             /*******************Hyunho************************/
         }
+#if DEBUG_LATENCY
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+        cm->latency.decode_intra_block += cpu_time_used;
+#endif
     } else {
         cm->inter_count++;
         /*******************Hyunho************************/
+#if DEBUG_LATENCY
+        start = clock();
+#endif
         if (cm->mode == DECODE_CACHE) {
             vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col, &cm->sf_upsample_inter);
             vp9_setup_debug_planes(xd->plane, cm->hr_debug_frame, mi_row, mi_col);
             vp9_setup_res_planes(xd->plane, cm->lr_resiudal, mi_row, mi_col); //TODO (hyunho): remove only for debugging
 
             dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, false);
-            dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
+//            dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
         } else {
             dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
         }
+#if DEBUG_LATENCY
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+        cm->latency.decode_inter_block += cpu_time_used;
+#endif
         /*******************Hyunho************************/
         // Reconstruction
+#if DEBUG_LATENCY
+        start = clock();
+#endif
         if (!mi->skip) {
             cm->inter_noskip_count++;
             int eobtotal = 0;
@@ -1504,18 +1531,23 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                 reconstruct_inter_block(twd, mi, plane, row, col, tx_size, cm);
 
                 /*******************Hyunho************************/
-                if (cm->mode == DECODE_CACHE) {
-                    if (plane == 0) {
-                        createBlock(cm->inter_block_list, mi_col, mi_row, max_blocks_wide,
-                                    max_blocks_high, mi->interp_filter);
-                    } else {
-                        setBlock(cm->inter_block_list, plane, max_blocks_wide, max_blocks_high);
-                    }
-                }
+//                if (cm->mode == DECODE_CACHE) {
+//                    if (plane == 0) {
+//                        createBlock(cm->inter_block_list, mi_col, mi_row, max_blocks_wide,
+//                                    max_blocks_high, mi->interp_filter);
+//                    } else {
+//                        setBlock(cm->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+//                    }
+//                }
                 /*******************Hyunho************************/
             }
             if (!less8x8 && eobtotal == 0) mi->skip = 1;  // skip loopfilter
         }
+#if DEBUG_LATENCY
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+        cm->latency.decode_inter_residual += cpu_time_used;
+#endif
     }
 
     xd->corrupted |= vpx_reader_has_error(r);
@@ -2164,7 +2196,6 @@ static void get_tile_buffers(VP9Decoder *pbi, const uint8_t *data,
     }
 }
 
-#define DEBUG_ADAPTIVE_CACHE 0
 static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                    const uint8_t *data_end) {
     VP9_COMMON *const cm = &pbi->common;
@@ -2176,6 +2207,10 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     int tile_row, tile_col;
     int mi_row, mi_col;
     TileWorkerData *tile_data = NULL;
+#if DEBUG_LATENCY
+    clock_t start, end;
+    double cpu_time_used;
+#endif
 
     //TODO (hyunho): add loop filter to super-resolutioned frame, but quite complex to modify 'vp9_loop_filter_worker()'
     if (cm->lf.filter_level && !cm->skip_loop_filter &&
@@ -2386,10 +2421,29 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                                     hr_debug_frame->uv_stride};
 #endif
 
+        //load a reference SR frame for applying adaptive caching
+        if(cm->decode_info->apply_adaptive_cache) {
+            char file_path[PATH_MAX];
+            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir,
+                    cm->current_video_frame, cm->current_super_frame,
+                    cm->decode_info->cache_file); //TODO: current_video_frame에서 -1하는게 맞는지?
+            if (vpx_deserialize_load(cm->hr_reference_frame, file_path,
+                                     get_frame_new_buffer(cm)->y_crop_width,
+                                     get_frame_new_buffer(cm)->y_crop_height,
+                                     cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
+                vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                                   "deserialize failed");
+            }
+        }
+
         MACROBLOCKD *const xd = &tile_data->xd;
         DecodeBlock *intra_block = cm->intra_block_list->head;
         DecodeBlock *prev_block = NULL;
 
+#if DEBUG_LATENCY
+        start = clock();
+#endif
         while (intra_block != NULL) {
 //            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", intra_block->mi_row,
 //                 intra_block->mi_col, intra_block->n4_w[0], intra_block->n4_h[0]);
@@ -2419,30 +2473,20 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             intra_block = intra_block->next;
             vpx_free(prev_block);
         }
-
         cm->intra_block_list->head = NULL;
         cm->intra_block_list->tail = NULL;
 
+#if DEBUG_LATENCY
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+        cm->latency.interp_intra_block += cpu_time_used;
+#endif
+
+
         DecodeBlock *inter_block = cm->inter_block_list->head;
 
-        //load a reference SR frame for applying adaptive caching
-        if(cm->decode_info->apply_adaptive_cache) {
-            char file_path[PATH_MAX];
-            memset(file_path, 0, sizeof(char) * PATH_MAX);
-            sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir,
-                    cm->current_video_frame, cm->current_super_frame,
-                    cm->decode_info->cache_file); //TODO: current_video_frame에서 -1하는게 맞는지?
-            if (vpx_deserialize_load(cm->hr_reference_frame, file_path,
-                                     get_frame_new_buffer(cm)->y_crop_width,
-                                     get_frame_new_buffer(cm)->y_crop_height,
-                                     cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
-                vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
-                                   "deserialize failed");
-            }
-        }
-
 #if DEBUG_ADAPTIVE_CACHE
-//copy a cached frame
+        //copy a cached frame
         for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
             LOGD("hr_frame_buffers: %p, hr_compare_frame_buffers: %p", hr_frame_buffers[0], hr_compare_frame_buffers[0]);
             vpx_copy_c(hr_frame_buffers[plane], hr_frame_strides[plane],
@@ -2451,6 +2495,9 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         }
 #endif
 
+#if DEBUG_LATENCY
+        start = clock();
+#endif
         int num_blocks = 0; //number of blocks which cache is reset
         while (inter_block != NULL) {
 //            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", inter_block->mi_row,
@@ -2518,11 +2565,14 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             vpx_free(prev_block);
             /**********************/
         }
-//        LOGD("[%d frame] adaptive caching %d frames over %d frames", cm->current_video_frame, cm->adaptive_cache_count, cm->inter_noskip_count);
-
-        //apply bilinear interpolation
         cm->inter_block_list->head = NULL;
         cm->inter_block_list->tail = NULL;
+
+#if DEBUG_LATENCY
+        end = clock();
+        cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+        cm->latency.interp_inter_residual += cpu_time_used;
+#endif
 
 #if DEBUG_ADAPTIVE_CACHE
         char file_path[PATH_MAX];
@@ -3015,10 +3065,12 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
         setup_residual_size(cm);
         //TODO (hyunho): only allocates when compare, debug frames are used
         setup_compare_frame_size(cm);
+
+    }
+    if (cm->mode == DECODE_CACHE || cm->mode == DECODE_BILINEAR) {
         setup_debug_frame_size(cm);
     }
     /*******************Hyunho************************/
-
 
     return sz;
 }

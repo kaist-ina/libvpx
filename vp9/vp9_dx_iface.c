@@ -33,6 +33,7 @@
 #include <vpx_dsp/psnr.h>
 #include <vpx_util/vpx_write_yuv_frame.h>
 #include <vpx_dsp/ssim.h>
+#include <vpx_dsp/vpx_bilinear.h>
 
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
@@ -56,6 +57,10 @@
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 #define VP9_CAP_POSTPROC (CONFIG_VP9_POSTPROC ? VPX_CODEC_CAP_POSTPROC : 0)
+
+//hyunho
+#define DEBUG_LATENCY 1
+#define DEBUG_LR_QUALITY 0
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
@@ -94,6 +99,14 @@ static vpx_codec_err_t decoder_destroy(vpx_codec_alg_priv_t *ctx) {
 
     vpx_free(ctx->buffer_pool);
     vpx_free(ctx);
+
+    /*******************Hyunho************************/
+    VP9_COMMON *cm = &ctx->pbi->common;
+    if (cm->latency_log != NULL) fclose(cm->latency_log);
+    if (cm->metadata_log != NULL) fclose(cm->metadata_log);
+    if (cm->quality_log != NULL) fclose(cm->quality_log);
+    /*******************Hyunho************************/
+
     return VPX_CODEC_OK;
 }
 
@@ -442,22 +455,23 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
 }
 
 
-static void save_decode_result(VP9_COMMON *cm, double cpu_time_used)
+static void save_decode_result(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
 {
     char log[LOG_MAX];
+
     //latency log
     memset(log, 0, LOG_MAX);
-    sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, cpu_time_used * 1000);
+    sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
+            current_super_frame, cm->latency.decode_frame,
+            cm->latency.interp_intra_block, cm->latency.interp_inter_residual,
+            cm->latency.decode_intra_block, cm->latency.decode_inter_block,
+            cm->latency.decode_inter_residual);
     fputs(log, cm->latency_log);
 
     //metadata log
     memset(log, 0, LOG_MAX);
-    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", cm->current_video_frame - 1, cm->current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_noskip_count, cm->adaptive_cache_count); //TODO: 추가...
+    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_noskip_count, cm->adaptive_cache_count); //TODO: 추가...
     fputs(log, cm->metadata_log);
-
-    //TODO: move fclose() to decoder_destroy()
-    if (cm->latency_log != NULL) fclose(cm->latency_log);
-    if (cm->metadata_log != NULL) fclose(cm->metadata_log);
 }
 
 static void save_quality_result(VP9_COMMON *cm)
@@ -479,16 +493,13 @@ static void save_quality_result(VP9_COMMON *cm)
     double weight;
     double ssim = vpx_calc_ssim(get_frame_new_buffer(cm), cm->hr_reference_frame, &weight);
     vpx_calc_psnr(get_frame_new_buffer(cm), cm->hr_reference_frame, &psnr);
-    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
+//    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
 
     //qualtiy log
     memset(log, 0, LOG_MAX);
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", cm->current_video_frame - 1, psnr.psnr[0], psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
 
     fputs(log, cm->quality_log);
-
-    //TODO (hyunho): move fclose() to decoder_destroy()
-    if (cm->quality_log != NULL) fclose(cm->quality_log);
 }
 
 static void debug_lr_quality(VP9_COMMON *cm, int current_video_frame,
@@ -511,7 +522,75 @@ static void debug_lr_quality(VP9_COMMON *cm, int current_video_frame,
     LOGD("Low-resolution quality, %d, %d, %.2fdB", current_video_frame, current_super_frame, psnr.psnr[0]);
 }
 
-#define DEBUG_LR_QUALITY 0
+static void apply_bilinear(VP9_COMMON *cm) {
+    YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
+    uint8_t *const lr_frame_buffers[MAX_MB_PLANE] = {lr_frame->y_buffer, lr_frame->u_buffer,
+                                                     lr_frame->v_buffer};
+    const int lr_frame_strides[MAX_MB_PLANE] = {lr_frame->y_stride, lr_frame->uv_stride,
+                                                lr_frame->uv_stride};
+    const int max_heights[MAX_MB_PLANE] = {lr_frame->y_crop_height, lr_frame->uv_crop_height,
+                                           lr_frame->uv_crop_height};
+    const int max_widths[MAX_MB_PLANE] = {lr_frame->y_crop_width, lr_frame->uv_crop_width,
+                                          lr_frame->uv_crop_width};
+
+    YV12_BUFFER_CONFIG *hr_debug_frame = cm->hr_debug_frame;
+    uint8_t *const hr_debug_frame_buffers[MAX_MB_PLANE] = {hr_debug_frame->y_buffer, hr_debug_frame->u_buffer,
+                                                           hr_debug_frame->v_buffer};
+    const int hr_debug_frame_strides[MAX_MB_PLANE] = {hr_debug_frame->y_stride, hr_debug_frame->uv_stride,
+                                                      hr_debug_frame->uv_stride};
+
+    for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+        vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
+                                    hr_debug_frame_buffers[plane],
+                                    hr_debug_frame_strides[plane],
+                                    0, 0, max_widths[plane],
+                                    max_heights[plane], max_widths[plane], max_heights[plane],
+                                    cm->scale);
+    }
+}
+
+static void save_bilinear_quality_result(VP9_COMMON *cm) {
+    char file_path[PATH_MAX];
+    char log[LOG_MAX];
+    FILE *quality_log;
+    int target_width = get_frame_new_buffer(cm)->y_crop_width * cm->scale;
+    int target_height = get_frame_new_buffer(cm)->y_crop_height * cm->scale;
+
+    if (cm->current_video_frame == 1) {
+        memset(file_path, 0, PATH_MAX);
+        sprintf(file_path, "%s/quality_bilinear_%dp_%s.log", cm->decode_info->log_dir,
+                target_height, cm->decode_info->prefix);
+        quality_log = fopen(file_path, "w");
+    } else {
+        memset(file_path, 0, PATH_MAX);
+        sprintf(file_path, "%s/quality_bilinear_%dp_%s.log", cm->decode_info->log_dir,
+                target_height, cm->decode_info->prefix);
+        quality_log = fopen(file_path, "a");
+    }
+
+    PSNR_STATS psnr;
+    memset(file_path, 0, sizeof(char) * PATH_MAX);
+
+    sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir,
+            cm->current_video_frame - 1, cm->decode_info->compare_file);
+    if (vpx_deserialize_load(cm->hr_reference_frame, file_path, target_width, target_height,
+                             cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
+        vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                           "deserialize failed");
+    }
+    vpx_calc_psnr(cm->hr_debug_frame, cm->hr_reference_frame, &psnr);
+
+    //qualtiy log
+    memset(log, 0, LOG_MAX);
+    sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", cm->current_video_frame - 1, psnr.psnr[0],
+            psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
+    LOGD("Bilinear quality, %d, PSNR %.2fdB", cm->current_video_frame - 1, psnr.psnr[0]);
+
+    //TODO: move to decoder_destroy()
+    fputs(log, quality_log);
+    if (quality_log != NULL) fclose(quality_log);
+}
+
 static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                       const uint8_t *data, unsigned int data_sz,
                                       void *user_priv, long deadline) {
@@ -551,8 +630,10 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     cm->current_super_frame = 0;
     cm->scale = cm->decode_info->scale;
     cm->mode = cm->decode_info->mode;
+#if DEBUG_LATENCY
     clock_t start, end;
     double cpu_time_used;
+#endif
 
     //TODO (hyunho): move to decoder_init()
     if (cm->decode_info->save_decode_result == 1) {
@@ -564,15 +645,15 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             sprintf(file_path, "%s/metadata_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
             cm->metadata_log = fopen(file_path, "w");
         }
-        else{
-            cm->quality_log = fopen(file_path, "a");
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/latency_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
-            cm->latency_log = fopen(file_path, "a");
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/metadata_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
-            cm->metadata_log = fopen(file_path, "a");
-        }
+//        else{
+//            cm->quality_log = fopen(file_path, "a");
+//            memset(file_path, 0, PATH_MAX);
+//            sprintf(file_path, "%s/latency_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
+//            cm->latency_log = fopen(file_path, "a");
+//            memset(file_path, 0, PATH_MAX);
+//            sprintf(file_path, "%s/metadata_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
+//            cm->metadata_log = fopen(file_path, "a");
+//        }
     }
     if (cm->decode_info->save_quality_result == 1) {
         if (cm->current_video_frame == 0) {
@@ -580,19 +661,17 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             sprintf(file_path, "%s/quality_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
             cm->quality_log = fopen(file_path, "w");
         }
-        else{
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/quality_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
-            cm->quality_log = fopen(file_path, "a");
-        }
+//        else{
+//            memset(file_path, 0, PATH_MAX);
+//            sprintf(file_path, "%s/quality_%s.log", cm->decode_info->log_dir, cm->decode_info->prefix);
+//            cm->quality_log = fopen(file_path, "a");
+//        }
     }
     /*******************Hyunho************************/
 
     if (frame_count > 0) {
         int i;
         for (i = 0; i < frame_count; ++i) {
-            start = clock();
-
             const uint8_t *data_start_copy = data_start;
             const uint32_t frame_size = frame_sizes[i];
             vpx_codec_err_t res;
@@ -600,14 +679,21 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                 set_error_detail(ctx, "Invalid frame size in index");
                 return VPX_CODEC_CORRUPT_FRAME;
             }
-
+#if DEBUG_LATENCY
+            memset(&cm->latency, 0, sizeof(cm->latency));
+            start = clock();
+#endif
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
-
+#if DEBUG_LATENCY
             end = clock();
-            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+            cm->latency.decode_frame += cpu_time_used;
+#endif
 
             data_start += frame_size;
+
+            //TODO: log latency (예전 log 뒤에 추가하기)
 
             /*******************Hyunho************************/
             if (cm->show_frame == 0) current_video_frame = cm->current_video_frame;
@@ -622,7 +708,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                                     cm->current_super_frame);
             }
 
-            if (cm->decode_info->save_decode_result) save_decode_result(cm, cpu_time_used);
+            if (cm->decode_info->save_decode_result) save_decode_result(cm, current_video_frame, cm->current_super_frame);
 
 #if DEBUG_LR_QUALITY
             debug_lr_quality(cm, current_video_frame, cm->current_super_frame);
@@ -633,13 +719,18 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         }
     } else {
         while (data_start < data_end) {
-            start = clock();
             const uint32_t frame_size = (uint32_t) (data_end - data_start);
+#if DEBUG_LATENCY
+            memset(&cm->latency, 0, sizeof(cm->latency));
+            start = clock();
+#endif
             const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv, deadline);
-
             if (res != VPX_CODEC_OK) return res;
+#if DEBUG_LATENCY
             end = clock();
-            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+            cm->latency.decode_frame += cpu_time_used;
+#endif
 
             // Account for suboptimal termination by the encoder.
             while (data_start < data_end) {
@@ -662,7 +753,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                                                                          cm->current_super_frame);
             }
 
-            if (cm->decode_info->save_decode_result) save_decode_result(cm, cpu_time_used);
+            if (cm->decode_info->save_decode_result) save_decode_result(cm, cm->current_video_frame - 1, cm->current_super_frame);
 
 #if DEBUG_LR_QUALITY
             debug_lr_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
@@ -674,15 +765,22 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     /*******************Hyunho************************/
     if (cm->current_super_frame > 0) cm->current_super_frame--;
 
-//    if (cm->decode_info->save_final) {
-//        if (cm->decode_info->save_serialized_frame) save_serialized_final_frame(cm, cm->current_video_frame - 1);
-//        if (cm->decode_info->save_decoded_frame) save_decoded_final_frame(cm, cm->current_video_frame -1);
-//    }
-//
-//    if (cm->decode_info->save_quality_result) save_quality_result(cm);
+    if (cm->decode_info->save_final) {
+        if (cm->decode_info->save_serialized_frame) save_serialized_final_frame(cm, cm->current_video_frame - 1);
+        if (cm->decode_info->save_decoded_frame) save_decoded_final_frame(cm, cm->current_video_frame -1);
+    }
 
+    if (cm->decode_info->save_quality_result) save_quality_result(cm);
+
+    //calculate bilinear interpolation quality
+    if (cm->decode_info->mode == DECODE_BILINEAR) {
+        //apply bilinear interpolation
+        apply_bilinear(cm);
+
+        //measure quality and save a log
+        save_bilinear_quality_result(cm);
+    }
     /*******************Hyunho************************/
-
     return res;
 }
 

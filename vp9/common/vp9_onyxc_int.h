@@ -152,6 +152,8 @@ typedef struct VP9Common {
     int inter_count;
     int inter_noskip_count;
     int adaptive_cache_count;
+
+    struct LatencyInfo latency;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;
