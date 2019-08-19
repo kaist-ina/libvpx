@@ -165,12 +165,12 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
         } else {
             // Must always scale in both directions. //TODO (hyunho): handle all case
             if (add) {
-                sf->predict_residual[0][0][0] = vpx_bilinear_interp_add_c;
-                sf->predict_residual[0][0][1] = vpx_bilinear_interp_add_c;
-                sf->predict_residual[0][1][0] = vpx_bilinear_interp_add_c;
-                sf->predict_residual[0][1][1] = vpx_bilinear_interp_add_c;
-                sf->predict_residual[1][0][0] = vpx_bilinear_interp_add_c;
-                sf->predict_residual[1][0][1] = vpx_bilinear_interp_add_c;
+//                sf->predict_residual[0][0][0] = vpx_bilinear_interp_add_c;
+//                sf->predict_residual[0][0][1] = vpx_bilinear_interp_add_c;
+//                sf->predict_residual[0][1][0] = vpx_bilinear_interp_add_c;
+//                sf->predict_residual[0][1][1] = vpx_bilinear_interp_add_c;
+//                sf->predict_residual[1][0][0] = vpx_bilinear_interp_add_c;
+//                sf->predict_residual[1][0][1] = vpx_bilinear_interp_add_c;
 //                sf->predict[0][0][0] = vpx_scaled_2d;
 //                sf->predict[0][0][1] = vpx_scaled_avg_2d;
 //                sf->predict[0][1][0] = vpx_scaled_2d;
@@ -179,12 +179,12 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
 //                sf->predict[1][0][1] = vpx_scaled_avg_2d;
             }
             else {
-                sf->predict[0][0][0] = vpx_bilinear_interp_c;
-                sf->predict[0][0][1] = vpx_bilinear_interp_c;
-                sf->predict[0][1][0] = vpx_bilinear_interp_c;
-                sf->predict[0][1][1] = vpx_bilinear_interp_c;
-                sf->predict[1][0][0] = vpx_bilinear_interp_c;
-                sf->predict[1][0][1] = vpx_bilinear_interp_c;
+//                sf->predict[0][0][0] = vpx_bilinear_interp_c;
+//                sf->predict[0][0][1] = vpx_bilinear_interp_c;
+//                sf->predict[0][1][0] = vpx_bilinear_interp_c;
+//                sf->predict[0][1][1] = vpx_bilinear_interp_c;
+//                sf->predict[1][0][0] = vpx_bilinear_interp_c;
+//                sf->predict[1][0][1] = vpx_bilinear_interp_c;
             }
         }
     }

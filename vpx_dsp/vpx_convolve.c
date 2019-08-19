@@ -43,6 +43,7 @@
 #define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
+//convolve_horiz(src - src_stride * (SUBPEL_TAPS / 2 - 1), src_stride, temp, 64, filter, x0_q4, x_step_q4, w, intermediate_height);
 static void convolve_horiz(const uint8_t *src, ptrdiff_t src_stride,
                            uint8_t *dst, ptrdiff_t dst_stride,
                            const InterpKernel *x_filters, int x0_q4,
@@ -368,159 +369,159 @@ void vpx_convolve_avg_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
     }
 }
 
-//TODO (hyunho): optimize by neon instructions (for on-device decoder), ARM v8a
-//TODO (hyunho): optimize by SIMD instructions (for cache optimizer), x86
-void vpx_bilinear_interp_add_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
-                               ptrdiff_t dst_stride, const InterpKernel *filter,
-                               int x0_q4, int x_scale, int y0_q4, int y_scale,
-                               int w, int h) {
-    int x, y;
-
-    (void) filter;
-    (void) x0_q4;
-    (void) y0_q4;
-
-    double x_scale_ = x_scale;
-    double y_scale_ = y_scale;
-
-    //LOGD("x_scale: %lf, y_scale: %lf", x_scale, y_scale);
-
-    for (y = 0; y < h; ++y) {
-        for (x = 0; x < w; ++x) {
-            int px = (int) (x / x_scale_);
-            int py = (int) (y / y_scale_);
-
-            double fx1 = (double) x / x_scale_ - (double) px;
-//            LOGD("px: %d, py: %d", px, py);
-            double fx2 = 1 - fx1;
-            double fy1 = (double) y / y_scale_ - (double) py;
-            double fy2 = 1 - fy1;
-
-            double w1 = fx2 * fy2;
-            double w2 = fx1 * fy2;
-            double w3 = fx2 * fy1;
-            double w4 = fx1 * fy1;
-
-            int sum = w1 * src[py * src_stride + px] +
-                      w2 * src[py * src_stride + (px + 1)] +
-                      w3 * src[(py + 1) * src_stride + px] +
-                      w4 * src[(py + 1) * src_stride + (px +
-                                                        1)]; //TODO (hyunho): performance bottleneck 1 - replace by fix-point
-
-            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] +
-                                                 sum); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
-
-        }
-    }
-
+////TODO (hyunho): optimize by neon instructions (for on-device decoder), ARM v8a
+////TODO (hyunho): optimize by SIMD instructions (for cache optimizer), x86
+//void vpx_bilinear_interp_add_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
+//                               ptrdiff_t dst_stride, const InterpKernel *filter,
+//                               int x0_q4, int x_scale, int y0_q4, int y_scale,
+//                               int w, int h) {
+//    int x, y;
+//
+//    (void) filter;
+//    (void) x0_q4;
+//    (void) y0_q4;
+//
+//    double x_scale_ = x_scale;
+//    double y_scale_ = y_scale;
+//
+//    //LOGD("x_scale: %lf, y_scale: %lf", x_scale, y_scale);
+//
 //    for (y = 0; y < h; ++y) {
 //        for (x = 0; x < w; ++x) {
-//            int px = (int)(x / x_scale);
-//            int py = (int)(y / y_scale);
+//            int px = (int) (x / x_scale_);
+//            int py = (int) (y / y_scale_);
 //
-//            float fx1 = (float)x/x_scale - px;
-//            float fx2 = 1 - fx1;
-//            float fy1 = (float)y/y_scale - py;
-//            float fy2 = 1 - fy1;
+//            double fx1 = (double) x / x_scale_ - (double) px;
+////            LOGD("px: %d, py: %d", px, py);
+//            double fx2 = 1 - fx1;
+//            double fy1 = (double) y / y_scale_ - (double) py;
+//            double fy2 = 1 - fy1;
 //
-//            int w1 = fx2 * fy2 * 256.0f;
-//            int w2 = fx1 * fy2 * 256.0f;
-//            int w3 = fx2 * fy1 * 256.0f;
-//            int w4 = fx1 * fy1 * 256.0f;
+//            double w1 = fx2 * fy2;
+//            double w2 = fx1 * fy2;
+//            double w3 = fx2 * fy1;
+//            double w4 = fx1 * fy1;
 //
 //            int sum = w1 * src[py * src_stride + px] +
-//                    w2 * src[py * src_stride + (px + 1)] +
-//                    w3 * src[(py + 1) * src_stride + px] +
-//                    w4 * src[(py + 1) * src_stride + (px + 1)]; //TODO (hyunho): performance bottleneck 1 - replace by fix-point
+//                      w2 * src[py * src_stride + (px + 1)] +
+//                      w3 * src[(py + 1) * src_stride + px] +
+//                      w4 * src[(py + 1) * src_stride + (px +
+//                                                        1)]; //TODO (hyunho): performance bottleneck 1 - replace by fix-point
 //
-//            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + (sum >> 8)); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
+//            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] +
+//                                                 sum); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
 //
 //        }
 //    }
-
+//
+////    for (y = 0; y < h; ++y) {
+////        for (x = 0; x < w; ++x) {
+////            int px = (int)(x / x_scale);
+////            int py = (int)(y / y_scale);
+////
+////            float fx1 = (float)x/x_scale - px;
+////            float fx2 = 1 - fx1;
+////            float fy1 = (float)y/y_scale - py;
+////            float fy2 = 1 - fy1;
+////
+////            int w1 = fx2 * fy2 * 256.0f;
+////            int w2 = fx1 * fy2 * 256.0f;
+////            int w3 = fx2 * fy1 * 256.0f;
+////            int w4 = fx1 * fy1 * 256.0f;
+////
+////            int sum = w1 * src[py * src_stride + px] +
+////                    w2 * src[py * src_stride + (px + 1)] +
+////                    w3 * src[(py + 1) * src_stride + px] +
+////                    w4 * src[(py + 1) * src_stride + (px + 1)]; //TODO (hyunho): performance bottleneck 1 - replace by fix-point
+////
+////            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + (sum >> 8)); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
+////
+////        }
+////    }
+//
+////    for (y = 0; y < h; ++y) {
+////        for (x = 0; x < w; ++x) {
+////            int px = (int)(x / x_scale);
+////            int py = (int)(y / y_scale);
+////
+////            float fx1 = (float)x/x_scale - px;
+////            float fx2 = 1 - fx1;
+////            float fy1 = (float)y/y_scale - py;
+////            float fy2 = 1 - fy1;
+////
+////            int w1 = fx2 * fy2 * 256.0f;
+////            int w2 = fx1 * fy2 * 256.0f;
+////            int w3 = fx2 * fy1 * 256.0f;
+////            int w4 = fx1 * fy1 * 256.0f;
+////
+////            int sum = w1 * src[py * src_stride + px] +
+////                    w2 * src[py * src_stride + (px + 1)] +
+////                    w3 * src[(py + 1) * src_stride + px] +
+////                    w4 * src[(py + 1) * src_stride + (px + 1)]; //TODO (hyunho): save this on memory and apply neon instructions
+////
+////            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + (sum >> 8)); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
+//
+////            if (x % 16 == 0) {
+////                LOGD("x: %d", x);
+////                uint8x16_t s0 = vld1q_u8(src);
+////                vst1q_u8(dst, s0);
+////                vst1q_u8(dst, s0);
+////            }
+//
+//    //sum = sum >> 8;
+////            dst[y * dst_stride + x] = sum; // Performance bottleneck is happening value saving
+//
+////            dst[y * dst_stride + x] = sum >> 8;
+////
+////            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + sum); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
+//
+////        }
+////    }
+//}
+//
+////TODO (hyunho): optimize by neon instructions (for on-device decoder), ARM v8a
+////TODO (hyunho): optimize by SIMD instructions (for cache optimizer), x86
+//void vpx_bilinear_interp_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
+//                           ptrdiff_t dst_stride, const InterpKernel *filter,
+//                           int x0_q4, int x_scale, int y0_q4, int y_scale,
+//                           int w, int h) {
+//    int x, y;
+//
+//    double x_scale_ = x_scale;
+//    double y_scale_ = y_scale;
+//
+////    LOGD("x_scale: %lf, y_scale: %lf", x_scale, y_scale);
+////    exit(0);
+//
 //    for (y = 0; y < h; ++y) {
 //        for (x = 0; x < w; ++x) {
-//            int px = (int)(x / x_scale);
-//            int py = (int)(y / y_scale);
+//            int px = (int) (x / x_scale_);
+//            int py = (int) (y / y_scale_);
 //
-//            float fx1 = (float)x/x_scale - px;
-//            float fx2 = 1 - fx1;
-//            float fy1 = (float)y/y_scale - py;
-//            float fy2 = 1 - fy1;
+//            double fx1 = (double) x / x_scale_ - (double) px;
+//            double fx2 = 1 - fx1;
+//            double fy1 = (double) y / y_scale_ - (double) py;
+//            double fy2 = 1 - fy1;
 //
-//            int w1 = fx2 * fy2 * 256.0f;
-//            int w2 = fx1 * fy2 * 256.0f;
-//            int w3 = fx2 * fy1 * 256.0f;
-//            int w4 = fx1 * fy1 * 256.0f;
+////            LOGD("h: %d, w: %d, px: %d, py: %d, fx1: %f, fx2: %f, fy1: %f, fy2: %f", h, w, px, py,
+////                 fx1, fx2, fy1, fy2);
+//
+//            double w1 = fx2 * fy2;
+//            double w2 = fx1 * fy2;
+//            double w3 = fx2 * fy1;
+//            double w4 = fx1 * fy1;
 //
 //            int sum = w1 * src[py * src_stride + px] +
-//                    w2 * src[py * src_stride + (px + 1)] +
-//                    w3 * src[(py + 1) * src_stride + px] +
-//                    w4 * src[(py + 1) * src_stride + (px + 1)]; //TODO (hyunho): save this on memory and apply neon instructions
+//                      w2 * src[py * src_stride + (px + 1)] +
+//                      w3 * src[(py + 1) * src_stride + px] +
+//                      w4 * src[(py + 1) * src_stride + (px + 1)];
 //
-//            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + (sum >> 8)); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
-
-//            if (x % 16 == 0) {
-//                LOGD("x: %d", x);
-//                uint8x16_t s0 = vld1q_u8(src);
-//                vst1q_u8(dst, s0);
-//                vst1q_u8(dst, s0);
-//            }
-
-    //sum = sum >> 8;
-//            dst[y * dst_stride + x] = sum; // Performance bottleneck is happening value saving
-
-//            dst[y * dst_stride + x] = sum >> 8;
+////            dst[y * dst_stride + x] = clip_pixel(sum);
+//            dst[y * dst_stride + x] = 255;
 //
-//            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + sum); //TODO (hyunho): performance bottleneck 2 - efficient clipping (?) - why?
-
 //        }
 //    }
-}
-
-//TODO (hyunho): optimize by neon instructions (for on-device decoder), ARM v8a
-//TODO (hyunho): optimize by SIMD instructions (for cache optimizer), x86
-void vpx_bilinear_interp_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
-                           ptrdiff_t dst_stride, const InterpKernel *filter,
-                           int x0_q4, int x_scale, int y0_q4, int y_scale,
-                           int w, int h) {
-    int x, y;
-
-    double x_scale_ = x_scale;
-    double y_scale_ = y_scale;
-
-//    LOGD("x_scale: %lf, y_scale: %lf", x_scale, y_scale);
-//    exit(0);
-
-    for (y = 0; y < h; ++y) {
-        for (x = 0; x < w; ++x) {
-            int px = (int) (x / x_scale_);
-            int py = (int) (y / y_scale_);
-
-            double fx1 = (double) x / x_scale_ - (double) px;
-            double fx2 = 1 - fx1;
-            double fy1 = (double) y / y_scale_ - (double) py;
-            double fy2 = 1 - fy1;
-
-//            LOGD("h: %d, w: %d, px: %d, py: %d, fx1: %f, fx2: %f, fy1: %f, fy2: %f", h, w, px, py,
-//                 fx1, fx2, fy1, fy2);
-
-            double w1 = fx2 * fy2;
-            double w2 = fx1 * fy2;
-            double w3 = fx2 * fy1;
-            double w4 = fx1 * fy1;
-
-            int sum = w1 * src[py * src_stride + px] +
-                      w2 * src[py * src_stride + (px + 1)] +
-                      w3 * src[(py + 1) * src_stride + px] +
-                      w4 * src[(py + 1) * src_stride + (px + 1)];
-
-//            dst[y * dst_stride + x] = clip_pixel(sum);
-            dst[y * dst_stride + x] = 255;
-
-        }
-    }
-}
+//}
 
 
 void vpx_convolve_copy_add_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,

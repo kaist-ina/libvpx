@@ -89,6 +89,29 @@ typedef struct BufferPool {
     InternalFrameBufferList int_frame_buffers;
 } BufferPool;
 
+/*******************Hyunho************************/
+typedef struct BilinearConfig{
+    float x_lerp[128];
+    int16_t x_lerp_fixed[128];
+    float y_lerp[128];
+    int16_t y_lerp_fixed[128];
+    int top_y_index[128];
+    int bottom_y_index[128];
+    int left_x_index[128];
+    int right_x_index[128];
+} bilinear_config_t;
+
+typedef struct LatencyInfo{
+    double decode_frame;
+    double interp_intra_block;
+    double interp_inter_residual;
+    double decode_intra_block;
+    double decode_inter_block;
+    double decode_inter_residual;
+} latency_info_t;
+/*******************Hyunho************************/
+
+
 typedef struct VP9Common {
     struct vpx_internal_error_info error;
     vpx_color_space_t color_space;
@@ -153,7 +176,10 @@ typedef struct VP9Common {
     int inter_noskip_count;
     int adaptive_cache_count;
 
-    struct LatencyInfo latency;
+    latency_info_t latency;
+    bilinear_config_t bilinear_x4;
+    bilinear_config_t bilinear_x3;
+    bilinear_config_t bilinear_x2;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;

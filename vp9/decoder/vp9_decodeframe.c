@@ -1063,8 +1063,6 @@ static void dec_build_sr_inter_predictors(
 
             /*******************Hyunho************************/
             if (is_sr) {
-                if (mi_x == 52 * MI_BLOCK_SIZE && mi_y == 28 * MI_BLOCK_SIZE)
-                    LOGD("extend_and_resize_and_predict");
                 extend_and_resize_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
                                               frame_height, border_offset, dst, dst_buf->stride,
                                               subpel_x, subpel_y, kernel, sf,
@@ -1459,14 +1457,15 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                                         tx_size);
             /*******************Hyunho************************/
             //TODO (hyunho): max block size를 넘어설수 있다.
-//            if (cm->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) {
-//                if (plane == 0) {
-//                    createBlock(cm->intra_block_list, mi_col, mi_row, max_blocks_wide,
-//                                max_blocks_high, mi->interp_filter);
-//                } else {
-//                    setBlock(cm->intra_block_list, plane, max_blocks_wide, max_blocks_high);
-//                }
-//            }
+            //TODO (hyunho): skip for super-resolutioned frame
+            if (cm->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) { //debug
+                if (plane == 0) {
+                    createBlock(cm->intra_block_list, mi_col, mi_row, max_blocks_wide,
+                                max_blocks_high, mi->interp_filter);
+                } else {
+                    setBlock(cm->intra_block_list, plane, max_blocks_wide, max_blocks_high);
+                }
+            }
             /*******************Hyunho************************/
         }
 #if DEBUG_LATENCY
@@ -1486,7 +1485,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             vp9_setup_res_planes(xd->plane, cm->lr_resiudal, mi_row, mi_col); //TODO (hyunho): remove only for debugging
 
             dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, false);
-//            dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
+            dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
         } else {
             dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
         }
@@ -1531,14 +1530,15 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                 reconstruct_inter_block(twd, mi, plane, row, col, tx_size, cm);
 
                 /*******************Hyunho************************/
-//                if (cm->mode == DECODE_CACHE) {
-//                    if (plane == 0) {
-//                        createBlock(cm->inter_block_list, mi_col, mi_row, max_blocks_wide,
-//                                    max_blocks_high, mi->interp_filter);
-//                    } else {
-//                        setBlock(cm->inter_block_list, plane, max_blocks_wide, max_blocks_high);
-//                    }
-//                }
+                //TODO (hyunho): skip for super-resolutioned frame
+                if (cm->mode == DECODE_CACHE) {
+                    if (plane == 0) {
+                        createBlock(cm->inter_block_list, mi_col, mi_row, max_blocks_wide,
+                                    max_blocks_high, mi->interp_filter);
+                    } else {
+                        setBlock(cm->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+                    }
+                }
                 /*******************Hyunho************************/
             }
             if (!less8x8 && eobtotal == 0) mi->skip = 1;  // skip loopfilter
@@ -2499,6 +2499,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         start = clock();
 #endif
         int num_blocks = 0; //number of blocks which cache is reset
+        int tmp = 0;
         while (inter_block != NULL) {
 //            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", inter_block->mi_row,
 //                 inter_block->mi_col, inter_block->n4_w[0], inter_block->n4_h[0]);
@@ -2517,14 +2518,25 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                                  inter_block->mi_row * MI_BLOCK_SIZE
                                                          >> lr_residual->subsampling_y};
 
+
+
+            //TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
             for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-                vpx_bilinear_interp_int16_c(lr_residual_buffers[plane], lr_residual_strides[plane],
-                                            hr_frame_buffers[plane], hr_frame_strides[plane],
-                                            x_offsets[plane], y_offsets[plane], widths[plane],
-                                            heights[plane], max_widths[plane], max_heights[plane],
-                                            cm->scale);
+//            for (int plane = 0; plane < 1; ++plane) {
+//                LOGD("width: %d, height: %d, x_offset: %d, y_offset: %d", widths[plane], heights[plane], x_offsets[plane], y_offsets[plane]);
+//                vpx_bilinear_interp_int16_c(lr_residual_buffers[plane], lr_residual_strides[plane],
+//                                            hr_frame_buffers[plane], hr_frame_strides[plane],
+//                                            x_offsets[plane], y_offsets[plane], widths[plane],
+//                                            heights[plane], max_widths[plane], max_heights[plane],
+//                                            cm->scale);
+                vpx_bilinear_interp_c(lr_residual_buffers[plane], lr_residual_strides[plane],
+                                                       hr_frame_buffers[plane], hr_frame_strides[plane],
+                                                       x_offsets[plane], y_offsets[plane], widths[plane],
+                                                       heights[plane], cm->scale, &cm->bilinear_x4);
+
             }
 
+//            LOGD("apply_adaptive_cache: %d", cm->decode_info->apply_adaptive_cache);
             if(cm->decode_info->apply_adaptive_cache) {
                 PSNR_STATS psnr_cache;
                 PSNR_STATS psnr_compare;
@@ -2572,6 +2584,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         end = clock();
         cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
         cm->latency.interp_inter_residual += cpu_time_used;
+        LOGD("result: %d", tmp);
 #endif
 
 #if DEBUG_ADAPTIVE_CACHE

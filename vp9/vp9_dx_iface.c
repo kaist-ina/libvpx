@@ -10,6 +10,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 #include "./vpx_config.h"
 #include "./vpx_version.h"
@@ -34,6 +35,7 @@
 #include <vpx_util/vpx_write_yuv_frame.h>
 #include <vpx_dsp/ssim.h>
 #include <vpx_dsp/vpx_bilinear.h>
+#include <sys/param.h>
 
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
@@ -61,6 +63,38 @@
 //hyunho
 #define DEBUG_LATENCY 1
 #define DEBUG_LR_QUALITY 0
+#define FRACTION_BIT (5)
+#define FRACTION_SCALE (1 << FRACTION_BIT)
+
+static void bilinear_ops_init(bilinear_config_t *config, int scale){
+    int x, y;
+    int width = 32, height = 32; //hyunho: 32 is the largest TX size.
+
+    float *x_lerp = config->x_lerp;
+    int16_t *x_lerp_fixed = config->x_lerp_fixed;
+    float *y_lerp = config->y_lerp;
+    int16_t *y_lerp_fixed = config->y_lerp_fixed;
+    int *top_y_index = config->top_y_index;
+    int *bottom_y_index = config->bottom_y_index;
+    int *left_x_index = config->left_x_index;
+    int *right_x_index = config->right_x_index;
+
+    for (x = 0; x < width * scale; ++x) {
+        const float in_x = (x + 0.5f) / scale - 0.5f;
+        left_x_index[x] = MAX(floor(in_x), 0);
+        right_x_index[x] = MIN(ceil(in_x), width * scale - 1);
+        x_lerp[x] = in_x - floor(in_x);
+        x_lerp_fixed[x] = x_lerp[x] * FRACTION_SCALE;
+    }
+
+    for (y = 0; y < height * scale; ++y) {
+        const float in_y = (y + 0.5f) / scale - 0.5f;
+        top_y_index[y] = MAX(floor(in_y), 0);
+        bottom_y_index[y] = MIN(ceil(in_y), height * scale - 1);
+        y_lerp[y] = in_y - floor(in_y);
+        y_lerp_fixed[y] = y_lerp[y] * FRACTION_SCALE;
+    }
+}
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
@@ -297,6 +331,19 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 
     init_buffer_callbacks(ctx);
 
+    //hyunho: additional overhead is < 0.1 msec
+//    clock_t start, end;
+//    double cpu_time_used;
+//    start = clock();
+    VP9_COMMON *cm = &ctx->pbi->common;
+    bilinear_ops_init(&cm->bilinear_x4, 4);
+    bilinear_ops_init(&cm->bilinear_x3, 3);
+    bilinear_ops_init(&cm->bilinear_x2, 2);
+//    end = clock();
+//    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+//    LOGD("additional init overhead: %.2fmsec", cpu_time_used);
+    /*******************Hyunho************************/
+
     return VPX_CODEC_OK;
 }
 
@@ -493,7 +540,7 @@ static void save_quality_result(VP9_COMMON *cm)
     double weight;
     double ssim = vpx_calc_ssim(get_frame_new_buffer(cm), cm->hr_reference_frame, &weight);
     vpx_calc_psnr(get_frame_new_buffer(cm), cm->hr_reference_frame, &psnr);
-//    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
+    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
 
     //qualtiy log
     memset(log, 0, LOG_MAX);
