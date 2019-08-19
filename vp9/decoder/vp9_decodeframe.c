@@ -2196,6 +2196,15 @@ static void get_tile_buffers(VP9Decoder *pbi, const uint8_t *data,
     }
 }
 
+static bilinear_config_t *get_bilinear_config(VP9_COMMON *cm) {
+    switch (cm->scale) {
+        case 4: return &cm->bilinear_x4; break;
+        case 3: return &cm->bilinear_x3; break;
+        case 2: return &cm->bilinear_x2; break;
+        default: vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR, "Invalid scale: %d", cm->scale); break;
+    }
+}
+
 static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                    const uint8_t *data_end) {
     VP9_COMMON *const cm = &pbi->common;
@@ -2532,7 +2541,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 vpx_bilinear_interp_c(lr_residual_buffers[plane], lr_residual_strides[plane],
                                                        hr_frame_buffers[plane], hr_frame_strides[plane],
                                                        x_offsets[plane], y_offsets[plane], widths[plane],
-                                                       heights[plane], cm->scale, &cm->bilinear_x4);
+                                                       heights[plane], cm->scale, get_bilinear_config(cm));
 
             }
 

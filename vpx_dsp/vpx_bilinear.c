@@ -33,6 +33,9 @@
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
+#define FRACTION_BIT (5)
+#define FRACTION_SCALE (1 << FRACTION_BIT)
+static const int16_t delta = (1 << (FRACTION_BIT - 1));
 
 //TODO (hyunho): why not visible?
 //TODO (hyunho): check
@@ -162,11 +165,6 @@ int vpx_bilinear_interp_int16_test_c(const int16_t *src, ptrdiff_t src_stride, u
     return total;
 }
 
-#define FRACTION_BIT (5)
-#define FRACTION_SCALE (1 << FRACTION_BIT)
-#define DELTA (1 << (FRACTION_BIT - 1))
-const int16_t delta = (1 << (FRACTION_BIT - 1));
-
 static void vpx_bilinear_interp_horiz_c(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
@@ -248,15 +246,11 @@ void vpx_bilinear_interp_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *ds
 
     assert(width <= 32);
     assert(height <= 32);
-    assert(scale <= 4 && scale >= 1);
+    assert(scale <= 4 && scale >= 2);
 
     src = src + (y_offset * src_stride + x_offset);
     dst = dst + (y_offset * dst_stride + x_offset) * scale;
 
     vpx_bilinear_interp_horiz_c(src, src_stride, temp, 128, width, height, scale, config);
     vpx_bilinear_interp_vert_c(temp, 128, dst, dst_stride, width, height, scale, config);
-}
-
-void vpx_bilear_calculate_offset(){
-
 }
