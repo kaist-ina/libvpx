@@ -51,6 +51,7 @@
 #include <vpx_dsp/psnr.h>
 #include <vpx_dsp/vpx_constant.h>
 #include <vpx_dsp/vpx_copy.h>
+#include <vpx_dsp/arm/vpx_bilinear_interp_neon.h>
 
 #define TAG "vp9_decodeframe.c JNI"
 #define _UNKNOWN   0
@@ -2538,7 +2539,11 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 //                                            x_offsets[plane], y_offsets[plane], widths[plane],
 //                                            heights[plane], max_widths[plane], max_heights[plane],
 //                                            cm->scale);
-                vpx_bilinear_interp_c(lr_residual_buffers[plane], lr_residual_strides[plane],
+//                vpx_bilinear_interp_c(lr_residual_buffers[plane], lr_residual_strides[plane],
+//                                                       hr_frame_buffers[plane], hr_frame_strides[plane],
+//                                                       x_offsets[plane], y_offsets[plane], widths[plane],
+//                                                       heights[plane], cm->scale, get_bilinear_config(cm));
+                vpx_bilinear_interp_neon_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                                        hr_frame_buffers[plane], hr_frame_strides[plane],
                                                        x_offsets[plane], y_offsets[plane], widths[plane],
                                                        heights[plane], cm->scale, get_bilinear_config(cm));

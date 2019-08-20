@@ -233,7 +233,7 @@ static void vpx_bilinear_interp_vert_c(const int16_t *src, ptrdiff_t src_stride,
             const int16_t bottom_ = src[bottom_y_index * src_stride + (x + 1)];
 
             const int16_t result = top + (((bottom - top) * y_lerp_fixed + delta) >> FRACTION_BIT);
-            const int16_t result_ = top_ + (((bottom_ - top_) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_ = top_ + (((bottom_ - top_) * y_lerp_fixed + delta) >> FRACTION_BIT); // top_ +((bottom - top) * y_lerp_fixed)
 
             dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + result);
             dst[y * dst_stride + (x + 1)] = clip_pixel(dst[y * dst_stride + (x + 1)] + result_);

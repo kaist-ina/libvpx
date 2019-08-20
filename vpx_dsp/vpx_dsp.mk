@@ -91,6 +91,10 @@ DSP_SRCS-yes += vpx_constant.c
 DSP_SRCS-yes += vpx_constant.h
 DSP_SRCS-yes += vpx_copy.c
 DSP_SRCS-yes += vpx_copy.h
+ifeq ($(HAVE_NEON),yes)
+DSP_SRCS-yes += arm/vpx_bilinear_interp_neon.c
+DSP_SRCS-yes += arm/vpx_bilinear_interp_neon.h
+endif  # HAVE_NEON
 
 DSP_SRCS-$(ARCH_X86)$(ARCH_X86_64) += x86/convolve.h
 DSP_SRCS-$(ARCH_X86)$(ARCH_X86_64) += x86/vpx_asm_stubs.c
