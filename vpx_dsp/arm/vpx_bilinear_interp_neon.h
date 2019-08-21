@@ -14,10 +14,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const bilinear_config_t *config);
-void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const bilinear_config_t *config);
+
+void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride,
+                                    int x_offset, int y_offset, int width, int height, int scale,
+                                    const bilinear_config_t *config);
+
+void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride,
+                                    int x_offset, int y_offset, int width, int height, int scale,
+                                    const bilinear_config_t *config);
+
 #ifdef __cplusplus
-}  // extern "C"
+    }  // extern "C"
 #endif
 
 #endif //LIBVPX_WRAPPER_VPX_BILINEAR_INTERP_NEON_H

@@ -2472,12 +2472,17 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                                  intra_block->mi_row * MI_BLOCK_SIZE
                                                          >> lr_frame->subsampling_y};
 
+            //for intra-block case, optimizing bilinear degrades performance notably
             for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
                 vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
                                             hr_frame_buffers[plane], hr_frame_strides[plane],
                                             x_offsets[plane], y_offsets[plane], widths[plane],
                                             heights[plane], max_widths[plane], max_heights[plane],
                                             cm->scale);
+//                vpx_bilinear_interp_neon_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+//                                               hr_frame_buffers[plane], hr_frame_strides[plane],
+//                                               x_offsets[plane], y_offsets[plane], widths[plane],
+//                                               heights[plane], cm->scale, get_bilinear_config(cm));
             }
             prev_block = intra_block;
             intra_block = intra_block->next;
