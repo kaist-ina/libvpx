@@ -16,6 +16,7 @@
 #include "vpx_dsp/arm/mem_neon.h"
 #include "vpx_dsp/txfm_common.h"
 
+//hyunho: a0, a1 seems to residual
 void vpx_idct4x4_16_add_neon(const tran_low_t *input, uint8_t *dest,
                              int stride) {
   const uint8_t *dst = dest;

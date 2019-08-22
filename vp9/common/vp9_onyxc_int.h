@@ -101,6 +101,67 @@ typedef struct BilinearConfig{
     int right_x_index[128];
 } bilinear_config_t;
 
+typedef struct BilinearProfile{
+    //scale x4
+    bilinear_config_t config_TX_4X4_s4;
+    bilinear_config_t config_TX_8X8_s4;
+    bilinear_config_t config_TX_16X16_s4;
+    bilinear_config_t config_TX_32X32_s4;
+
+    //scale x3
+    bilinear_config_t config_TX_4X4_s3;
+    bilinear_config_t config_TX_8X8_s3;
+    bilinear_config_t config_TX_16X16_s3;
+    bilinear_config_t config_TX_32X32_s3;
+
+    //scale x2
+    bilinear_config_t config_TX_4X4_s2;
+    bilinear_config_t config_TX_8X8_s2;
+    bilinear_config_t config_TX_16X16_s2;
+    bilinear_config_t config_TX_32X32_s2;
+} bilinear_profile_t;
+
+static INLINE bilinear_config_t *get_bilinear_config(bilinear_profile_t *bilinear_profile, int scale, int size) {
+    assert(scale == 4 || scale ==3 || scale ==2);
+    assert(size == 32 || size ==16 || size == 8 || size == 4);
+
+    switch (scale) {
+        case 2:
+            switch(size) {
+                case 4:
+                    return &bilinear_profile->config_TX_4X4_s2;
+                case 8:
+                    return &bilinear_profile->config_TX_8X8_s2;
+                case 16:
+                    return &bilinear_profile->config_TX_16X16_s2;
+                case 32:
+                    return &bilinear_profile->config_TX_32X32_s2;
+            }
+        case 3:
+            switch(size) {
+                case 4:
+                    return &bilinear_profile->config_TX_4X4_s3;
+                case 8:
+                    return &bilinear_profile->config_TX_8X8_s3;
+                case 16:
+                    return &bilinear_profile->config_TX_16X16_s3;
+                case 32:
+                    return &bilinear_profile->config_TX_32X32_s3;
+            }
+        case 4:
+            switch(size) {
+                case 4:
+                    return &bilinear_profile->config_TX_4X4_s4;
+                case 8:
+                    return &bilinear_profile->config_TX_8X8_s4;
+                case 16:
+                    return &bilinear_profile->config_TX_16X16_s4;
+                case 32:
+                    return &bilinear_profile->config_TX_32X32_s4;
+            }
+    }
+}
+
 typedef struct LatencyInfo{
     double decode_frame;
     double interp_intra_block;
@@ -177,9 +238,10 @@ typedef struct VP9Common {
     int adaptive_cache_count;
 
     latency_info_t latency;
-    bilinear_config_t bilinear_x4;
-    bilinear_config_t bilinear_x3;
-    bilinear_config_t bilinear_x2;
+    bilinear_profile_t bl_profile;
+//    bilinear_config_t bilinear_x4;
+//    bilinear_config_t bilinear_x3;
+//    bilinear_config_t bilinear_x2;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;

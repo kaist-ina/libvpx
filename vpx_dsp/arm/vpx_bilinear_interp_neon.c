@@ -5,6 +5,7 @@
 #include <arm_neon.h>
 #include <assert.h>
 #include <android/log.h>
+#include <memory.h>
 
 #include "vpx_dsp/arm/vpx_bilinear_interp_neon.h"
 #include "./vpx_config.h"
@@ -130,16 +131,18 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
 
             const int16_t x_lerp_fixed_0 = config->x_lerp_fixed[x];
             const int16_t x_lerp_fixed_1 = config->x_lerp_fixed[x + 1];
+//            const float x_lerp_0 = config->x_lerp[x];
+//            const float x_lerp_1 = config->x_lerp[x + 1];
 
             const int16_t left_0 = src[y * src_stride + left_x_index_0];
             const int16_t right_0 = src[y * src_stride + right_x_index_0];
             const int16_t left_1 = src[y * src_stride + left_x_index_1];
             const int16_t right_1 = src[y * src_stride + right_x_index_1];
 
-            const int16_t result_0 =
-                    left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT); //fixed-point
-            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta)
-                    >> FRACTION_BIT); //fixed-point
+//            const float result_0 = left_0 + ((right_0 - left_0) * x_lerp_0);
+//            const float result_1 = left_1 + ((right_1 - left_1) * x_lerp_1);
+            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT); //fixed-point
+            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta) >> FRACTION_BIT); //fixed-point
 
             dst[y * dst_stride + x] = result_0;
             dst[y * dst_stride + (x + 1)] = result_1;
@@ -272,8 +275,8 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
 
     int16x8_t qS0_01234567_0, qS0_01234567_1, qS1_01234567_0, qS1_01234567_1;
     int16x8_t qT_01234567_0, qT_01234567_1;
-    uint8x8_t dDst_01234567_0, dDst_01234567_1;
-    uint16x8_t dT0_01234567_0, dT0_01234567_1;
+    uint8x8_t dDst_01234567_0;
+    uint16x8_t dT0_01234567_0;
     int16x8_t y_lerp_fixed_v;
 
     for (y = 0; y < height * scale; ++y) {
@@ -329,13 +332,13 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
             vst1_u8(&dst[y * dst_stride + x], dDst_01234567_0);
         }
     }
-
 //    int x, y;
 //
 //    for (y = 0; y < height * scale; ++y) {
 //        const int top_y_index = config->top_y_index[y];
 //        const int bottom_y_index = config->bottom_y_index[y];
 //        const float y_lerp = config->y_lerp[y];
+////        const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
 //
 //        for (x = 0; x < width * scale; x = x + 2) {
 //            const int16_t top_0 = src[top_y_index * src_stride + x];
@@ -343,11 +346,13 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
 //            const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
 //            const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
 //
-//            const float result_0 = top_0 + ((bottom_0 - top_0) * y_lerp);
-//            const float result_1 = top_1 + ((bottom_1 - top_1) * y_lerp);
+//            const int16_t result_0 = top_0 + ((bottom_0 - top_0) * y_lerp);
+//            const int16_t result_1 = top_1 + ((bottom_1 - top_1) * y_lerp);
+////            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
+////            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
 //
-//            dst[y * dst_stride + x] = result_0;
-//            dst[y * dst_stride + (x + 1)] = result_1;
+//            dst[y * dst_stride + x] = clip_pixel(result_0);
+//            dst[y * dst_stride + (x + 1)] = clip_pixel(result_1);
 //        }
 //    }
 }
@@ -452,9 +457,11 @@ void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, ui
     }
 }
 
+//TODO (hyunho): a) memory, b) block size (smaller than ...)
+//TODO: reset to int16
 void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                    int height, int scale, const bilinear_config_t *config) {
+                                    int height, int scale, const bilinear_config_t *config, int plane) {
     int16_t temp[128 * 128];
     int h = height * scale;
 
@@ -462,6 +469,7 @@ void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, ui
     assert(height <= 32);
     assert(scale <= 4 && scale >= 2);
 
+//    LOGD("width: %d, height: %d, x_offset: %d, y_offset: %d, scale: %d", width, height, x_offset, y_offset, scale);
     src = src + (y_offset * src_stride + x_offset);
     dst = dst + (y_offset * dst_stride + x_offset) * scale;
 
@@ -470,7 +478,7 @@ void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, ui
         vpx_bilinear_interp_vert_neon_w16_uint8(temp, 128, dst, dst_stride, width, height, scale,
                                                 config);
     } else {
-//        vpx_bilinear_interp_vert_neon_w8_uint8(temp, 128, dst, dst_stride, width, height, scale,
-//                                               config);
+        LOGF("Not implemented yet");
+        assert(1);
     }
 }

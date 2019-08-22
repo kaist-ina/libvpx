@@ -47,6 +47,39 @@ void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8
     int y_end = y_offset * scale + height * scale;
     int x_start = x_offset * scale;
     int x_end = x_offset * scale + width * scale;
+//
+//    uint8_t temp[128 * 128];
+//
+//    for (int y = y_offset; y < y_offset + height; ++y) {
+//        for (int x = x_start; x < x_end; ++x) {
+//            const float in_x = (x + 0.5f) / scale - 0.5f;
+//            const int left_x_index = MAX(floor(in_x), 0);
+//            const int right_x_index = MIN(ceil(in_x), max_width - 1);
+//            const float x_lerp = in_x - floor(in_x);
+//
+//            const float left = src[y * src_stride + left_x_index];
+//            const float right = src[y * src_stride + right_x_index];
+//
+//            const float result = left + (right - left) * x_lerp;
+//
+////            dst[y * dst_stride + x] = clip_pixel(result);
+//            temp[(y - y_offset) * 128 + (x - x_start)] = result;
+//        }
+//    }
+//
+//    for (int y = y_start; y < y_end; ++y) {
+//        const float in_y = (y + 0.5f) / scale - 0.5f;
+//        const int top_y_index = MAX(floor(in_y), 0);
+//        const int bottom_y_index = MIN(ceil(in_y), max_height - 1);
+//        const float y_lerp = in_y - floor(in_y);
+//        for (int x = x_start; x < x_end; ++x) {
+//            const float top = temp[(top_y_index - y_offset) * 128 + (x - x_start)];
+//            const float bottom = temp[(bottom_y_index - y_offset) * 128 + (x - x_start)];
+//            const float result = top + (bottom - top) * y_lerp;
+//
+//            dst[y * dst_stride + x] = clip_pixel(result);
+//        }
+//    }
 
     for (int y = y_start; y < y_end; ++y) {
         const float in_y = (y + 0.5f) / scale - 0.5f;
@@ -73,9 +106,40 @@ void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8
     }
 }
 
-void vpx_bilinear_interp_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int max_width, int max_height, int scale)
+void vpx_bilinear_interp_uint8_opt_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, bilinear_config_t *config)
 {
 //    LOGD("x_offset: %d, y_offset: %d, width: %d, height: %d, max_width: %d, max_height: %d, scale: %d", x_offset, y_offset, width, height,max_width, max_height, scale);
+    int x, y;
+
+    src = src + (y_offset * src_stride + x_offset);
+    dst = dst + (y_offset * dst_stride + x_offset) * scale;
+
+    for (int y = 0; y < height * scale; ++y) {
+        const int top_y_index = config->top_y_index[y];
+        const int bottom_y_index = config->bottom_y_index[y];
+        const int16_t y_lerp = config->y_lerp_fixed[y];
+        for (int x = 0; x < width * scale; ++x) {
+            const int left_x_index = config->left_x_index[x];
+            const int right_x_index = config->right_x_index[x];
+            const int16_t x_lerp = config->x_lerp_fixed[x];
+
+            const int16_t top_left = src[top_y_index * src_stride + left_x_index];
+            const int16_t top_right = src[top_y_index * src_stride + right_x_index];
+            const int16_t bottom_left = src[bottom_y_index * src_stride + left_x_index];
+            const int16_t bottom_right = src[bottom_y_index * src_stride + right_x_index];
+
+            const int16_t top = top_left + (((top_right - top_left) * x_lerp + delta) >> FRACTION_BIT);
+            const int16_t bottom = bottom_left + (((bottom_right - bottom_left) * x_lerp + delta) >> FRACTION_BIT);
+            const int16_t result = top + (((bottom - top) * y_lerp + delta) >> FRACTION_BIT);
+
+            dst[y * dst_stride + x] = clip_pixel(result);
+        }
+    }
+}
+
+void vpx_bilinear_interp_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int max_width, int max_height, int scale)
+{
+//    LOGD("x_offset: %d, y_offset: %d, width: %d, height: %d, max_width: %d, max_height: %d, scale: %d", x_offset, y_offset, width, height,maget_bilinear_config(cm)x_width, max_height, scale);
     int y_start = y_offset * scale;
     int y_end = y_offset * scale + height * scale;
     int x_start = x_offset * scale;

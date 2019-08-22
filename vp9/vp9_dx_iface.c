@@ -62,13 +62,13 @@
 
 //hyunho
 #define DEBUG_LATENCY 1
-#define DEBUG_LR_QUALITY 0
+#define DEBUG_LR_QUALITY 1
 #define FRACTION_BIT (5)
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 
-static void bilinear_ops_init(bilinear_config_t *config, int scale){
+static void bilinear_config_init(bilinear_config_t *config, int scale, int size) {
     int x, y;
-    int width = 32, height = 32; //hyunho: 32 is the largest TX size.
+    int width = size, height = size; //hyunho: 32 is the largest TX size.
 
     float *x_lerp = config->x_lerp;
     int16_t *x_lerp_fixed = config->x_lerp_fixed;
@@ -82,7 +82,7 @@ static void bilinear_ops_init(bilinear_config_t *config, int scale){
     for (x = 0; x < width * scale; ++x) {
         const float in_x = (x + 0.5f) / scale - 0.5f;
         left_x_index[x] = MAX(floor(in_x), 0);
-        right_x_index[x] = MIN(ceil(in_x), width * scale - 1);
+        right_x_index[x] = MIN(ceil(in_x), width - 1);
         x_lerp[x] = in_x - floor(in_x);
         x_lerp_fixed[x] = x_lerp[x] * FRACTION_SCALE;
     }
@@ -90,11 +90,61 @@ static void bilinear_ops_init(bilinear_config_t *config, int scale){
     for (y = 0; y < height * scale; ++y) {
         const float in_y = (y + 0.5f) / scale - 0.5f;
         top_y_index[y] = MAX(floor(in_y), 0);
-        bottom_y_index[y] = MIN(ceil(in_y), height * scale - 1);
+        bottom_y_index[y] = MIN(ceil(in_y), height - 1);
         y_lerp[y] = in_y - floor(in_y);
         y_lerp_fixed[y] = y_lerp[y] * FRACTION_SCALE;
     }
 }
+
+static void bilinear_profile_init(bilinear_profile_t *profile){
+    //scale x4
+    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4);
+    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8);
+    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16);
+    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32);
+
+    //scale x3
+    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4);
+    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8);
+    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16);
+    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32);
+
+    //scale x2
+    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4);
+    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8);
+    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16);
+    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32);
+}
+
+//static void bilinear_ops_init(bilinear_config_t *config, int scale){
+//    int x, y;
+//    int width = 32, height = 32; //hyunho: 32 is the largest TX size.
+//
+//    float *x_lerp = config->x_lerp;
+//    int16_t *x_lerp_fixed = config->x_lerp_fixed;
+//    float *y_lerp = config->y_lerp;
+//    int16_t *y_lerp_fixed = config->y_lerp_fixed;
+//    int *top_y_index = config->top_y_index;
+//    int *bottom_y_index = config->bottom_y_index;
+//    int *left_x_index = config->left_x_index;
+//    int *right_x_index = config->right_x_index;
+//
+//    for (x = 0; x < width * scale; ++x) {
+//        const float in_x = (x + 0.5f) / scale - 0.5f;
+//        left_x_index[x] = MAX(floor(in_x), 0);
+//        right_x_index[x] = MIN(ceil(in_x), width * scale - 1);
+//        x_lerp[x] = in_x - floor(in_x);
+//        x_lerp_fixed[x] = x_lerp[x] * FRACTION_SCALE;
+//    }
+//
+//    for (y = 0; y < height * scale; ++y) {
+//        const float in_y = (y + 0.5f) / scale - 0.5f;
+//        top_y_index[y] = MAX(floor(in_y), 0);
+//        bottom_y_index[y] = MIN(ceil(in_y), height * scale - 1);
+//        y_lerp[y] = in_y - floor(in_y);
+//        y_lerp_fixed[y] = y_lerp[y] * FRACTION_SCALE;
+//    }
+//}
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
@@ -332,16 +382,17 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     init_buffer_callbacks(ctx);
 
     //hyunho: additional overhead is < 0.1 msec
-//    clock_t start, end;
-//    double cpu_time_used;
-//    start = clock();
+    clock_t start, end;
+    double cpu_time_used;
+    start = clock();
     VP9_COMMON *cm = &ctx->pbi->common;
-    bilinear_ops_init(&cm->bilinear_x4, 4);
-    bilinear_ops_init(&cm->bilinear_x3, 3);
-    bilinear_ops_init(&cm->bilinear_x2, 2);
-//    end = clock();
-//    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
-//    LOGD("additional init overhead: %.2fmsec", cpu_time_used);
+    bilinear_profile_init(&cm->bl_profile);
+//    bilinear_ops_init(&cm->bilinear_x4, 4);
+//    bilinear_ops_init(&cm->bilinear_x3, 3);
+//    bilinear_ops_init(&cm->bilinear_x2, 2);
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+    LOGD("additional init overhead: %.2fmsec", cpu_time_used);
     /*******************Hyunho************************/
 
     return VPX_CODEC_OK;

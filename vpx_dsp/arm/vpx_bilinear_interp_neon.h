@@ -17,7 +17,7 @@ extern "C" {
 
 void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride,
                                     int x_offset, int y_offset, int width, int height, int scale,
-                                    const bilinear_config_t *config);
+                                    const bilinear_config_t *config, int plane);
 
 void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride,
                                     int x_offset, int y_offset, int width, int height, int scale,
