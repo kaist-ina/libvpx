@@ -36,6 +36,7 @@
 #include <vpx_dsp/ssim.h>
 #include <vpx_dsp/vpx_bilinear.h>
 #include <sys/param.h>
+#include <vpx_dsp/arm/vpx_bilinear_interp_neon.h>
 
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
@@ -66,9 +67,8 @@
 #define FRACTION_BIT (5)
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 
-static void bilinear_config_init(bilinear_config_t *config, int scale, int size) {
+static void bilinear_config_init(bilinear_config_t *config, int scale, int width, int height) {
     int x, y;
-    int width = size, height = size; //hyunho: 32 is the largest TX size.
 
     float *x_lerp = config->x_lerp;
     int16_t *x_lerp_fixed = config->x_lerp_fixed;
@@ -98,22 +98,22 @@ static void bilinear_config_init(bilinear_config_t *config, int scale, int size)
 
 static void bilinear_profile_init(bilinear_profile_t *profile){
     //scale x4
-    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4);
-    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8);
-    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16);
-    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32);
+    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
+    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
+    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
+    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
 
     //scale x3
-    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4);
-    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8);
-    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16);
-    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32);
+    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
+    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
+    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
+    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
 
     //scale x2
-    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4);
-    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8);
-    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16);
-    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32);
+    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
+    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
+    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
+    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
 }
 
 //static void bilinear_ops_init(bilinear_config_t *config, int scale){
@@ -637,13 +637,16 @@ static void apply_bilinear(VP9_COMMON *cm) {
     const int hr_debug_frame_strides[MAX_MB_PLANE] = {hr_debug_frame->y_stride, hr_debug_frame->uv_stride,
                                                       hr_debug_frame->uv_stride};
 
+    //1. make own bilinear config
+    bilinear_config_t config;
+
+    //2. aaply bilinear interpolation
+    LOGF("%s: Need to test", __func__);
     for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-        vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
-                                    hr_debug_frame_buffers[plane],
-                                    hr_debug_frame_strides[plane],
-                                    0, 0, max_widths[plane],
-                                    max_heights[plane], max_widths[plane], max_heights[plane],
-                                    cm->scale);
+        bilinear_config_init(&config, cm->scale, max_widths[plane], max_heights[plane]);
+        vpx_bilinear_interp_neon_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+                                       hr_debug_frame_buffers[plane], hr_debug_frame_strides[plane],
+                                       0, 0, max_widths[plane], max_heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, max_widths[plane]));
     }
 }
 

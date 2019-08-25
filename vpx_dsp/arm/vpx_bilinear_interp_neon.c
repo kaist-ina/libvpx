@@ -39,20 +39,6 @@ static const int16_t delta = (1 << (FRACTION_BIT - 1));
 #define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
-//TODO (hyunho): add to these files to a build script
-//TODO (hyunho): write a pseudo code
-
-//#define TX_4X4 ((TX_SIZE)0)    // 4x4 transform     // 2x2 -- 4x4, 6x6, 8x8 (UV plane의 경우)
-//#define TX_8X8 ((TX_SIZE)1)    // 8x8 transform
-//#define TX_16X16 ((TX_SIZE)2)  // 16x16 transform
-//#define TX_32X32 ((TX_SIZE)3)  // 32x32 transform
-
-//8개씩 처리하니 8, 16을 만들어두면 된다.
-//8, 16이상인 경우 for loop을 돌면서, 마지막에 남은 것 처리하는 형식으로 만들자.
-//우선 C코드로 neon을 제외한 모든 구현을 해보자. (fixed point precision, neon)
-//그 다음 neon으로 vectorize를 진행하자.
-//ne10을 참조하자.
-
 //TODO: here, neon optimization slows down the performance for scale x4, but maybe faster in x3, x4 which requires a manual test
 #if 0
 static void vpx_bilinear_interp_horiz_neon_h8_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config)
@@ -115,12 +101,16 @@ static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff
 }
 #endif
 
-//TODO: check quality without fixed-point
 static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_stride,
                                               int16_t *dst, ptrdiff_t dst_stride, int width,
                                               int height, int scale,
                                               const bilinear_config_t *config) {
     int x, y;
+
+    if (scale == 2 || scale == 3) {
+        LOGF("%s: Need to compare neon and c implementations", __func__);
+        assert(1);
+    }
 
     for (y = 0; y < height; ++y) {
         for (x = 0; x < width * scale; x = x + 2) {
@@ -131,16 +121,12 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
 
             const int16_t x_lerp_fixed_0 = config->x_lerp_fixed[x];
             const int16_t x_lerp_fixed_1 = config->x_lerp_fixed[x + 1];
-//            const float x_lerp_0 = config->x_lerp[x];
-//            const float x_lerp_1 = config->x_lerp[x + 1];
 
             const int16_t left_0 = src[y * src_stride + left_x_index_0];
             const int16_t right_0 = src[y * src_stride + right_x_index_0];
             const int16_t left_1 = src[y * src_stride + left_x_index_1];
             const int16_t right_1 = src[y * src_stride + right_x_index_1];
 
-//            const float result_0 = left_0 + ((right_0 - left_0) * x_lerp_0);
-//            const float result_1 = left_1 + ((right_1 - left_1) * x_lerp_1);
             const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT); //fixed-point
             const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta) >> FRACTION_BIT); //fixed-point
 
@@ -155,6 +141,11 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
                                               int height, int scale,
                                               const bilinear_config_t *config) {
     int x, y;
+
+    if (scale == 2 || scale == 3) {
+        LOGF("%s: Need to compare neon and c implementations", __func__);
+        assert(1);
+    }
 
     for (y = 0; y < height; ++y) {
         for (x = 0; x < width * scale; x = x + 2) {
@@ -180,46 +171,21 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
             dst[y * dst_stride + (x + 1)] = result_1;
         }
     }
-
-//    for (y = 0; y < height; ++y) {
-//        for (x = 0; x < width * scale; x = x + 2) {
-//            const int left_x_index_0 = config->left_x_index[x];
-//            const int left_x_index_1 = config->left_x_index[x + 1];
-//            const int right_x_index_0 = config->right_x_index[x];
-//            const int right_x_index_1 = config->right_x_index[x + 1];
-//
-//            const float x_lerp_0 = config->x_lerp[x];
-//            const float x_lerp_1 = config->x_lerp[x + 1];
-//
-//            const int16_t left_0 = src[y * src_stride + left_x_index_0];
-//            const int16_t right_0 = src[y * src_stride + right_x_index_0];
-//            const int16_t left_1 = src[y * src_stride + left_x_index_1];
-//            const int16_t right_1 = src[y * src_stride + right_x_index_1];
-//
-//            const float result_0 = left_0 + ((right_0 - left_0) * x_lerp_0);
-//            const float result_1 = left_1 + ((right_1 - left_1) * x_lerp_1);
-//
-//            dst[y * dst_stride + x] = result_0;
-//            dst[y * dst_stride + (x + 1)] = result_1;
-//        }
-//    }
 }
 
-//TODO (hyunho) - need quality & latency test for scale x2, x3
 static void
-vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
+vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                        ptrdiff_t dst_stride, int width, int height, int scale,
                                        const bilinear_config_t *config) {
-    LOGF("Not tested yet: vpx_bilinear_interp_vert_neon_w8_int16()");
-    assert(1);
-
     int x, y;
 
-    int16x8_t qS0_01234567_0, qS0_01234567_1, qS1_01234567_0, qS1_01234567_1;
-    int16x8_t qT_01234567_0, qT_01234567_1;
-    uint8x8_t dDst_01234567_0, dDst_01234567_1;
-    uint16x8_t dT0_01234567_0, dT0_01234567_1;
+    int16x8_t qS0_01234567_0, qS1_01234567_0;
+    int16x8_t qT_01234567_0;
     int16x8_t y_lerp_fixed_v;
+
+    LOGF("%s: Not tested yet", __func__);
+    assert(1);
+
     for (y = 0; y < height * scale; ++y) {
         x = 0;
         const int top_y_index = config->top_y_index[y];
@@ -227,8 +193,8 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
         const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
         y_lerp_fixed_v = vdupq_n_s16(y_lerp_fixed);
 
-        //1. process 8 values * 2 loop unrolling == 16 // case: 8x8, 12x12
-        for (; x <= width * scale - 16; x += 16) {
+        //1. process 8 values * 2 loop unrolling == 16
+        for (; x <= width * scale - 8; x += 8) {
             //a. load source pixels: top0,1, bottom0,1
             qS0_01234567_0 = vld1q_s16(&src[top_y_index * src_stride + x]);
             qS1_01234567_0 = vld1q_s16(&src[bottom_y_index * src_stride + x]);
@@ -238,34 +204,54 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
             qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
 
-            //c. load & add destination pixels
-            //d. clip pixels
-            //e. convert from in16 to uint8
-            dDst_01234567_0 = vld1_u8(&dst[y * dst_stride + x]);
-            dT0_01234567_0 = vaddw_u8(vreinterpretq_u16_s16(qT_01234567_0), dDst_01234567_0);
-            dDst_01234567_0 = vqmovun_s16(vreinterpretq_s16_u16(dT0_01234567_0));
-
-            //f. save pixels
-            vst1_u8(&dst[y * dst_stride + x], dDst_01234567_0);
+            //c. save pixels
+            vst1_u8(&dst[y * dst_stride + x], vmovn_u16(vreinterpretq_u16_s16(qT_01234567_0)));
         }
 
-        //2. process remaining 4 values // case: 12x12
-        for (; x < width * scale; x += 2) {
+        //2. process remaining 8 values // case: 12x12
+        for (x = 0; x < width * scale; x = x + 2) {
+            LOGF("%s: Not tested yet", __func__);
+            assert(1);
+
             const int16_t top_0 = src[top_y_index * src_stride + x];
             const int16_t bottom_0 = src[bottom_y_index * src_stride + x];
             const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
             const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
 
-            const int16_t result_0 =
-                    top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
-            const int16_t result_1 =
-                    top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
 
-            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + result_0);
-            dst[y * dst_stride + (x + 1)] = clip_pixel(dst[y * dst_stride + (x + 1)] + result_1);
+            dst[y * dst_stride + x] = clip_pixel(result_0);
+            dst[y * dst_stride + (x + 1)] = clip_pixel(result_1);
         }
     }
+
+
+//    int x, y;
+//
+//    for (y = 0; y < height * scale; ++y) {
+//        const int top_y_index = config->top_y_index[y];
+//        const int bottom_y_index = config->bottom_y_index[y];
+//        const float y_lerp = config->y_lerp[y];
+////        const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
+//
+//        for (x = 0; x < width * scale; x = x + 2) {
+//            const int16_t top_0 = src[top_y_index * src_stride + x];
+//            const int16_t bottom_0 = src[bottom_y_index * src_stride + x];
+//            const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
+//            const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
+//
+//            const int16_t result_0 = top_0 + ((bottom_0 - top_0) * y_lerp);
+//            const int16_t result_1 = top_1 + ((bottom_1 - top_1) * y_lerp);
+////            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
+////            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+//
+//            dst[y * dst_stride + x] = clip_pixel(result_0);
+//            dst[y * dst_stride + (x + 1)] = clip_pixel(result_1);
+//        }
+//    }
 }
+
 
 static void
 vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
@@ -307,11 +293,48 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
         }
 
         //2. process remaining 8 values // case: 24x24
-        //TODO (hyunho) - need quality & latency test for scale x3
         for (; x < width * scale; x += 8) {
-            LOGF("Not tested yet: vpx_bilinear_interp_vert_neon_w16_int16()");
+            LOGF("%s: Not tested yet", __func__);
             assert(1);
 
+            //a. load source pixels: top0,1, bottom0,1
+            qS0_01234567_0 = vld1q_s16(&src[top_y_index * src_stride + x]);
+            qS1_01234567_0 = vld1q_s16(&src[bottom_y_index * src_stride + x]);
+
+            //b. interpolate pixels
+            qT_01234567_0 = vsubq_s16(qS1_01234567_0, qS0_01234567_0);
+            qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
+
+            //c. save pixels
+            vst1_u8(&dst[y * dst_stride + x], vmovn_u16(vreinterpretq_u16_s16(qT_01234567_0)));
+        }
+    }
+}
+
+static void
+vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
+                                       ptrdiff_t dst_stride, int width, int height, int scale,
+                                       const bilinear_config_t *config) {
+    LOGF("%s: Not tested yet", __func__);
+    assert(1);
+
+    int x, y;
+
+    int16x8_t qS0_01234567_0, qS1_01234567_0;
+    int16x8_t qT_01234567_0;
+    uint8x8_t dDst_01234567_0;
+    uint16x8_t dT0_01234567_0;
+    int16x8_t y_lerp_fixed_v;
+    for (y = 0; y < height * scale; ++y) {
+        x = 0;
+        const int top_y_index = config->top_y_index[y];
+        const int bottom_y_index = config->bottom_y_index[y];
+        const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
+        y_lerp_fixed_v = vdupq_n_s16(y_lerp_fixed);
+
+        //1. process 8 values * 2 loop unrolling == 16 // case: 8x8, 12x12
+        for (; x <= width * scale - 16; x += 16) {
             //a. load source pixels: top0,1, bottom0,1
             qS0_01234567_0 = vld1q_s16(&src[top_y_index * src_stride + x]);
             qS1_01234567_0 = vld1q_s16(&src[bottom_y_index * src_stride + x]);
@@ -331,30 +354,32 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
             //f. save pixels
             vst1_u8(&dst[y * dst_stride + x], dDst_01234567_0);
         }
+
+        //2. process remaining 4 values // case: 12x12
+        for (; x < width * scale; x += 2) { //hyunho: it consists of only 4 pixels, so process by non-neon instructions
+            LOGF("%s: Not tested yet", __func__);
+            assert(1);
+
+            //a. load source pixels: top0,1, bottom0,1
+            const int16_t top_0 = src[top_y_index * src_stride + x];
+            const int16_t bottom_0 = src[bottom_y_index * src_stride + x];
+            const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
+            const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
+
+            //b. interpolate pixels
+            const int16_t result_0 =
+                    top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_1 =
+                    top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+
+            //c. load & add destination pixels
+            //d. clip pixels
+            //e. convert from in16 to uint8
+            //f. save pixels
+            dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + result_0);
+            dst[y * dst_stride + (x + 1)] = clip_pixel(dst[y * dst_stride + (x + 1)] + result_1);
+        }
     }
-//    int x, y;
-//
-//    for (y = 0; y < height * scale; ++y) {
-//        const int top_y_index = config->top_y_index[y];
-//        const int bottom_y_index = config->bottom_y_index[y];
-//        const float y_lerp = config->y_lerp[y];
-////        const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
-//
-//        for (x = 0; x < width * scale; x = x + 2) {
-//            const int16_t top_0 = src[top_y_index * src_stride + x];
-//            const int16_t bottom_0 = src[bottom_y_index * src_stride + x];
-//            const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
-//            const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
-//
-//            const int16_t result_0 = top_0 + ((bottom_0 - top_0) * y_lerp);
-//            const int16_t result_1 = top_1 + ((bottom_1 - top_1) * y_lerp);
-////            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
-////            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
-//
-//            dst[y * dst_stride + x] = clip_pixel(result_0);
-//            dst[y * dst_stride + (x + 1)] = clip_pixel(result_1);
-//        }
-//    }
 }
 
 static void
@@ -461,7 +486,7 @@ void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, ui
 //TODO: reset to int16
 void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                    int height, int scale, const bilinear_config_t *config, int plane) {
+                                    int height, int scale, const bilinear_config_t *config) {
     int16_t temp[128 * 128];
     int h = height * scale;
 
@@ -469,7 +494,6 @@ void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, ui
     assert(height <= 32);
     assert(scale <= 4 && scale >= 2);
 
-//    LOGD("width: %d, height: %d, x_offset: %d, y_offset: %d, scale: %d", width, height, x_offset, y_offset, scale);
     src = src + (y_offset * src_stride + x_offset);
     dst = dst + (y_offset * dst_stride + x_offset) * scale;
 
@@ -478,7 +502,7 @@ void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, ui
         vpx_bilinear_interp_vert_neon_w16_uint8(temp, 128, dst, dst_stride, width, height, scale,
                                                 config);
     } else {
-        LOGF("Not implemented yet");
-        assert(1);
+        vpx_bilinear_interp_vert_neon_w8_uint8(temp, 128, dst, dst_stride, width, height, scale,
+                                                config);
     }
 }

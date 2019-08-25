@@ -2465,24 +2465,14 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
             //for intra-block case, optimizing bilinear degrades performance notably
             for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-//            for (int plane = 0; plane < 1; ++plane){
-                if (0) {
-                    vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
-                                                hr_frame_buffers[plane], hr_frame_strides[plane],
-                                                x_offsets[plane], y_offsets[plane], widths[plane],
-                                                heights[plane],  max_widths[plane], max_heights[plane], cm->scale);
-                }
-                else {
+//                    vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
+//                                                hr_frame_buffers[plane], hr_frame_strides[plane],
+//                                                x_offsets[plane], y_offsets[plane], widths[plane],
+//                                                heights[plane],  cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
                     vpx_bilinear_interp_neon_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                                    hr_frame_buffers[plane], hr_frame_strides[plane],
                                                    x_offsets[plane], y_offsets[plane], widths[plane],
-                                                   heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]), plane);
-                }
-//                vpx_bilinear_interp_uint8_opt_c(lr_frame_buffers[plane], lr_frame_strides[plane],
-//                                            hr_frame_buffers[plane], hr_frame_strides[plane],
-//                                            x_offsets[plane], y_offsets[plane], widths[plane],
-//                                            heights[plane],  cm->scale, get_bilinear_config(cm));
-
+                                                   heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
             }
             prev_block = intra_block;
             intra_block = intra_block->next;
@@ -2542,12 +2532,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 //                vpx_bilinear_interp_int16_c(lr_residual_buffers[plane], lr_residual_strides[plane],
 //                                            hr_frame_buffers[plane], hr_frame_strides[plane],
 //                                            x_offsets[plane], y_offsets[plane], widths[plane],
-//                                            heights[plane], max_widths[plane], max_heights[plane],
-//                                            cm->scale);
-//                vpx_bilinear_interp_c(lr_residual_buffers[plane], lr_residual_strides[plane],
-//                                                       hr_frame_buffers[plane], hr_frame_strides[plane],
-//                                                       x_offsets[plane], y_offsets[plane], widths[plane],
-//                                                       heights[plane], cm->scale, get_bilinear_config(cm));
+//                                            heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
                 vpx_bilinear_interp_neon_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                                hr_frame_buffers[plane], hr_frame_strides[plane],
                                                x_offsets[plane], y_offsets[plane], widths[plane],
@@ -2560,11 +2545,10 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 PSNR_STATS psnr_compare;
 
                 for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-                    vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
-                                                hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane],
-                                                x_offsets[plane], y_offsets[plane], widths[plane],
-                                                heights[plane], max_widths[plane], max_heights[plane],
-                                                cm->scale);
+                    vpx_bilinear_interp_neon_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+                                                   hr_frame_buffers[plane], hr_frame_strides[plane],
+                                                   x_offsets[plane], y_offsets[plane], widths[plane],
+                                                   heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
                 }
 
                 vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
@@ -2575,11 +2559,10 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
                     //TODO (hyunho): here, bilinear interpolation is redundnant, copy is enough
                     for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-                        vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
-                                                    hr_frame_buffers[plane], hr_frame_strides[plane],
-                                                    x_offsets[plane], y_offsets[plane], widths[plane],
-                                                    heights[plane], max_widths[plane], max_heights[plane],
-                                                    cm->scale);
+                        vpx_bilinear_interp_neon_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+                                                       hr_frame_buffers[plane], hr_frame_strides[plane],
+                                                       x_offsets[plane], y_offsets[plane], widths[plane],
+                                                       heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
 #if DEBUG_ADAPTIVE_CACHE
                         vpx_constant_c(hr_debug_frame_buffers[plane], hr_debug_frame_strides[plane],
                                                     x_offsets[plane], y_offsets[plane], widths[plane],
