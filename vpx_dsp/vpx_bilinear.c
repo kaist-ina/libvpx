@@ -6,7 +6,6 @@
 #include <math.h>
 #include <android/log.h>
 #include <assert.h>
-#include "vpx_dsp/vpx_bilinear.h"
 #include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_dsp_common.h"
 #include "../vp9/common/vp9_onyxc_int.h"

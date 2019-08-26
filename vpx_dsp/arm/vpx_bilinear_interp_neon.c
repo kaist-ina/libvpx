@@ -7,7 +7,6 @@
 #include <android/log.h>
 #include <memory.h>
 
-#include "vpx_dsp/arm/vpx_bilinear_interp_neon.h"
 #include "./vpx_config.h"
 #include "./vpx_dsp_rtcd.h"
 #include "vpx/vpx_integer.h"
@@ -459,7 +458,7 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
     }
 }
 
-void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
+void vpx_bilinear_interp_int16_neon(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
                                     int height, int scale, const bilinear_config_t *config) {
     int16_t temp[128 * 128];
@@ -484,7 +483,7 @@ void vpx_bilinear_interp_neon_int16(const int16_t *src, ptrdiff_t src_stride, ui
 
 //TODO (hyunho): a) memory, b) block size (smaller than ...)
 //TODO: reset to int16
-void vpx_bilinear_interp_neon_uint8(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
+void vpx_bilinear_interp_uint8_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
                                     int height, int scale, const bilinear_config_t *config) {
     int16_t temp[128 * 128];

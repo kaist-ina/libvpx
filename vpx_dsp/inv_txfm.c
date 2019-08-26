@@ -220,28 +220,6 @@ void vpx_idct4x4_16_copy_add_c(const tran_low_t *input, uint8_t *dest, int strid
 //            LOGD("temp_out[j]: %d, lr_resiudal[j * res_stride +i] : %d", ROUND_POWER_OF_TWO(temp_out[j], 4), lr_resiudal[j * res_stride + i]);
         }
     }
-//    int i, j;
-//    tran_low_t out[4 * 4];
-//    tran_low_t *outptr = out;
-//    tran_low_t temp_in[4], temp_out[4];
-//
-//    // Rows
-//    for (i = 0; i < 4; ++i) {
-//        idct4_c(input, outptr);
-//        input += 4;
-//        outptr += 4;
-//    }
-//
-//    // Columns
-//    for (i = 0; i < 4; ++i) {
-//        for (j = 0; j < 4; ++j) temp_in[j] = out[j * 4 + i];
-//        idct4_c(temp_in, temp_out);
-//        for (j = 0; j < 4; ++j) {
-//            dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
-//                                                  ROUND_POWER_OF_TWO(temp_out[j], 4));
-//            lr_resiudal[j * res_stride + i] = ROUND_POWER_OF_TWO(temp_out[j], 4);
-//        }
-//    }
 }
 
 void vpx_idct4x4_1_add_c(const tran_low_t *input, uint8_t *dest, int stride) {
@@ -286,28 +264,6 @@ void vpx_idct4x4_1_copy_add_c(const tran_low_t *input, uint8_t *dest, int stride
 
     residual += res_stride;
   }
-//    int i;
-//    tran_high_t a1;
-//    tran_low_t out =
-//            WRAPLOW(dct_const_round_shift((int16_t)input[0] * cospi_16_64));
-//
-//    out = WRAPLOW(dct_const_round_shift(out * cospi_16_64));
-//    a1 = ROUND_POWER_OF_TWO(out, 4);
-//
-//    for (i = 0; i < 4; i++) {
-//        dest[0] = clip_pixel_add(dest[0], a1);
-//        dest[1] = clip_pixel_add(dest[1], a1);
-//        dest[2] = clip_pixel_add(dest[2], a1);
-//        dest[3] = clip_pixel_add(dest[3], a1);
-//
-////        residual[0] = (int16_t) a1;
-////        residual[1] = (int16_t) a1;
-////        residual[2] = (int16_t) a1;
-////        residual[3] = (int16_t) a1;
-//
-//        dest += stride;
-//        lr_resiudal += res_stride;
-//    }
 }
 
 void iadst8_c(const tran_low_t *input, tran_low_t *output) {

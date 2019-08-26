@@ -34,6 +34,16 @@ if ($opts{arch} eq "x86_64") {
 }
 
 #
+# hyunho: Bilinear interpolation
+#
+add_proto qw/void vpx_bilinear_interp_uint8/, "const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
+                                                                                int height, int scale, const bilinear_config_t *config";
+specialize qw/vpx_bilinear_interp_uint8 neon/;
+add_proto qw/void vpx_bilinear_interp_int16/, "const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
+                                                                                int height, int scale, const bilinear_config_t *config";
+specialize qw/vpx_bilinear_interp_int16 neon/;
+
+#
 # Intra prediction
 #
 
@@ -609,6 +619,22 @@ add_proto qw/void vpx_idct32x32_34_add/, "const tran_low_t *input, uint8_t *dest
 add_proto qw/void vpx_idct32x32_1_add/, "const tran_low_t *input, uint8_t *dest, int stride";
 add_proto qw/void vpx_iwht4x4_16_add/, "const tran_low_t *input, uint8_t *dest, int stride";
 add_proto qw/void vpx_iwht4x4_1_add/, "const tran_low_t *input, uint8_t *dest, int stride";
+
+add_proto qw/void vpx_idct4x4_16_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct4x4_1_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct8x8_64_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct8x8_12_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct8x8_1_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct16x16_256_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct16x16_38_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct16x16_10_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct16x16_1_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct32x32_1024_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct32x32_135_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct32x32_34_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_idct32x32_1_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_iwht4x4_16_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
+add_proto qw/void vpx_iwht4x4_1_copy_add/, "const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride";
 
 if (vpx_config("CONFIG_EMULATE_HARDWARE") ne "yes") {
   # Note that there are more specializations appended when

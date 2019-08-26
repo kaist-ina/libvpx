@@ -34,9 +34,7 @@
 #include <vpx_dsp/psnr.h>
 #include <vpx_util/vpx_write_yuv_frame.h>
 #include <vpx_dsp/ssim.h>
-#include <vpx_dsp/vpx_bilinear.h>
 #include <sys/param.h>
-#include <vpx_dsp/arm/vpx_bilinear_interp_neon.h>
 
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
@@ -644,9 +642,10 @@ static void apply_bilinear(VP9_COMMON *cm) {
     LOGF("%s: Need to test", __func__);
     for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
         bilinear_config_init(&config, cm->scale, max_widths[plane], max_heights[plane]);
-        vpx_bilinear_interp_neon_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+        vpx_bilinear_interp_uint8_neon(lr_frame_buffers[plane], lr_frame_strides[plane],
                                        hr_debug_frame_buffers[plane], hr_debug_frame_strides[plane],
-                                       0, 0, max_widths[plane], max_heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, max_widths[plane]));
+                                       0, 0, max_widths[plane], max_heights[plane], cm->scale,
+                                       get_bilinear_config(&cm->bl_profile, cm->scale, max_widths[plane]));
     }
 }
 
