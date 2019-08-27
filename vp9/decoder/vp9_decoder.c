@@ -331,7 +331,12 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
         cm->ref_frame_map[ref_index] = cm->next_ref_frame_map[ref_index];
     }
     pbi->hold_ref_buf = 0;
-    cm->frame_to_show = get_frame_new_buffer(cm);
+    if (pbi->common.decode_info == DECODE_SR_CACHE) {
+        cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
+    }
+    else {
+        cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not
+    }
 
     --frame_bufs[cm->new_fb_idx].ref_count;
 

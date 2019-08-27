@@ -144,7 +144,7 @@ int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s) {
     FILE *serialize_file = fopen(file_path, "wb");
     if(serialize_file == NULL)
     {
-        LOGE("file open fail: %s", file_path);
+        LOGE("%s: %s", __func__, file_path);
         return -1;
     }
 
@@ -217,7 +217,7 @@ int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int 
     FILE *serialize_file = fopen(file_path, "rb");
     if(serialize_file == NULL)
     {
-        LOGE("file open fail: %s", file_path);
+        LOGE("%s: %s", __func__, file_path);
         return -1;
     }
 
@@ -290,7 +290,7 @@ int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int 
     FILE *serialize_file = fopen(file_path, "rb");
     if(serialize_file == NULL)
     {
-        LOGE("file open fail: %s", file_path);
+        LOGE("%s: %s", __func__, file_path);
         return -1;
     }
 

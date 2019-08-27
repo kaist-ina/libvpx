@@ -499,7 +499,7 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
     // TODO (hyunho): implement neon-based lr_resiudal decode & copy
     // TODO (hyunho): a) residual을 다른 dummy frame에 더하고 (debug frame set도 해야한다.), b) copy add를 만들어서 넣자. (TX size에 따라서 switch 만들어 줘야한다.)
     if (eob > 0) {
-        if (cm->mode == DECODE_CACHE) {
+        if (cm->mode == DECODE_SR_CACHE) {
 #if !DEBUG_RESIDUAL
             inverse_transform_block_inter_copy(
                     xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
@@ -780,14 +780,14 @@ static void dec_build_inter_predictors(
     }
 
 //    if (plane == 0) {
-//        frame_width = ref_frame_buf->buf_lr.y_crop_width;
-//        frame_height = ref_frame_buf->buf_lr.y_crop_height;
-//        ref_frame = ref_frame_buf->buf_lr.y_buffer;
+//        frame_width = ref_frame_buf->sr_buf.y_crop_width;
+//        frame_height = ref_frame_buf->sr_buf.y_crop_height;
+//        ref_frame = ref_frame_buf->sr_buf.y_buffer;
 //    } else {
-//        frame_width = ref_frame_buf->buf_lr.uv_crop_width;
-//        frame_height = ref_frame_buf->buf_lr.uv_crop_height;
+//        frame_width = ref_frame_buf->sr_buf.uv_crop_width;
+//        frame_height = ref_frame_buf->sr_buf.uv_crop_height;
 //        ref_frame =
-//                plane == 1 ? ref_frame_buf->buf_lr.u_buffer : ref_frame_buf->buf_lr.v_buffer;
+//                plane == 1 ? ref_frame_buf->sr_buf.u_buffer : ref_frame_buf->sr_buf.v_buffer;
 //    }
 
     if (is_scaled) {
@@ -931,6 +931,17 @@ static void dec_build_sr_inter_predictors(
     /*******************Hyunho************************/
     if (is_sr) {
         if (plane == 0) {
+            frame_width = ref_frame_buf->sr_buf.y_crop_width;
+            frame_height = ref_frame_buf->sr_buf.y_crop_height;
+            ref_frame = ref_frame_buf->sr_buf.y_buffer;
+        } else {
+            frame_width = ref_frame_buf->sr_buf.uv_crop_width;
+            frame_height = ref_frame_buf->sr_buf.uv_crop_height;
+            ref_frame =
+                    plane == 1 ? ref_frame_buf->sr_buf.u_buffer : ref_frame_buf->sr_buf.v_buffer;
+        }
+    } else {
+        if (plane == 0) {
             frame_width = ref_frame_buf->buf.y_crop_width;
             frame_height = ref_frame_buf->buf.y_crop_height;
             ref_frame = ref_frame_buf->buf.y_buffer;
@@ -939,17 +950,6 @@ static void dec_build_sr_inter_predictors(
             frame_height = ref_frame_buf->buf.uv_crop_height;
             ref_frame =
                     plane == 1 ? ref_frame_buf->buf.u_buffer : ref_frame_buf->buf.v_buffer;
-        }
-    } else {
-        if (plane == 0) {
-            frame_width = ref_frame_buf->buf_lr.y_crop_width;
-            frame_height = ref_frame_buf->buf_lr.y_crop_height;
-            ref_frame = ref_frame_buf->buf_lr.y_buffer;
-        } else {
-            frame_width = ref_frame_buf->buf_lr.uv_crop_width;
-            frame_height = ref_frame_buf->buf_lr.uv_crop_height;
-            ref_frame =
-                    plane == 1 ? ref_frame_buf->buf_lr.u_buffer : ref_frame_buf->buf_lr.v_buffer;
         }
     }
     /*******************Hyunho************************/
@@ -1239,8 +1239,8 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
         RefBuffer *ref_buf = &pbi->common.frame_refs[frame - LAST_FRAME];
         /*******************Hyunho************************/
         const struct scale_factors *sf;
-        if (is_sr) sf = &ref_buf->sf;
-        else sf = &ref_buf->sf_lr;
+        if (is_sr) sf = &ref_buf->sf_sr;
+        else sf = &ref_buf->sf;
         /*******************Hyunho************************/
         //const struct scale_factors *const sf = &ref_buf->sf_lr;
         const int idx = ref_buf->idx;
@@ -1248,16 +1248,15 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
         RefCntBuffer *const ref_frame_buf = &pool->frame_bufs[idx];
 
         if (!vp9_is_valid_scale(sf) && pbi->common.mode !=
-                                       DECODE_CACHE) //TODO (hyunho): how to check valid scale in DECODE_CACHE mode?
+                                       DECODE_SR_CACHE) //TODO (hyunho): how to check valid scale in DECODE_SR_CACHE mode?
             vpx_internal_error(xd->error_info, VPX_CODEC_UNSUP_BITSTREAM,
                                "Reference frame has invalid dimensions");
 
         is_scaled = vp9_is_scaled(sf);
 //        LOGD("is_scaled: %d", is_scaled);
         /*******************Hyunho************************/
-        if (is_sr)
-            vp9_setup_pre_planes(xd, ref, ref_buf->buf, mi_row, mi_col, is_scaled ? sf : NULL);
-        else vp9_setup_pre_planes(xd, ref, ref_buf->buf_lr, mi_row, mi_col, is_scaled ? sf : NULL);
+        if (is_sr) vp9_setup_pre_planes(xd, ref, ref_buf->buf_sr, mi_row, mi_col, is_scaled ? sf : NULL);
+        else vp9_setup_pre_planes(xd, ref, ref_buf->buf, mi_row, mi_col, is_scaled ? sf : NULL);
         /*******************Hyunho************************/
         xd->block_refs[ref] = ref_buf;
 
@@ -1368,15 +1367,13 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
     set_mi_row_col(xd, tile, mi_row, bh, mi_col, bw, cm->mi_rows, cm->mi_cols);
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE) {
-        //vp9_setup_dst_planes(xd->plane, cm->hr_debug_frame, mi_row, mi_col);
-        vp9_setup_dst_planes(xd->plane, get_frame_new_buffer_lr(cm), mi_row, mi_col);
-        //vp9_setup_residual_planes(xd->plane, cm->hr_debug_frame, mi_row, mi_col);
-        //LOGD("get_frame_new_buffer_lr: %p", get_frame_new_buffer_lr(cm)->y_buffer);
-
-    } else {
-        vp9_setup_dst_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col);
-    }
+    vp9_setup_dst_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col);
+//    if (cm->mode == DECODE_SR_CACHE) {
+//        vp9_setup_dst_planes(xd->plane, get_frame_new_buffer_lr(cm), mi_row, mi_col);
+//
+//    } else {
+//        vp9_setup_dst_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col); //check: original frame
+//    }
     /*******************Hyunho************************/
 
     return xd->mi[0];
@@ -1457,7 +1454,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             /*******************Hyunho************************/
             //TODO (hyunho): max block size를 넘어설수 있다.
             //TODO (hyunho): skip for super-resolutioned frame
-            if (cm->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) { //debug
+            if (cm->mode == DECODE_SR_CACHE && cm->frame_type != KEY_FRAME) { //debug
                 if (plane == 0) {
                     createBlock(cm->intra_block_list, mi_col, mi_row, max_blocks_wide,
                                 max_blocks_high, mi->interp_filter);
@@ -1478,9 +1475,9 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 #if DEBUG_LATENCY
         start = clock();
 #endif
-        if (cm->mode == DECODE_CACHE) {
-            vp9_setup_sr_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col, &cm->sf_upsample_inter);
-            vp9_setup_debug_planes(xd->plane, cm->hr_debug_frame, mi_row, mi_col);
+        if (cm->mode == DECODE_SR_CACHE) {
+            vp9_setup_sr_planes(xd->plane, get_sr_frame_new_buffer(cm), mi_row, mi_col, &cm->sf_upsample_inter); //check: sr frame
+//            vp9_setup_debug_planes(xd->plane, cm->hr_debug_frame, mi_row, mi_col);
             vp9_setup_res_planes(xd->plane, cm->lr_resiudal, mi_row, mi_col); //TODO (hyunho): remove only for debugging
 
             dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, false);
@@ -1530,7 +1527,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 
                 /*******************Hyunho************************/
                 //TODO (hyunho): skip for super-resolutioned frame
-                if (cm->mode == DECODE_CACHE) {
+                if (cm->mode == DECODE_SR_CACHE) {
                     if (plane == 0) {
                         createBlock(cm->inter_block_list, mi_col, mi_row, max_blocks_wide,
                                     max_blocks_high, mi->interp_filter);
@@ -1931,8 +1928,8 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
     setup_render_size(cm, rb);
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE) {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
+    if (cm->mode == DECODE_SR_CACHE) {
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
@@ -1946,8 +1943,8 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
                                "Failed to allocate frame buffer");
         }
 
-        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer_lr(cm);
-        if (vpx_realloc_scaled_frame_buffer(get_frame_new_buffer(cm), frame->y_width,
+        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+        if (vpx_realloc_scaled_frame_buffer(get_sr_frame_new_buffer(cm), frame->y_width, //check: sr frame
                                             frame->y_crop_width, frame->y_height,
                                             frame->y_crop_height, cm->scale,
                                             cm->subsampling_x,
@@ -1964,7 +1961,7 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
                                "Failed to allocate frame buffer");
         }
     } else {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height,
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height, //check: original frame
                                      cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
@@ -2010,13 +2007,15 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                 YV12_BUFFER_CONFIG *const buf = cm->frame_refs[i].buf;
 
                 /*******************Hyunho************************/
-                if (cm->mode == DECODE_CACHE) {
-                    width = buf->y_crop_width / cm->scale;
-                    height = buf->y_crop_height / cm->scale;
-                } else {
-                    width = buf->y_crop_width;
-                    height = buf->y_crop_height;
-                }
+                width = buf->y_crop_width;
+                height = buf->y_crop_height;
+//                if (cm->mode == DECODE_SR_CACHE) {
+//                    width = buf->y_crop_width / cm->scale;
+//                    height = buf->y_crop_height / cm->scale;
+//                } else {
+//                    width = buf->y_crop_width;
+//                    height = buf->y_crop_height;
+//                }
                 /*******************Hyunho************************/
 
                 found = 1;
@@ -2039,14 +2038,18 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     for (i = 0; i < REFS_PER_FRAME; ++i) {
         RefBuffer *const ref_frame = &cm->frame_refs[i];
         /*******************Hyunho************************/
-        if (cm->mode == DECODE_CACHE) {
-            has_valid_ref_frame = 1; //TODO (hyunho): Hyunho: how to check valid frame size in DECODE_CACHE mode?
-        } else {
-            has_valid_ref_frame |=
-                    (ref_frame->idx != INVALID_IDX &&
-                     valid_ref_frame_size(ref_frame->buf->y_crop_width,
-                                          ref_frame->buf->y_crop_height, width, height));
-        }
+        has_valid_ref_frame |=
+                (ref_frame->idx != INVALID_IDX &&
+                 valid_ref_frame_size(ref_frame->buf->y_crop_width,
+                                      ref_frame->buf->y_crop_height, width, height));
+//        if (cm->mode == DECODE_SR_CACHE) {
+//            has_valid_ref_frame = 1; //TODO (hyunho): Hyunho: how to check valid frame size in DECODE_SR_CACHE mode?
+//        } else {
+//            has_valid_ref_frame |=
+//                    (ref_frame->idx != INVALID_IDX &&
+//                     valid_ref_frame_size(ref_frame->buf->y_crop_width,
+//                                          ref_frame->buf->y_crop_height, width, height));
+//        }
         /*******************Hyunho************************/
     }
 
@@ -2067,8 +2070,8 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE) {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer_lr(cm), cm->width,
+    if (cm->mode == DECODE_SR_CACHE) {
+        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
@@ -2082,8 +2085,8 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                                "Failed to allocate frame buffer");
         }
 
-        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer_lr(cm);
-        if (vpx_realloc_scaled_frame_buffer(get_frame_new_buffer(cm), frame->y_width,
+        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+        if (vpx_realloc_scaled_frame_buffer(get_sr_frame_new_buffer(cm), frame->y_width, //check: sr frame
                                             frame->y_crop_width, frame->y_height,
                                             frame->y_crop_height, cm->scale,
                                             cm->subsampling_x,
@@ -2101,7 +2104,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
         }
     } else {
         if (vpx_realloc_frame_buffer(
-                get_frame_new_buffer(cm), cm->width, cm->height, cm->subsampling_x,
+                get_frame_new_buffer(cm), cm->width, cm->height, cm->subsampling_x, //check: original frame
                 cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
                 cm->use_highbitdepth,
@@ -2224,12 +2227,12 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE) {
+    if (cm->mode == DECODE_SR_CACHE) {
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
             // Be sure to sync as we might be resuming after a failed frame decode.
             winterface->sync(&pbi->lf_worker);
-            vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer_lr(cm), cm,
+            vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer(cm), cm,
                                        pbi->mb.plane);
         }
     } else {
@@ -2237,7 +2240,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
             // Be sure to sync as we might be resuming after a failed frame decode.
             winterface->sync(&pbi->lf_worker);
-            vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer(cm), cm,
+            vp9_loop_filter_data_reset(lf_data, get_frame_new_buffer(cm), cm, //check: original frame
                                        pbi->mb.plane);
         }
     }
@@ -2299,7 +2302,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             }
 
             /*******************Hyunho************************/
-            if (cm->mode == DECODE_CACHE) {
+            if (cm->mode == DECODE_SR_CACHE) {
                 // Loopfilter one row.
                 if (cm->lf.filter_level && !cm->skip_loop_filter) {
                     const int lf_start = mi_row - MI_BLOCK_SIZE;
@@ -2348,7 +2351,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE) {
+    if (cm->mode == DECODE_SR_CACHE) {
         // Loopfilter remaining rows in the frame.
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
@@ -2375,10 +2378,10 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     /*******************Hyunho************************/
     //TODO (add new decode option if adaptive cache encoding phase is needed)
     //TODO add a debug frame
-    if (cm->mode == DECODE_CACHE) {
+    if (cm->mode == DECODE_SR_CACHE) {
         //setup frames
-        YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer_lr(cm);
-        YV12_BUFFER_CONFIG *hr_frame = get_frame_new_buffer(cm);
+        YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
+        YV12_BUFFER_CONFIG *hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
         YV12_BUFFER_CONFIG *hr_compare_frame = cm->hr_compare_frame;
         YV12_BUFFER_CONFIG *hr_reference_frame = cm->hr_reference_frame;
         YV12_BUFFER_CONFIG *lr_residual = cm->lr_resiudal;
@@ -2428,8 +2431,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                     cm->current_video_frame, cm->current_super_frame,
                     cm->decode_info->cache_file); //TODO: current_video_frame에서 -1하는게 맞는지?
             if (vpx_deserialize_load(cm->hr_reference_frame, file_path,
-                                     get_frame_new_buffer(cm)->y_crop_width,
-                                     get_frame_new_buffer(cm)->y_crop_height,
+                                     get_sr_frame_new_buffer(cm)->y_crop_width, //check: sr frame
+                                     get_sr_frame_new_buffer(cm)->y_crop_height, //check: sr frame
                                      cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
                 vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                    "deserialize failed");
@@ -2463,11 +2466,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
             //for intra-block case, optimizing bilinear degrades performance notably
             for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-//                    vpx_bilinear_interp_uint8_c(lr_frame_buffers[plane], lr_frame_strides[plane],
-//                                                hr_frame_buffers[plane], hr_frame_strides[plane],
-//                                                x_offsets[plane], y_offsets[plane], widths[plane],
-//                                                heights[plane],  cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
-                vpx_bilinear_interp_uint8_neon(lr_frame_buffers[plane], lr_frame_strides[plane],
+                vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                                hr_frame_buffers[plane], hr_frame_strides[plane],
                                                x_offsets[plane], y_offsets[plane], widths[plane],
                                                heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
@@ -2525,13 +2524,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
             //TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
             for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-//            for (int plane = 0; plane < 1; ++plane) {
 //                LOGD("width: %d, height: %d, x_offset: %d, y_offset: %d", widths[plane], heights[plane], x_offsets[plane], y_offsets[plane]);
-//                vpx_bilinear_interp_int16_c(lr_residual_buffers[plane], lr_residual_strides[plane],
-//                                            hr_frame_buffers[plane], hr_frame_strides[plane],
-//                                            x_offsets[plane], y_offsets[plane], widths[plane],
-//                                            heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
-                vpx_bilinear_interp_int16_neon(lr_residual_buffers[plane], lr_residual_strides[plane],
+                vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                                hr_frame_buffers[plane], hr_frame_strides[plane],
                                                x_offsets[plane], y_offsets[plane], widths[plane],
                                                heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
@@ -2621,6 +2615,10 @@ static int tile_worker_hook(void *arg1, void *arg2) {
 
     tile_data->xd.corrupted = 0;
 
+//    clock_t start, end;
+//    double cpu_time_used;
+//    start = clock();
+
     do {
         int mi_row, mi_col;
         const TileBuffer *const buf = pbi->tile_buffers + n;
@@ -2639,6 +2637,7 @@ static int tile_worker_hook(void *arg1, void *arg2) {
             vp9_zero(tile_data->xd.left_seg_context);
             for (mi_col = tile->mi_col_start; mi_col < tile->mi_col_end;
                  mi_col += MI_BLOCK_SIZE) {
+//                LOGD("mi_row_start: %d, mi_row_end: %d, mi_col_start: %d, mi_col_end: %d", tile->mi_row_start, tile->mi_row_end, tile->mi_col_start, tile->mi_row_end);
                 decode_partition(tile_data, pbi, mi_row, mi_col, BLOCK_64X64, 4);
             }
         }
@@ -2647,6 +2646,10 @@ static int tile_worker_hook(void *arg1, void *arg2) {
             bit_reader_end = vpx_reader_find_end(&tile_data->bit_reader);
         }
     } while (!tile_data->xd.corrupted && ++n <= tile_data->buf_end);
+
+//    end = clock();
+//    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
+//    LOGD("tile_worker_hook: %.2fmsec", cpu_time_used);
 
     tile_data->data_end = bit_reader_end;
     return !tile_data->xd.corrupted;
@@ -2691,6 +2694,7 @@ static const uint8_t *decode_tiles_mt(VP9Decoder *pbi, const uint8_t *data,
     }
 
     // Reset tile decoding hook
+//    LOGD("num_worker: %d", num_workers);
     for (n = 0; n < num_workers; ++n) {
         VPxWorker *const worker = &pbi->tile_workers[n];
         TileWorkerData *const tile_data =
@@ -2911,7 +2915,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
         for (i = 0; i < REFS_PER_FRAME; ++i) {
             cm->frame_refs[i].idx = INVALID_IDX;
             cm->frame_refs[i].buf = NULL;
-            cm->frame_refs[i].buf_lr = NULL;
+            cm->frame_refs[i].buf_sr = NULL;
         }
 
         setup_frame_size(cm, rb);
@@ -2959,7 +2963,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                 RefBuffer *const ref_frame = &cm->frame_refs[i];
                 ref_frame->idx = idx;
                 ref_frame->buf = &frame_bufs[idx].buf;
-                ref_frame->buf_lr = &frame_bufs[idx].buf_lr;
+                ref_frame->buf_sr = &frame_bufs[idx].sr_buf;
                 cm->ref_frame_sign_bias[LAST_FRAME + i] = vpx_rb_read_bit(rb);
             }
 
@@ -2980,13 +2984,13 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
 #else
                 /*******************Hyunho************************/
                 //LOGD("y_crop_width: %d, cm->width: %d", ref_buf->buf->y_crop_width, cm->width);
-                if (cm->mode == DECODE_CACHE) {
+                if (cm->mode == DECODE_SR_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
-                            &ref_buf->sf, ref_buf->buf->y_crop_width,
-                            ref_buf->buf->y_crop_height, cm->width, cm->height, false, false, 1);
+                            &ref_buf->sf_sr, ref_buf->buf_sr->y_crop_width,
+                            ref_buf->buf_sr->y_crop_height, cm->width, cm->height, false, false, 1);
                     vp9_setup_scale_factors_for_frame(
-                            &ref_buf->sf_lr, ref_buf->buf_lr->y_crop_width,
-                            ref_buf->buf_lr->y_crop_height, cm->width, cm->height);
+                            &ref_buf->sf, ref_buf->buf->y_crop_width,
+                            ref_buf->buf->y_crop_height, cm->width, cm->height);
                 } else {
                     vp9_setup_scale_factors_for_frame(
                             &ref_buf->sf, ref_buf->buf->y_crop_width,
@@ -3000,10 +3004,10 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
 #if CONFIG_VP9_HIGHBITDEPTH
     get_frame_new_buffer(cm)->bit_depth = cm->bit_depth;
 #endif
-    get_frame_new_buffer(cm)->color_space = cm->color_space;
-    get_frame_new_buffer(cm)->color_range = cm->color_range;
-    get_frame_new_buffer(cm)->render_width = cm->render_width;
-    get_frame_new_buffer(cm)->render_height = cm->render_height;
+    get_frame_new_buffer(cm)->color_space = cm->color_space; //check: original frame
+    get_frame_new_buffer(cm)->color_range = cm->color_range; //check: original frame
+    get_frame_new_buffer(cm)->render_width = cm->render_width; //check: original frame
+    get_frame_new_buffer(cm)->render_height = cm->render_height; //check: original frame
 
     if (pbi->need_resync) {
         vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
@@ -3062,23 +3066,21 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                            "Invalid header size");
 
     /*******************Hyunho************************/
-    if (cm->mode == DECODE_CACHE) {
-        vp9_setup_scale_factors_for_sr_frame(
-                &cm->sf_upsample_intra, cm->scale,
-                cm->scale, 1, 1, true, false, cm->scale);
-
-        vp9_setup_scale_factors_for_sr_frame(
+    if (cm->mode == DECODE_SR_CACHE) {
+//        vp9_setup_scale_factors_for_sr_frame(
+//                &cm->sf_upsample_intra, cm->scale,
+//                cm->scale, 1, 1, true, false, cm->scale);
+        vp9_setup_scale_factors_for_sr_frame( //hyunho: scale factor for sr-cached frames
                 &cm->sf_upsample_inter, cm->scale,
                 cm->scale, 1, 1, true, true, cm->scale);
-//        vp9_setup_scale_factors_for_tmp_frame(
-//                &cm->sf_copy)
+        setup_residual_size(cm); //hyunho: frame for upsampling residual
 
-        setup_residual_size(cm);
         //TODO (hyunho): only allocates when compare, debug frames are used
-        setup_compare_frame_size(cm);
-
+        if (cm->decode_info->apply_adaptive_cache) {
+            setup_compare_frame_size(cm);
+        }
     }
-    if (cm->mode == DECODE_CACHE || cm->mode == DECODE_BILINEAR) {
+    else if (cm->mode == DECODE_BILINEAR) { //hyunho: for debugging
         setup_debug_frame_size(cm);
     }
     /*******************Hyunho************************/
@@ -3188,7 +3190,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             pbi, init_read_bit_buffer(pbi, &rb, data, data_end, clear_data));
     const int tile_rows = 1 << cm->log2_tile_rows;
     const int tile_cols = 1 << cm->log2_tile_cols;
-    YV12_BUFFER_CONFIG *const new_fb = get_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *const new_fb = get_frame_new_buffer(cm); //check: original frame
     xd->cur_buf = new_fb;
 
     /*******************Hyunho************************/
@@ -3282,10 +3284,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
     ***/
     int current_video_frame;
-//    if (cm->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) {
+//    if (cm->mode == DECODE_SR_CACHE && cm->frame_type == KEY_FRAME) {
 //    LOGD('%s', 'HELLO WORLD');
 
     //TODO (hyunho): implement multi-thread version, add cache inside decode_tiles_mt() (need to investigate)
+//    LOGD("pbi->max_threads: %d, tile_rows: %d, tile_cols: %d", pbi->max_threads, tile_rows, tile_cols);
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
         // Multi-threaded tile decoder
         *p_data_end = decode_tiles_mt(pbi, data + first_partition_size, data_end);
@@ -3293,9 +3296,9 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             if (!cm->skip_loop_filter) {
                 // If multiple threads are used to decode tiles, then we use those
                 // threads to do parallel loopfiltering.
-                vp9_loop_filter_frame_mt(new_fb, cm, pbi->mb.plane, cm->lf.filter_level,
-                                         0, 0, pbi->tile_workers, pbi->num_tile_workers,
-                                         &pbi->lf_row_sync);
+//                vp9_loop_filter_frame_mt(new_fb, cm, pbi->mb.plane, cm->lf.filter_level,
+//                                         0, 0, pbi->tile_workers, pbi->num_tile_workers,
+//                                         &pbi->lf_row_sync);
             }
         } else {
             vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
@@ -3305,7 +3308,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         *p_data_end = decode_tiles(pbi, data + first_partition_size, data_end);
     }
 
-    if (cm->mode == DECODE_CACHE && cm->current_super_frame == cm->decode_info->apply_sr) {
+//    if (cm->mode == DECODE_SR_CACHE && cm->current_super_frame == cm->decode_info->apply_sr) { //TODO: replace by a cache profile
+    if (cm->frame_type == KEY_FRAME) {
         //if (cm->current_super_frame > 0) current_video_frame = cm->current_video_frame + 1;
         //else current_video_frame = cm->current_video_frame;
         current_video_frame = cm->current_video_frame;
@@ -3319,7 +3323,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 //        if (cm->current_video_frame == 1 && cm->current_video_frame == 0) sprintf(frame_path, "%s/%d_%d_hr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->current_super_frame, cm->decode_info->prefix);
 //        else sprintf(frame_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->current_super_frame, cm->decode_info->cache_file);
 
-        if (vpx_deserialize_copy(get_frame_new_buffer(cm), frame_path, cm->width * cm->scale,
+        if (vpx_deserialize_copy(get_sr_frame_new_buffer(cm), frame_path, cm->width * cm->scale, //check: sr frame
                                  cm->height * cm->scale, cm->subsampling_x,
                                  cm->subsampling_y, cm->byte_alignment)) {
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,

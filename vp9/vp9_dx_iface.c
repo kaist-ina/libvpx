@@ -31,10 +31,11 @@
 #include "vp9/vp9_iface_common.h"
 
 #include <android/log.h>
-#include <vpx_dsp/psnr.h>
-#include <vpx_util/vpx_write_yuv_frame.h>
-#include <vpx_dsp/ssim.h>
 #include <sys/param.h>
+#include <vpx_util/vpx_write_yuv_frame.h>
+#include <vpx_dsp/psnr.h>
+#include <vpx_dsp/ssim.h>
+#include <vpx_dsp_rtcd.h>
 
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
@@ -113,36 +114,6 @@ static void bilinear_profile_init(bilinear_profile_t *profile){
     bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
     bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
 }
-
-//static void bilinear_ops_init(bilinear_config_t *config, int scale){
-//    int x, y;
-//    int width = 32, height = 32; //hyunho: 32 is the largest TX size.
-//
-//    float *x_lerp = config->x_lerp;
-//    int16_t *x_lerp_fixed = config->x_lerp_fixed;
-//    float *y_lerp = config->y_lerp;
-//    int16_t *y_lerp_fixed = config->y_lerp_fixed;
-//    int *top_y_index = config->top_y_index;
-//    int *bottom_y_index = config->bottom_y_index;
-//    int *left_x_index = config->left_x_index;
-//    int *right_x_index = config->right_x_index;
-//
-//    for (x = 0; x < width * scale; ++x) {
-//        const float in_x = (x + 0.5f) / scale - 0.5f;
-//        left_x_index[x] = MAX(floor(in_x), 0);
-//        right_x_index[x] = MIN(ceil(in_x), width * scale - 1);
-//        x_lerp[x] = in_x - floor(in_x);
-//        x_lerp_fixed[x] = x_lerp[x] * FRACTION_SCALE;
-//    }
-//
-//    for (y = 0; y < height * scale; ++y) {
-//        const float in_y = (y + 0.5f) / scale - 0.5f;
-//        top_y_index[y] = MAX(floor(in_y), 0);
-//        bottom_y_index[y] = MIN(ceil(in_y), height * scale - 1);
-//        y_lerp[y] = in_y - floor(in_y);
-//        y_lerp_fixed[y] = y_lerp[y] * FRACTION_SCALE;
-//    }
-//}
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
@@ -385,9 +356,6 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     start = clock();
     VP9_COMMON *cm = &ctx->pbi->common;
     bilinear_profile_init(&cm->bl_profile);
-//    bilinear_ops_init(&cm->bilinear_x4, 4);
-//    bilinear_ops_init(&cm->bilinear_x3, 3);
-//    bilinear_ops_init(&cm->bilinear_x2, 2);
     end = clock();
     cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
     LOGD("additional init overhead: %.2fmsec", cpu_time_used);
@@ -444,21 +412,21 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
 static void save_serialized_intermediate_frame(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
 {
     char file_path[PATH_MAX];
-    if (cm->mode == DECODE_CACHE) {
+    if (cm->mode == DECODE_SR_CACHE) {
         memset(file_path, 0, sizeof(char) * PATH_MAX);
         sprintf(file_path, "%s/%d_%d_hr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
-        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) {
+        if (vpx_serialize_save(file_path, get_sr_frame_new_buffer(cm))) { //check: sr frame
             LOGE("save a serialized frame fail");
         }
 
         sprintf(file_path, "%s/%d_%d_lr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
-        if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(cm))) {
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) {
             LOGE("save a serialized frame fail");
         }
     }
     else {
         sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
-        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm)))
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) //check: original frame
         {
             LOGE("save a serialized frame fail");
         }
@@ -468,21 +436,21 @@ static void save_serialized_intermediate_frame(VP9_COMMON *cm, int current_video
 static void save_serialized_final_frame(VP9_COMMON *cm, int current_video_frame)
 {
     char file_path[PATH_MAX];
-    if (cm->mode == DECODE_CACHE) {
+    if (cm->mode == DECODE_SR_CACHE) {
         memset(file_path, 0, sizeof(char) * PATH_MAX);
         sprintf(file_path, "%s/%d_hr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->decode_info->prefix);
-        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) {
+        if (vpx_serialize_save(file_path, get_sr_frame_new_buffer(cm))) { //check: sr frame
             LOGE("save a serialized frame fail");
         }
 
         sprintf(file_path, "%s/%d_lr_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->decode_info->prefix);
-        if (vpx_serialize_save(file_path, get_frame_new_buffer_lr(cm))) {
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) {
             LOGE("save a serialized frame fail");
         }
     }
     else {
         sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, cm->decode_info->prefix);
-        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm)))
+        if (vpx_serialize_save(file_path, get_frame_new_buffer(cm))) //check: original frame
         {
             LOGE("save a serialized frame fail");
         }
@@ -495,16 +463,16 @@ static void save_decoded_intermediate_frame(VP9_COMMON *cm, int current_video_fr
     char file_path[PATH_MAX];
     if (cm->decode_info->save_decoded_frame && cm->decode_info->save_intermediate)
     {
-        if (cm->mode == DECODE_CACHE) {
+        if (cm->mode == DECODE_SR_CACHE) {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->decode_info->frame_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            if (vpx_write_y_frame(file_path, get_sr_frame_new_buffer(cm))) //check: sr frame
             {
                 LOGE("save a decoded frame fail");
             }
 
             sprintf(file_path, "%s/%d_%d_lr_%s.y", cm->decode_info->frame_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(cm)))
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
             {
                 LOGE("save a decoded frame fail");
             }
@@ -512,7 +480,7 @@ static void save_decoded_intermediate_frame(VP9_COMMON *cm, int current_video_fr
         else {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_%d_%s.y", cm->decode_info->frame_dir, current_video_frame, current_super_frame, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) //check: original frame
             {
                 LOGE("save a decoded frame fail");
             }
@@ -525,16 +493,16 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
     char file_path[PATH_MAX];
     if (cm->decode_info->save_decoded_frame && cm->decode_info->save_intermediate)
     {
-        if (cm->mode == DECODE_CACHE) {
+        if (cm->mode == DECODE_SR_CACHE) {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_hr_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            if (vpx_write_y_frame(file_path, get_sr_frame_new_buffer(cm))) //check: sr frame
             {
                 LOGE("save a decoded frame fail");
             }
 
             sprintf(file_path, "%s/%d_lr_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer_lr(cm)))
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
             {
                 LOGE("save a decoded frame fail");
             }
@@ -542,7 +510,7 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
         else {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_%s.y", cm->decode_info->frame_dir, current_video_frame, cm->decode_info->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm)))
+            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) //check: original frame
             {
                 LOGE("save a decoded frame fail");
             }
@@ -551,7 +519,7 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
 }
 
 
-static void save_decode_result(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
+static void save_sr_cache_decode_result(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
 {
     char log[LOG_MAX];
 
@@ -570,14 +538,16 @@ static void save_decode_result(VP9_COMMON *cm, int current_video_frame, int curr
     fputs(log, cm->metadata_log);
 }
 
-static void save_quality_result(VP9_COMMON *cm)
+//TODO: check it's only for super-resolution
+static void save_sr_cache_quality_result(VP9_COMMON *cm)
 {
     char file_path[PATH_MAX];
     char log[LOG_MAX];
     PSNR_STATS psnr;
     memset(file_path, 0, sizeof(char) * PATH_MAX);
-    int width_ = get_frame_new_buffer(cm)->y_width;
-    int height_ = get_frame_new_buffer(cm)->y_height;
+    int width_ = get_sr_frame_new_buffer(cm)->y_width; //check: sr frame
+    int height_ = get_sr_frame_new_buffer(cm)->y_height; //check: sr frame
+    LOGD("width_:%d, height_: %d", width_, height_);
     sprintf(file_path, "%s/%d_%s.serialize", cm->decode_info->serialize_dir, cm->current_video_frame - 1, cm->decode_info->compare_file);
     if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width_, height_,
                             cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
@@ -587,8 +557,8 @@ static void save_quality_result(VP9_COMMON *cm)
     }
 
     double weight;
-    double ssim = vpx_calc_ssim(get_frame_new_buffer(cm), cm->hr_reference_frame, &weight);
-    vpx_calc_psnr(get_frame_new_buffer(cm), cm->hr_reference_frame, &psnr);
+    double ssim = vpx_calc_ssim(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &weight); //check: sr frame
+    vpx_calc_psnr(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &psnr); //check: sr frame
     LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
 
     //qualtiy log
@@ -598,28 +568,29 @@ static void save_quality_result(VP9_COMMON *cm)
     fputs(log, cm->quality_log);
 }
 
-static void debug_lr_quality(VP9_COMMON *cm, int current_video_frame,
-                             int current_super_frame)
+static void show_lr_cache_quality(VP9_COMMON *cm, int current_video_frame,
+                                  int current_super_frame)
 {
     char file_path[PATH_MAX];
     PSNR_STATS psnr;
     memset(file_path, 0, sizeof(char) * PATH_MAX);
-    int width_ = get_frame_new_buffer_lr(cm)->y_width;
-    int height_ = get_frame_new_buffer_lr(cm)->y_height;
+    int width_ = get_frame_new_buffer(cm)->y_width;
+    int height_ = get_frame_new_buffer(cm)->y_height;
     sprintf(file_path, "%s/%d_%d_%s.serialize", cm->decode_info->serialize_dir, current_video_frame, current_super_frame, cm->decode_info->target_file);
+    LOGD("file path: %s", file_path);
     if(vpx_deserialize_load(cm->lr_reference_frame, file_path, width_, height_,
                             cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
     {
         vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                            "deserialize failed");
     }
-    vpx_calc_psnr(get_frame_new_buffer_lr(cm), cm->lr_reference_frame, &psnr);
+    vpx_calc_psnr(get_frame_new_buffer(cm), cm->lr_reference_frame, &psnr);
 
     LOGD("Low-resolution quality, %d, %d, %.2fdB", current_video_frame, current_super_frame, psnr.psnr[0]);
 }
 
 static void apply_bilinear(VP9_COMMON *cm) {
-    YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm); //check: original frame
     uint8_t *const lr_frame_buffers[MAX_MB_PLANE] = {lr_frame->y_buffer, lr_frame->u_buffer,
                                                      lr_frame->v_buffer};
     const int lr_frame_strides[MAX_MB_PLANE] = {lr_frame->y_stride, lr_frame->uv_stride,
@@ -642,7 +613,7 @@ static void apply_bilinear(VP9_COMMON *cm) {
     LOGF("%s: Need to test", __func__);
     for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
         bilinear_config_init(&config, cm->scale, max_widths[plane], max_heights[plane]);
-        vpx_bilinear_interp_uint8_neon(lr_frame_buffers[plane], lr_frame_strides[plane],
+        vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                        hr_debug_frame_buffers[plane], hr_debug_frame_strides[plane],
                                        0, 0, max_widths[plane], max_heights[plane], cm->scale,
                                        get_bilinear_config(&cm->bl_profile, cm->scale, max_widths[plane]));
@@ -653,8 +624,8 @@ static void save_bilinear_quality_result(VP9_COMMON *cm) {
     char file_path[PATH_MAX];
     char log[LOG_MAX];
     FILE *quality_log;
-    int target_width = get_frame_new_buffer(cm)->y_crop_width * cm->scale;
-    int target_height = get_frame_new_buffer(cm)->y_crop_height * cm->scale;
+    int target_width = get_frame_new_buffer(cm)->y_crop_width * cm->scale; //check: original frame
+    int target_height = get_frame_new_buffer(cm)->y_crop_height * cm->scale; //check: original frame
 
     if (cm->current_video_frame == 1) {
         memset(file_path, 0, PATH_MAX);
@@ -808,11 +779,12 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                                     cm->current_super_frame);
             }
 
-            if (cm->decode_info->save_decode_result) save_decode_result(cm, current_video_frame, cm->current_super_frame);
-
+            if (cm->decode_info->mode == DECODE_SR_CACHE) {
+                if (cm->decode_info->save_decode_result) save_sr_cache_decode_result(cm, current_video_frame, cm->current_super_frame);
 #if DEBUG_LR_QUALITY
-            debug_lr_quality(cm, current_video_frame, cm->current_super_frame);
+                if (cm->decode_info->save_quality_result) show_lr_cache_quality(cm, current_video_frame, cm->current_super_frame);
 #endif
+            }
 
             cm->current_super_frame++;
             /*******************Hyunho************************/
@@ -853,11 +825,13 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                                                                          cm->current_super_frame);
             }
 
-            if (cm->decode_info->save_decode_result) save_decode_result(cm, cm->current_video_frame - 1, cm->current_super_frame);
+            if (cm->decode_info->mode == DECODE_SR_CACHE) {
+                if (cm->decode_info->save_decode_result) save_sr_cache_decode_result(cm, cm->current_video_frame - 1, cm->current_super_frame);
 
 #if DEBUG_LR_QUALITY
-            debug_lr_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
+                if (cm->decode_info->save_quality_result) show_lr_cache_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
 #endif
+            }
             /*******************Hyunho************************/
         }
     }
@@ -870,10 +844,10 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         if (cm->decode_info->save_decoded_frame) save_decoded_final_frame(cm, cm->current_video_frame -1);
     }
 
-    if (cm->decode_info->save_quality_result) save_quality_result(cm);
-
-    //calculate bilinear interpolation quality
-    if (cm->decode_info->mode == DECODE_BILINEAR) {
+    if (cm->decode_info->mode == DECODE_SR_CACHE) {
+        if (cm->decode_info->save_quality_result) save_sr_cache_quality_result(cm);
+    }
+    else if (cm->decode_info->mode == DECODE_BILINEAR){ //calculate bilinear interpolation quality
         //apply bilinear interpolation
         apply_bilinear(cm);
 

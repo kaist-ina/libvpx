@@ -174,9 +174,9 @@ typedef struct RefBuffer {
   // is used in vp9_onyxd_if.c
   int idx;
   YV12_BUFFER_CONFIG *buf;
-  YV12_BUFFER_CONFIG *buf_lr; //hyunho: used for intra-prediction blocks
+  YV12_BUFFER_CONFIG *buf_sr; //hyunho: used for intra-prediction blocks
   struct scale_factors sf;
-  struct scale_factors sf_lr;
+  struct scale_factors sf_sr;
 } RefBuffer;
 
 typedef struct macroblockd {
