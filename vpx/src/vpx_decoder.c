@@ -186,3 +186,8 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
   return SAVE_STATUS(ctx, res);
 }
+
+void vpx_mobinas_cfg_init(vpx_codec_ctx_t *ctx, vpx_mobinas_cfg_t *mobinas_cfg){
+  ctx->iface->sr.mobinas_cfg_init(get_alg_priv(ctx), mobinas_cfg);
+}
+

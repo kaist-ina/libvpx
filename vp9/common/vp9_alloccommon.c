@@ -68,6 +68,9 @@ void vp9_free_ref_frame_buffers(BufferPool *pool) {
     if (!pool->frame_bufs[i].released &&
         pool->frame_bufs[i].raw_frame_buffer.data != NULL) {
       pool->release_fb_cb(pool->cb_priv, &pool->frame_bufs[i].raw_frame_buffer);
+      if (pool->mode == DECODE_SR_CACHE) {
+          pool->release_fb_cb(pool->cb_priv, &pool->frame_bufs[i].raw_sr_frame_buffer);
+      }
       pool->frame_bufs[i].ref_count = 0;
       pool->frame_bufs[i].released = 1;
     }

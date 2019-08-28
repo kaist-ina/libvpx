@@ -331,7 +331,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
         cm->ref_frame_map[ref_index] = cm->next_ref_frame_map[ref_index];
     }
     pbi->hold_ref_buf = 0;
-    if (pbi->common.decode_info == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
         cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
     }
     else {
@@ -377,6 +377,10 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         !frame_bufs[cm->new_fb_idx].released) {
         pool->release_fb_cb(pool->cb_priv,
                             &frame_bufs[cm->new_fb_idx].raw_frame_buffer);
+        if (pool->mode == DECODE_SR_CACHE) {
+            pool->release_fb_cb(pool->cb_priv,
+                                &frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer);
+        }
         frame_bufs[cm->new_fb_idx].released = 1;
     }
 

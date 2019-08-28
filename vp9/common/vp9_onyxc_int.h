@@ -80,6 +80,7 @@ typedef struct {
 typedef struct BufferPool {
     // Private data associated with the frame buffer callbacks.
     void *cb_priv;
+    uint8_t mode;
 
     vpx_get_frame_buffer_cb_fn_t get_fb_cb;
     vpx_release_frame_buffer_cb_fn_t release_fb_cb;
@@ -126,26 +127,10 @@ typedef struct VP9Common {
     struct scale_factors sf;
 
     /*******************Hyunho************************/
-    //DEBUG_SERIALIZE - deprecated
-    YV12_BUFFER_CONFIG *frame_to_deserialize;
-
-    //DEBUG_RESIZE - deprecated
-    YV12_BUFFER_CONFIG *frame_to_input;
-    YV12_BUFFER_CONFIG *frame_to_resize;
-
-    //DEBUG_QUALITY - deprecated
-    YV12_BUFFER_CONFIG *frame_to_compare_0;
-    YV12_BUFFER_CONFIG *frame_to_compare_1;
-    YV12_BUFFER_CONFIG *frame_to_reference;
-
     //General
-    struct scale_factors sf_copy;
-    struct scale_factors sf_upsample_intra;
     struct scale_factors sf_upsample_inter;
     int scale;
-
-    decode_info_t *decode_info;
-    DECODE_MODE mode;
+    vpx_mobinas_cfg_t *mobinas_cfg;
 
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *lr_resiudal;
@@ -168,9 +153,6 @@ typedef struct VP9Common {
 
     latency_info_t latency;
     bilinear_profile_t bl_profile;
-//    bilinear_config_t bilinear_x4;
-//    bilinear_config_t bilinear_x3;
-//    bilinear_config_t bilinear_x2;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;
