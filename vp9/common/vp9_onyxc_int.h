@@ -131,28 +131,13 @@ typedef struct VP9Common {
     struct scale_factors sf_upsample_inter;
     int scale;
     vpx_mobinas_cfg_t *mobinas_cfg;
+    FILE *quality_log;
+    latency_info_t latency; //logging decoding end-to-end latency
+    bilinear_profile_t bl_profile;
 
     YV12_BUFFER_CONFIG *lr_reference_frame;
-    YV12_BUFFER_CONFIG *lr_resiudal;
-    YV12_BUFFER_CONFIG *hr_compare_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;
-    YV12_BUFFER_CONFIG *hr_debug_frame; //only used for internal process
-
-    DecodeBlockList *intra_block_list;
-    DecodeBlockList *inter_block_list;
-
-    FILE *quality_log;
-    FILE *latency_log;
-    FILE *metadata_log;
-
-    int count;
-    int intra_count;
-    int inter_count;
-    int inter_noskip_count;
-    int adaptive_cache_count;
-
-    latency_info_t latency;
-    bilinear_profile_t bl_profile;
+    YV12_BUFFER_CONFIG *hr_bilinear_frame;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;

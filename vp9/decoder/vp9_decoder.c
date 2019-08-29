@@ -99,6 +99,63 @@ static void vp9_dec_free_mi(VP9_COMMON *cm) {
     cm->mi_grid_base = NULL;
 }
 
+/*******************Hyunho************************/
+static void mobinas_worker_data_remove(MobiNASWorkerData *mwd){
+    vpx_free_frame_buffer(mwd->hr_compare_frame);
+    vpx_free_frame_buffer(mwd->hr_reference_frame);
+    vpx_free_frame_buffer(mwd->lr_reference_frame);
+    vpx_free_frame_buffer(mwd->lr_resiudal);
+    vpx_free(mwd->hr_compare_frame);
+    vpx_free(mwd->hr_reference_frame);
+    vpx_free(mwd->lr_reference_frame);
+    vpx_free(mwd->lr_resiudal);
+
+    //free decode block lists
+    DecodeBlock *intra_block = mwd->intra_block_list->head;
+    DecodeBlock *prev_block = NULL;
+    while (intra_block != NULL) {
+        prev_block = intra_block;
+        intra_block = intra_block->next;
+        vpx_free(prev_block);
+    }
+    vpx_free(mwd->intra_block_list);
+
+    DecodeBlock *inter_block = mwd->inter_block_list->head;
+    while (inter_block != NULL) {
+        prev_block = inter_block;
+        inter_block = inter_block->next;
+        vpx_free(prev_block);
+    }
+    vpx_free(mwd->inter_block_list);
+
+    if (mwd->latency_log != NULL) fclose(mwd->latency_log);
+    if (mwd->metadata_log != NULL) fclose(mwd->metadata_log);
+}
+
+void mobinas_worker_data_init(MobiNASWorkerData *mwd, int index){
+    mwd->hr_compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    mwd->hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    mwd->lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+//    mwd->hr_debug_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
+    mwd->lr_resiudal = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+
+    mwd->intra_block_list = (DecodeBlockList *) vpx_calloc(1, sizeof(DecodeBlockList));
+    mwd->intra_block_list->cur = NULL;
+    mwd->intra_block_list->head = NULL;
+    mwd->intra_block_list->tail = NULL;
+
+    mwd->inter_block_list = (DecodeBlockList *) vpx_calloc(1, sizeof(DecodeBlockList));
+    mwd->inter_block_list->cur = NULL;
+    mwd->inter_block_list->head = NULL;
+    mwd->inter_block_list->tail = NULL;
+
+    mwd->index = index;
+
+    mwd->latency_log = NULL;
+    mwd->metadata_log = NULL;
+}
+/*******************Hyunho************************/
+
 VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     VP9Decoder *volatile const pbi = vpx_memalign(32, sizeof(*pbi));
     VP9_COMMON *volatile const cm = pbi ? &pbi->common : NULL;
@@ -143,21 +200,9 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     cm->error.setjmp = 0;
 
     /*******************Hyunho************************/ //TODO (hyunho): should we move this to decode_one?
-    cm->intra_block_list = (DecodeBlockList *) vpx_calloc(1, sizeof(DecodeBlockList));
-    cm->intra_block_list->cur = NULL;
-    cm->intra_block_list->head = NULL;
-    cm->intra_block_list->tail = NULL;
-
-    cm->inter_block_list = (DecodeBlockList *) vpx_calloc(1, sizeof(DecodeBlockList));
-    cm->inter_block_list->cur = NULL;
-    cm->inter_block_list->head = NULL;
-    cm->inter_block_list->tail = NULL;
-
-    cm->hr_compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->hr_debug_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    cm->lr_resiudal = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    cm->hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //adaptive cache o
+    cm->lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //vp9_dx_iface x
+    cm->hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //vp9_dx_iface x
     /*******************Hyunho************************/
 
     vpx_get_worker_interface()->init(&pbi->lf_worker);
@@ -188,35 +233,23 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     /*******************Hyunho************************/
     VP9_COMMON *cm = &pbi->common;
 
-    //free decode block lists
-    DecodeBlock *intra_block = cm->intra_block_list->head;
-    DecodeBlock *prev_block = NULL;
-    while (intra_block != NULL) {
-        prev_block = intra_block;
-        intra_block = intra_block->next;
-        vpx_free(prev_block);
-    }
-    vpx_free(cm->intra_block_list);
-
-    DecodeBlock *inter_block = cm->inter_block_list->head;
-    while (inter_block != NULL) {
-        prev_block = inter_block;
-        inter_block = inter_block->next;
-        vpx_free(prev_block);
-    }
-    vpx_free(cm->inter_block_list);
-
     //free frames
-    vpx_free_frame_buffer(cm->hr_compare_frame);
     vpx_free_frame_buffer(cm->hr_reference_frame);
     vpx_free_frame_buffer(cm->lr_reference_frame);
-    vpx_free_frame_buffer(cm->hr_debug_frame);
-    vpx_free_frame_buffer(cm->lr_resiudal);
-    vpx_free(cm->hr_compare_frame);
+    vpx_free_frame_buffer(cm->hr_bilinear_frame);
     vpx_free(cm->hr_reference_frame);
     vpx_free(cm->lr_reference_frame);
-    vpx_free(cm->hr_debug_frame);
-    vpx_free(cm->lr_resiudal);
+    vpx_free(cm->hr_bilinear_frame);
+
+    if (pbi->mobinas_worker_data != NULL) {
+        const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
+
+        for (int i = 0; i < num_threads; ++i) {
+            mobinas_worker_data_remove(&pbi->mobinas_worker_data[i]);
+        }
+
+        vpx_free(pbi->mobinas_worker_data);
+    }
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);

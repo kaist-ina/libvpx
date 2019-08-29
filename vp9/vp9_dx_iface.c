@@ -65,6 +65,7 @@
 #define DEBUG_LR_QUALITY 0
 #define FRACTION_BIT (5)
 #define FRACTION_SCALE (1 << FRACTION_BIT)
+#define BILLION  1E9
 
 static void bilinear_config_init(bilinear_config_t *config, int scale, int width, int height) {
     int x, y;
@@ -159,8 +160,8 @@ static vpx_codec_err_t decoder_destroy(vpx_codec_alg_priv_t *ctx) {
 
     /*******************Hyunho************************/
     VP9_COMMON *cm = &ctx->pbi->common;
-    if (cm->latency_log != NULL) fclose(cm->latency_log);
-    if (cm->metadata_log != NULL) fclose(cm->metadata_log);
+//    if (cm->latency_log != NULL) fclose(cm->latency_log);
+//    if (cm->metadata_log != NULL) fclose(cm->metadata_log);
     if (cm->quality_log != NULL) fclose(cm->quality_log);
     /*******************Hyunho************************/
 
@@ -365,6 +366,26 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 //    end = clock();
 //    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
 //    LOGD("additional init overhead: %.2fmsec", cpu_time_used);
+    char file_path[PATH_MAX];
+    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
+
+    if (ctx->pbi->mobinas_worker_data == NULL) {
+        const size_t mwd_size = num_threads * sizeof(MobiNASWorkerData);
+        CHECK_MEM_ERROR(cm, ctx->pbi->mobinas_worker_data, vpx_memalign(32, mwd_size));
+
+        for (int i = 0; i < num_threads; ++i) {
+            mobinas_worker_data_init(&ctx->pbi->mobinas_worker_data[i], i);
+
+            if (cm->mobinas_cfg->save_decode_result == 1) {
+                memset(file_path, 0, PATH_MAX);
+                sprintf(file_path, "%s/latency_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
+                ctx->pbi->mobinas_worker_data[i].latency_log = fopen(file_path, "w");
+                memset(file_path, 0, PATH_MAX);
+                sprintf(file_path, "%s/metadata_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
+                ctx->pbi->mobinas_worker_data[i].metadata_log = fopen(file_path, "w");
+            }
+        }
+    }
     /*******************Hyunho************************/
 
     init_buffer_callbacks(ctx);
@@ -526,23 +547,48 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
     }
 }
 
-static void save_sr_cache_decode_result(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
+//static void save_sr_cache_decode_result(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
+//{
+//    char log[LOG_MAX];
+//
+//    //latency log
+//    memset(log, 0, LOG_MAX);
+//    sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
+//            current_super_frame, cm->latency.decode_frame,
+//            cm->latency.interp_intra_block, cm->latency.interp_inter_residual,
+//            cm->latency.decode_intra_block, cm->latency.decode_inter_block,
+//            cm->latency.decode_inter_residual);
+//    fputs(log, cm->latency_log);
+//
+//    //metadata log
+//    memset(log, 0, LOG_MAX);
+//    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_noskip_count, cm->adaptive_cache_count); //TODO: 추가...
+//    fputs(log, cm->metadata_log);
+//}
+
+static void save_sr_cache_decode_result(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
 {
     char log[LOG_MAX];
+    const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
-    //latency log
-    memset(log, 0, LOG_MAX);
-    sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
-            current_super_frame, cm->latency.decode_frame,
-            cm->latency.interp_intra_block, cm->latency.interp_inter_residual,
-            cm->latency.decode_intra_block, cm->latency.decode_inter_block,
-            cm->latency.decode_inter_residual);
-    fputs(log, cm->latency_log);
+    for (int i = 0; i < num_threads; ++i) {
+        MobiNASWorkerData *mwd = &pbi->mobinas_worker_data[i];
 
-    //metadata log
-    memset(log, 0, LOG_MAX);
-    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_noskip_count, cm->adaptive_cache_count); //TODO: 추가...
-    fputs(log, cm->metadata_log);
+        //latency log
+        memset(log, 0, sizeof(log));
+        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
+                current_super_frame, pbi->common.latency.decode_frame,
+                mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
+                mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,
+                mwd->latency.decode_inter_residual);
+        fputs(log, mwd->latency_log);
+
+        //metadata log
+        memset(log, 0, sizeof(log));
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, mwd->count, mwd->intra_count, mwd->inter_count,
+                mwd->inter_noskip_count, mwd->adaptive_cache_count);
+        fputs(log, mwd->metadata_log);
+    }
 }
 
 //TODO: check it's only for super-resolution
@@ -606,7 +652,7 @@ static void apply_bilinear(VP9_COMMON *cm) {
     const int max_widths[MAX_MB_PLANE] = {lr_frame->y_crop_width, lr_frame->uv_crop_width,
                                           lr_frame->uv_crop_width};
 
-    YV12_BUFFER_CONFIG *hr_debug_frame = cm->hr_debug_frame;
+    YV12_BUFFER_CONFIG *hr_debug_frame = cm->hr_bilinear_frame;
     uint8_t *const hr_debug_frame_buffers[MAX_MB_PLANE] = {hr_debug_frame->y_buffer, hr_debug_frame->u_buffer,
                                                            hr_debug_frame->v_buffer};
     const int hr_debug_frame_strides[MAX_MB_PLANE] = {hr_debug_frame->y_stride, hr_debug_frame->uv_stride,
@@ -655,7 +701,7 @@ static void save_bilinear_quality_result(VP9_COMMON *cm) {
         vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                            "deserialize failed");
     }
-    vpx_calc_psnr(cm->hr_debug_frame, cm->hr_reference_frame, &psnr);
+    vpx_calc_psnr(cm->hr_bilinear_frame, cm->hr_reference_frame, &psnr);
 
     //qualtiy log
     memset(log, 0, LOG_MAX);
@@ -724,25 +770,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         const vpx_codec_err_t res = init_decoder(ctx);
         if (res != VPX_CODEC_OK) return res;
 
-        /*******************Hyunho************************/
         cm = &ctx->pbi->common;
 
-        //init logs
-        char file_path[PATH_MAX];
-        if (cm->mobinas_cfg->save_decode_result == 1) {
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/latency_%s.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix);
-            cm->latency_log = fopen(file_path, "w");
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/metadata_%s.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix);
-            cm->metadata_log = fopen(file_path, "w");
-        }
-        if (cm->mobinas_cfg->save_quality_result == 1) {
+        if(cm->mobinas_cfg->save_quality_result) {
+            char file_path[PATH_MAX];
             memset(file_path, 0, PATH_MAX);
             sprintf(file_path, "%s/quality_%s.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix);
             cm->quality_log = fopen(file_path, "w");
         }
-        /*******************Hyunho************************/
     }
     else {
         cm = &ctx->pbi->common;
@@ -758,8 +793,8 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         frame_count = ctx->svc_spatial_layer + 1;
 
 #if DEBUG_LATENCY
-    clock_t start, end;
-    double cpu_time_used;
+    struct timespec start_time, finish_time;
+    double diff;
 #endif
 
     if (frame_count > 0) {
@@ -777,19 +812,17 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
-            start = clock();
+            clock_gettime( CLOCK_REALTIME, &start_time);
 #endif
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
 #if DEBUG_LATENCY
-            end = clock();
-            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
-            cm->latency.decode_frame += cpu_time_used;
+            clock_gettime( CLOCK_REALTIME, &finish_time);
+            diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+            cm->latency.decode_frame += diff;
 #endif
 
             data_start += frame_size;
-
-            //TODO: log latency (예전 log 뒤에 추가하기)
 
             /*******************Hyunho************************/
             if (cm->show_frame == 0) current_video_frame = cm->current_video_frame;
@@ -805,9 +838,9 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 
             if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-                if (cm->mobinas_cfg->save_decode_result) save_sr_cache_decode_result(cm, current_video_frame, cm->current_super_frame);
+                if (cm->mobinas_cfg->save_decode_result) save_sr_cache_decode_result(ctx->pbi, current_video_frame, cm->current_super_frame);
 #if DEBUG_LR_QUALITY
-                if (mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, current_video_frame, cm->current_super_frame);
+                if (cm->mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, current_video_frame, cm->current_super_frame);
 #endif
             }
 
@@ -819,14 +852,14 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             const uint32_t frame_size = (uint32_t) (data_end - data_start);
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
-            start = clock();
+            clock_gettime( CLOCK_REALTIME, &start_time);
 #endif
             const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
 #if DEBUG_LATENCY
-            end = clock();
-            cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
-            cm->latency.decode_frame += cpu_time_used;
+            clock_gettime( CLOCK_REALTIME, &finish_time);
+            diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+            cm->latency.decode_frame += diff;
 #endif
 
             // Account for suboptimal termination by the encoder.
@@ -851,16 +884,15 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 
             if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-                if (cm->mobinas_cfg->save_decode_result) save_sr_cache_decode_result(cm, cm->current_video_frame - 1, cm->current_super_frame);
+                if (cm->mobinas_cfg->save_decode_result) save_sr_cache_decode_result(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
 
 #if DEBUG_LR_QUALITY
-                if (mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
+                if (cm->mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
 #endif
             }
             /*******************Hyunho************************/
         }
     }
-
     /*******************Hyunho************************/
     if (cm->current_super_frame > 0) cm->current_super_frame--;
 

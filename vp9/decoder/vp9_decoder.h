@@ -27,21 +27,48 @@
 extern "C" {
 #endif
 
+/*******************Hyunho************************/
+typedef struct MobiNASWorkerData {
+    YV12_BUFFER_CONFIG *lr_reference_frame;
+    YV12_BUFFER_CONFIG *lr_resiudal;
+    YV12_BUFFER_CONFIG *hr_compare_frame;
+    YV12_BUFFER_CONFIG *hr_reference_frame;
+//    YV12_BUFFER_CONFIG *hr_debug_frame; //only used for internal process
+
+    DecodeBlockList *intra_block_list;
+    DecodeBlockList *inter_block_list;
+
+    int count;
+    int intra_count;
+    int inter_count;
+    int inter_noskip_count;
+    int adaptive_cache_count;
+    int index;
+
+    latency_info_t latency;
+
+    FILE *latency_log;
+    FILE *metadata_log;
+} MobiNASWorkerData;
+
+void mobinas_worker_data_init(MobiNASWorkerData *mwd, int index);
+
 typedef struct TileBuffer {
-  const uint8_t *data;
-  size_t size;
-  int col;  // only used with multi-threaded decoding
+    const uint8_t *data;
+    size_t size;
+    int col;  // only used with multi-threaded decoding
 } TileBuffer;
 
 typedef struct TileWorkerData {
-  const uint8_t *data_end;
-  int buf_start, buf_end;  // pbi->tile_buffers to decode, inclusive
-  vpx_reader bit_reader;
-  FRAME_COUNTS counts;
-  DECLARE_ALIGNED(16, MACROBLOCKD, xd);
-  /* dqcoeff are shared by all the planes. So planes must be decoded serially */
-  DECLARE_ALIGNED(16, tran_low_t, dqcoeff[32 * 32]);
-  struct vpx_internal_error_info error_info;
+    const uint8_t *data_end;
+    MobiNASWorkerData *mobinas_worker_data;
+    int buf_start, buf_end;  // pbi->tile_buffers to decode, inclusive
+    vpx_reader bit_reader;
+    FRAME_COUNTS counts;
+    DECLARE_ALIGNED(16, MACROBLOCKD, xd);
+    /* dqcoeff are shared by all the planes. So planes must be decoded serially */
+    DECLARE_ALIGNED(16, tran_low_t, dqcoeff[32 * 32]);
+    struct vpx_internal_error_info error_info;
 } TileWorkerData;
 
 typedef struct VP9Decoder {
@@ -73,6 +100,10 @@ typedef struct VP9Decoder {
   int inv_tile_order;
   int need_resync;   // wait for key/intra-only frame.
   int hold_ref_buf;  // hold the reference buffer.
+
+    /*******************Hyunho************************/
+    MobiNASWorkerData *mobinas_worker_data;
+    /*******************Hyunho************************/
 } VP9Decoder;
 
 int vp9_receive_compressed_data(struct VP9Decoder *pbi, size_t size,
