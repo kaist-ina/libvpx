@@ -1424,7 +1424,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 
     if (!is_inter_block(mi)) {
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &start_time);
+        clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
         //LOGD("%d %d mi_row: %d, mi_col: %d", cm->current_video_frame, cm->current_super_frame, mi_row, mi_col);
 //        cm->intra_count++; //hyunho: debug
@@ -1459,20 +1459,17 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             //TODO (hyunho): skip for super-resolutioned frame
             if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type != KEY_FRAME) { //debug
                 if (plane == 0) {
-//                    createBlock(cm->intra_block_list, mi_col, mi_row, max_blocks_wide,
-//                                max_blocks_high, mi->interp_filter);
                     createBlock(twd->mobinas_worker_data->intra_block_list, mi_col, mi_row, max_blocks_wide,
                                 max_blocks_high, mi->interp_filter);
                 } else {
-//                    setBlock(cm->intra_block_list, plane, max_blocks_wide, max_blocks_high);
                     setBlock(twd->mobinas_worker_data->intra_block_list, plane, max_blocks_wide, max_blocks_high);
                 }
             }
             /*******************Hyunho************************/
         }
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &finish_time);
-        diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        clock_gettime( CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
         twd->mobinas_worker_data->latency.decode_intra_block += diff;
 #endif
     } else {
@@ -1480,7 +1477,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         twd->mobinas_worker_data->inter_count;
         /*******************Hyunho************************/
 #if DEBUG_LATENCY
-        clock_gettime(CLOCK_REALTIME, &start_time);
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
         if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
             vp9_setup_sr_planes(xd->plane, get_sr_frame_new_buffer(cm), mi_row, mi_col, &cm->sf_upsample_inter); //check: sr frame
@@ -1493,14 +1490,14 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
         }
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &finish_time);
-        diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        clock_gettime( CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
         twd->mobinas_worker_data->latency.decode_inter_block += diff;
 #endif
         /*******************Hyunho************************/
         // Reconstruction
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &start_time);
+        clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
         if (!mi->skip) {
 //            cm->inter_noskip_count++;
@@ -1537,12 +1534,9 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                 //TODO (hyunho): skip for super-resolutioned frame
                 if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
                     if (plane == 0) {
-//                        createBlock(cm->inter_block_list, mi_col, mi_row, max_blocks_wide,
-//                                    max_blocks_high, mi->interp_filter);
                         createBlock(twd->mobinas_worker_data->inter_block_list, mi_col, mi_row, max_blocks_wide,
                                     max_blocks_high, mi->interp_filter);
                     } else {
-//                        setBlock(cm->inter_block_list, plane, max_blocks_wide, max_blocks_high);
                         setBlock(twd->mobinas_worker_data->inter_block_list, plane, max_blocks_wide, max_blocks_high);
                     }
                 }
@@ -1551,8 +1545,8 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             if (!less8x8 && eobtotal == 0) mi->skip = 1;  // skip loopfilter
         }
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &finish_time);
-        diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        clock_gettime( CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
         twd->mobinas_worker_data->latency.decode_inter_residual += diff;
 #endif
     }
@@ -2467,7 +2461,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         DecodeBlock *prev_block = NULL;
 
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &start_time);
+        clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
         while (intra_block != NULL) {
 //            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", intra_block->mi_row,
@@ -2504,8 +2498,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         mwd->intra_block_list->tail = NULL;
 
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &finish_time);
-        diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        clock_gettime( CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
         mwd->latency.interp_intra_block += diff;
 #endif
 
@@ -2524,7 +2518,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 #endif
 
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &start_time);
+        clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
         int num_blocks = 0; //number of blocks which cache is reset
         int tmp = 0;
@@ -2601,8 +2595,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         mwd->inter_block_list->tail = NULL;
 
 #if DEBUG_LATENCY
-        clock_gettime( CLOCK_REALTIME, &finish_time);
-        diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        clock_gettime( CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
         mwd->latency.interp_inter_residual += diff;
 #endif
 
@@ -2680,6 +2674,126 @@ static int tile_worker_hook(void *arg1, void *arg2) {
 
     tile_data->data_end = bit_reader_end;
     return !tile_data->xd.corrupted;
+}
+
+static int mobinas_worker_hook(void *arg1, void *arg2) {
+    TileWorkerData *const tile_data = (TileWorkerData *) arg1;
+    VP9Decoder *const pbi = (VP9Decoder *) arg2;
+    VP9_COMMON *cm = &pbi->common;
+    MobiNASWorkerData *mwd = tile_data->mobinas_worker_data;
+#if DEBUG_LATENCY
+    struct timespec start_time, finish_time;
+    double diff;
+#endif
+
+    YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+    YV12_BUFFER_CONFIG *hr_compare_frame = mwd->hr_compare_frame;
+    YV12_BUFFER_CONFIG *hr_reference_frame = mwd->hr_reference_frame;
+    YV12_BUFFER_CONFIG *lr_residual = mwd->lr_resiudal;
+
+    //low-resolution decoded data
+    uint8_t *const lr_frame_buffers[MAX_MB_PLANE] = {lr_frame->y_buffer, lr_frame->u_buffer,
+                                                     lr_frame->v_buffer};
+    const int lr_frame_strides[MAX_MB_PLANE] = {lr_frame->y_stride, lr_frame->uv_stride,
+                                                lr_frame->uv_stride};
+    //low-resolution lr_resiudal data
+    int16_t *const lr_residual_buffers[MAX_MB_PLANE] = {(int16_t *) lr_residual->y_buffer,
+                                                        (int16_t *) lr_residual->u_buffer,
+                                                        (int16_t *) lr_residual->v_buffer};
+    const int lr_residual_strides[MAX_MB_PLANE] = {lr_residual->y_stride / 2,
+                                                   lr_residual->uv_stride / 2,
+                                                   lr_residual->uv_stride / 2};
+    //high-resolution decoded data (super-resolution cache)
+    uint8_t *const hr_frame_buffers[MAX_MB_PLANE] = {hr_frame->y_buffer, hr_frame->u_buffer,
+                                                     hr_frame->v_buffer};
+    const int hr_frame_strides[MAX_MB_PLANE] = {hr_frame->y_stride, hr_frame->uv_stride,
+                                                hr_frame->uv_stride};
+
+#if DEBUG_LATENCY
+    clock_gettime( CLOCK_MONOTONIC, &start_time);
+#endif
+    DecodeBlock *intra_block = mwd->intra_block_list->head;
+    DecodeBlock *prev_block = NULL;
+    while (intra_block != NULL) {
+//            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", intra_block->mi_row,
+//                 intra_block->mi_col, intra_block->n4_w[0], intra_block->n4_h[0]);
+        const int widths[MAX_MB_PLANE] = {intra_block->n4_w[0] * 4, intra_block->n4_w[1] * 4,
+                                          intra_block->n4_w[2] * 4};
+        const int heights[MAX_MB_PLANE] = {intra_block->n4_h[0] * 4, intra_block->n4_h[1] * 4,
+                                           intra_block->n4_h[2] * 4};
+        const int x_offsets[MAX_MB_PLANE] = {intra_block->mi_col * MI_BLOCK_SIZE,
+                                             intra_block->mi_col * MI_BLOCK_SIZE
+                                                     >> lr_frame->subsampling_x,
+                                             intra_block->mi_col * MI_BLOCK_SIZE
+                                                     >> lr_frame->subsampling_x};
+        const int y_offsets[MAX_MB_PLANE] = {intra_block->mi_row * MI_BLOCK_SIZE,
+                                             intra_block->mi_row * MI_BLOCK_SIZE
+                                                     >> lr_frame->subsampling_y,
+                                             intra_block->mi_row * MI_BLOCK_SIZE
+                                                     >> lr_frame->subsampling_y};
+
+        //for intra-block case, optimizing bilinear degrades performance notably
+        for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+            vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+                                      hr_frame_buffers[plane], hr_frame_strides[plane],
+                                      x_offsets[plane], y_offsets[plane], widths[plane],
+                                      heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+        }
+        prev_block = intra_block;
+        intra_block = intra_block->next;
+        vpx_free(prev_block);
+    }
+    mwd->intra_block_list->head = NULL;
+    mwd->intra_block_list->tail = NULL;
+
+#if DEBUG_LATENCY
+    clock_gettime( CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    mwd->latency.interp_intra_block += diff;
+#endif
+
+    DecodeBlock *inter_block = mwd->inter_block_list->head;
+#if DEBUG_LATENCY
+    clock_gettime( CLOCK_MONOTONIC, &start_time);
+#endif
+    while (inter_block != NULL) {
+        const int widths[MAX_MB_PLANE] = {inter_block->n4_w[0] * 4, inter_block->n4_w[1] * 4,
+                                          inter_block->n4_w[2] * 4};
+        const int heights[MAX_MB_PLANE] = {inter_block->n4_h[0] * 4, inter_block->n4_h[1] * 4,
+                                           inter_block->n4_h[2] * 4};
+        const int x_offsets[MAX_MB_PLANE] = {inter_block->mi_col * MI_BLOCK_SIZE,
+                                             inter_block->mi_col * MI_BLOCK_SIZE
+                                                     >> lr_residual->subsampling_x,
+                                             inter_block->mi_col * MI_BLOCK_SIZE
+                                                     >> lr_residual->subsampling_x};
+        const int y_offsets[MAX_MB_PLANE] = {inter_block->mi_row * MI_BLOCK_SIZE,
+                                             inter_block->mi_row * MI_BLOCK_SIZE
+                                                     >> lr_residual->subsampling_y,
+                                             inter_block->mi_row * MI_BLOCK_SIZE
+                                                     >> lr_residual->subsampling_y};
+
+        //TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
+        for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+            vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
+                                      hr_frame_buffers[plane], hr_frame_strides[plane],
+                                      x_offsets[plane], y_offsets[plane], widths[plane],
+                                      heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+        }
+        prev_block = inter_block;
+        inter_block = inter_block->next;
+        vpx_free(prev_block);
+        /**********************/
+    }
+    mwd->inter_block_list->head = NULL;
+    mwd->inter_block_list->tail = NULL;
+
+#if DEBUG_LATENCY
+    clock_gettime( CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    mwd->latency.interp_inter_residual += diff;
+#endif
+    return 1;
 }
 
 // sorts in descending order
@@ -2836,6 +2950,78 @@ static const uint8_t *decode_tiles_mt(VP9Decoder *pbi, const uint8_t *data,
 
     assert(bit_reader_end || pbi->mb.corrupted);
     return bit_reader_end;
+}
+
+static const uint8_t *apply_bilinear_mt(VP9Decoder *pbi) {
+    VP9_COMMON *const cm = &pbi->common;
+    const VPxWorkerInterface *const winterface = vpx_get_worker_interface();
+    const uint8_t *bit_reader_end = NULL;
+    const int tile_cols = 1 << cm->log2_tile_cols;
+    const int tile_rows = 1 << cm->log2_tile_rows;
+    const int num_workers = VPXMIN(pbi->max_threads, tile_cols);
+    int n;
+
+    assert(tile_cols <= (1 << 6));
+    assert(tile_rows == 1);
+    (void) tile_rows;
+
+    if (pbi->num_tile_workers == 0) {
+        const int num_threads = pbi->max_threads;
+        CHECK_MEM_ERROR(cm, pbi->tile_workers,
+                        vpx_malloc(num_threads * sizeof(*pbi->tile_workers)));
+        for (n = 0; n < num_threads; ++n) {
+            VPxWorker *const worker = &pbi->tile_workers[n];
+            ++pbi->num_tile_workers;
+
+            winterface->init(worker);
+            if (n < num_threads - 1 && !winterface->reset(worker)) {
+                vpx_internal_error(&cm->error, VPX_CODEC_ERROR,
+                                   "Tile decoder thread creation failed");
+            }
+        }
+    }
+
+    // Reset tile decoding hook
+    for (n = 0; n < num_workers; ++n) {
+        VPxWorker *const worker = &pbi->tile_workers[n];
+        TileWorkerData *const tile_data =
+                &pbi->tile_worker_data[n + pbi->total_tiles];
+        /*******************Hyunho************************/
+        tile_data->mobinas_worker_data = &pbi->mobinas_worker_data[n];
+        /*******************Hyunho************************/
+        winterface->sync(worker);
+        worker->hook = mobinas_worker_hook;
+        worker->data1 = tile_data;
+        worker->data2 = pbi;
+    }
+
+    {
+        const int base = tile_cols / num_workers;
+        const int remain = tile_cols % num_workers;
+
+        //TODO (hyunho): add intra-, inter-block list in tile_data by num_workers
+        //TODO (hyunho):
+        for (n = 0; n < num_workers; ++n) {
+            VPxWorker *const worker = &pbi->tile_workers[n];
+            worker->had_error = 0;
+            if (n == num_workers - 1) {
+                winterface->execute(worker);
+            } else {
+                winterface->launch(worker);
+            }
+        }
+
+        for (; n > 0; --n) {
+            VPxWorker *const worker = &pbi->tile_workers[n - 1];
+            TileWorkerData *const tile_data = (TileWorkerData *) worker->data1;
+            // TODO(jzern): The tile may have specific error data associated with
+            // its vpx_internal_error_info which could be propagated to the main info
+            // in cm. Additionally once the threads have been synced and an error is
+            // detected, there's no point in continuing to decode tiles.
+            pbi->mb.corrupted |= !winterface->sync(worker);
+            if (!bit_reader_end) bit_reader_end = tile_data->data_end;
+        }
+    }
 }
 
 static void error_handler(void *data) {
@@ -3351,6 +3537,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                                          0, 0, pbi->tile_workers, pbi->num_tile_workers,
                                          &pbi->lf_row_sync);
             }
+
+            apply_bilinear_mt(pbi);
         } else {
             vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
                                "Decode failed. Frame data is corrupted.");

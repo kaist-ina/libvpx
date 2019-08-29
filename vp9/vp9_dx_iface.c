@@ -812,13 +812,13 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
-            clock_gettime( CLOCK_REALTIME, &start_time);
+            clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
 #if DEBUG_LATENCY
-            clock_gettime( CLOCK_REALTIME, &finish_time);
-            diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+            clock_gettime( CLOCK_MONOTONIC, &finish_time);
+            diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
             cm->latency.decode_frame += diff;
 #endif
 
@@ -852,13 +852,13 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             const uint32_t frame_size = (uint32_t) (data_end - data_start);
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
-            clock_gettime( CLOCK_REALTIME, &start_time);
+            clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
             const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv, deadline);
             if (res != VPX_CODEC_OK) return res;
 #if DEBUG_LATENCY
-            clock_gettime( CLOCK_REALTIME, &finish_time);
-            diff = (finish_time.tv_sec - start_time.tv_sec) + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+            clock_gettime( CLOCK_MONOTONIC, &finish_time);
+            diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
             cm->latency.decode_frame += diff;
 #endif
 
@@ -911,6 +911,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         //measure quality and save a log
         save_bilinear_quality_result(cm);
     }
+    LOGD("decoding latency %d: %.2f msec", cm->current_video_frame - 1, cm->latency.decode_frame);
     /*******************Hyunho************************/
     return res;
 }
