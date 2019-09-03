@@ -100,36 +100,48 @@ static void vp9_dec_free_mi(VP9_COMMON *cm) {
 }
 
 /*******************Hyunho************************/
-static void mobinas_worker_data_remove(MobiNASWorkerData *mwd){
-    vpx_free_frame_buffer(mwd->hr_compare_frame);
-    vpx_free_frame_buffer(mwd->hr_reference_frame);
-    vpx_free_frame_buffer(mwd->lr_reference_frame);
-    vpx_free_frame_buffer(mwd->lr_resiudal);
-    vpx_free(mwd->hr_compare_frame);
-    vpx_free(mwd->hr_reference_frame);
-    vpx_free(mwd->lr_reference_frame);
-    vpx_free(mwd->lr_resiudal);
+static void mobinas_worker_data_remove(VP9Decoder *pbi){
+    if (pbi->mobinas_worker_data != NULL) {
+        const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
-    //free decode block lists
-    DecodeBlock *intra_block = mwd->intra_block_list->head;
-    DecodeBlock *prev_block = NULL;
-    while (intra_block != NULL) {
-        prev_block = intra_block;
-        intra_block = intra_block->next;
-        vpx_free(prev_block);
+        for (int i = 0; i < num_threads; ++i) {
+            MobiNASWorkerData *mwd = &pbi->mobinas_worker_data[i];
+
+            vpx_free_frame_buffer(mwd->hr_compare_frame);
+            vpx_free_frame_buffer(mwd->hr_reference_frame);
+            vpx_free_frame_buffer(mwd->lr_reference_frame);
+            vpx_free_frame_buffer(mwd->lr_resiudal);
+            vpx_free(mwd->hr_compare_frame);
+            vpx_free(mwd->hr_reference_frame);
+            vpx_free(mwd->lr_reference_frame);
+            vpx_free(mwd->lr_resiudal);
+
+            //free decode block lists
+            DecodeBlock *intra_block = mwd->intra_block_list->head;
+            DecodeBlock *prev_block = NULL;
+            while (intra_block != NULL) {
+                prev_block = intra_block;
+                intra_block = intra_block->next;
+                vpx_free(prev_block);
+            }
+            vpx_free(mwd->intra_block_list);
+
+            DecodeBlock *inter_block = mwd->inter_block_list->head;
+            while (inter_block != NULL) {
+                prev_block = inter_block;
+                inter_block = inter_block->next;
+                vpx_free(prev_block);
+            }
+            vpx_free(mwd->inter_block_list);
+
+            if (mwd->latency_log != NULL) fclose(mwd->latency_log);
+            if (mwd->metadata_log != NULL) fclose(mwd->metadata_log);
+
+            vpx_remove_cache_reset_profile(mwd->cache_reset_profile);
+        }
+
+        vpx_free(pbi->mobinas_worker_data);
     }
-    vpx_free(mwd->intra_block_list);
-
-    DecodeBlock *inter_block = mwd->inter_block_list->head;
-    while (inter_block != NULL) {
-        prev_block = inter_block;
-        inter_block = inter_block->next;
-        vpx_free(prev_block);
-    }
-    vpx_free(mwd->inter_block_list);
-
-    if (mwd->latency_log != NULL) fclose(mwd->latency_log);
-    if (mwd->metadata_log != NULL) fclose(mwd->metadata_log);
 }
 
 void mobinas_worker_data_init(MobiNASWorkerData *mwd, int index){
@@ -150,6 +162,8 @@ void mobinas_worker_data_init(MobiNASWorkerData *mwd, int index){
     mwd->inter_block_list->tail = NULL;
 
     mwd->index = index;
+    mwd->reset_cache = 0;
+    mwd->cache_reset_profile = NULL;
 
     mwd->latency_log = NULL;
     mwd->metadata_log = NULL;
@@ -241,15 +255,9 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     vpx_free(cm->lr_reference_frame);
     vpx_free(cm->hr_bilinear_frame);
 
-    if (pbi->mobinas_worker_data != NULL) {
-        const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
+    if (cm->quality_log != NULL) fclose(cm->quality_log);
 
-        for (int i = 0; i < num_threads; ++i) {
-            mobinas_worker_data_remove(&pbi->mobinas_worker_data[i]);
-        }
-
-        vpx_free(pbi->mobinas_worker_data);
-    }
+    mobinas_worker_data_remove(pbi);
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);

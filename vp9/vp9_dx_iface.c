@@ -96,24 +96,29 @@ static void bilinear_config_init(bilinear_config_t *config, int scale, int width
     }
 }
 
-static void bilinear_profile_init(bilinear_profile_t *profile){
-    //scale x4
-    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
-    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
-    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
-    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
+static void init_bilinear_profile(vpx_codec_alg_priv_t *ctx){
+    VP9_COMMON *cm = &ctx->pbi->common;
+    bilinear_profile_t *profile = &cm->bl_profile;
 
-    //scale x3
-    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
-    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
-    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
-    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
+    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+        //scale x4
+        bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
+        bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
+        bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
+        bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
 
-    //scale x2
-    bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
-    bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
-    bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
-    bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
+        //scale x3
+        bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
+        bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
+        bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
+        bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
+
+        //scale x2
+        bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
+        bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
+        bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
+        bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
+    }
 }
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
@@ -157,13 +162,6 @@ static vpx_codec_err_t decoder_destroy(vpx_codec_alg_priv_t *ctx) {
 
     vpx_free(ctx->buffer_pool);
     vpx_free(ctx);
-
-    /*******************Hyunho************************/
-    VP9_COMMON *cm = &ctx->pbi->common;
-//    if (cm->latency_log != NULL) fclose(cm->latency_log);
-//    if (cm->metadata_log != NULL) fclose(cm->metadata_log);
-    if (cm->quality_log != NULL) fclose(cm->quality_log);
-    /*******************Hyunho************************/
 
     return VPX_CODEC_OK;
 }
@@ -334,6 +332,65 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
+static void init_mobinas_worker(vpx_codec_alg_priv_t *ctx) {
+    char file_path[PATH_MAX];
+    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
+    VP9_COMMON *cm = &ctx->pbi->common;
+    cm->mobinas_cfg = ctx->mobinas_cfg;
+
+    //init mobinas_worker_data
+    if (ctx->pbi->mobinas_worker_data == NULL) {
+        const size_t mwd_size = num_threads * sizeof(MobiNASWorkerData);
+        CHECK_MEM_ERROR(cm, ctx->pbi->mobinas_worker_data, vpx_memalign(32, mwd_size));
+
+        for (int i = 0; i < num_threads; ++i) {
+            mobinas_worker_data_init(&ctx->pbi->mobinas_worker_data[i], i);
+
+            if (cm->mobinas_cfg->save_decode_result == 1) {
+                memset(file_path, 0, PATH_MAX);
+                sprintf(file_path, "%s/latency_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
+                ctx->pbi->mobinas_worker_data[i].latency_log = fopen(file_path, "w");
+                memset(file_path, 0, PATH_MAX);
+                sprintf(file_path, "%s/metadata_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
+                ctx->pbi->mobinas_worker_data[i].metadata_log = fopen(file_path, "w");
+            }
+        }
+    }
+}
+
+static void init_cache_reset_profile(vpx_codec_alg_priv_t *ctx) {
+    char file_path[PATH_MAX];
+    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
+    VP9_COMMON *cm = &ctx->pbi->common;
+
+    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+        for (int i = 0; i < num_threads; ++i) {
+            MobiNASWorkerData *mwd = &ctx->pbi->mobinas_worker_data[i];
+
+            memset(file_path, 0, sizeof(file_path));
+            sprintf(file_path, "%s/cache_reset_%s_thread%d", cm->mobinas_cfg->profile_dir, cm->mobinas_cfg->prefix, mwd->index);
+
+            if (cm->mobinas_cfg->profile_cache_reset) {
+                mwd->cache_reset_profile = vpx_init_cache_reset_profile(file_path, 0);
+
+                if (mwd->cache_reset_profile == NULL) {
+                    LOGE("%s: turn-off cache reset", __func__);
+                    cm->mobinas_cfg->profile_cache_reset = 0;
+                }
+            }
+
+            if (cm->mobinas_cfg->apply_cache_reset) {
+                mwd->cache_reset_profile = vpx_init_cache_reset_profile(file_path, 1);
+
+                if (mwd->cache_reset_profile == NULL) {
+                    LOGE("%s: turn-off cache reset", __func__);
+                    cm->mobinas_cfg->apply_cache_reset = 0;
+                }
+            }
+        }
+    }
+}
+
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     ctx->last_show_frame = -1;
     ctx->need_resync = 1;
@@ -356,36 +413,12 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
         set_default_ppflags(&ctx->postproc_cfg);
 
     /*******************Hyunho************************/
-    //hyunho: additional overhead is < 0.1 msec
     VP9_COMMON *cm = &ctx->pbi->common;
-    cm->mobinas_cfg = &ctx->mobinas_cfg;
-//    clock_t start, end;
-//    double cpu_time_used;
-//    start = clock();
-    bilinear_profile_init(&cm->bl_profile);
-//    end = clock();
-//    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
-//    LOGD("additional init overhead: %.2fmsec", cpu_time_used);
-    char file_path[PATH_MAX];
-    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
+    cm->mobinas_cfg = ctx->mobinas_cfg;
 
-    if (ctx->pbi->mobinas_worker_data == NULL) {
-        const size_t mwd_size = num_threads * sizeof(MobiNASWorkerData);
-        CHECK_MEM_ERROR(cm, ctx->pbi->mobinas_worker_data, vpx_memalign(32, mwd_size));
-
-        for (int i = 0; i < num_threads; ++i) {
-            mobinas_worker_data_init(&ctx->pbi->mobinas_worker_data[i], i);
-
-            if (cm->mobinas_cfg->save_decode_result == 1) {
-                memset(file_path, 0, PATH_MAX);
-                sprintf(file_path, "%s/latency_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
-                ctx->pbi->mobinas_worker_data[i].latency_log = fopen(file_path, "w");
-                memset(file_path, 0, PATH_MAX);
-                sprintf(file_path, "%s/metadata_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
-                ctx->pbi->mobinas_worker_data[i].metadata_log = fopen(file_path, "w");
-            }
-        }
-    }
+    init_mobinas_worker(ctx);
+    init_bilinear_profile(ctx);
+    init_cache_reset_profile(ctx);
     /*******************Hyunho************************/
 
     init_buffer_callbacks(ctx);
@@ -715,30 +748,41 @@ static void save_bilinear_quality_result(VP9_COMMON *cm) {
 }
 
 static void mobinas_init(vpx_codec_alg_priv_t *ctx, vpx_mobinas_cfg_t *mobinas_cfg) {
-    //copy directory
-    strcpy(ctx->mobinas_cfg.video_dir, mobinas_cfg->video_dir);
-    strcpy(ctx->mobinas_cfg.log_dir, mobinas_cfg->log_dir);
-    strcpy(ctx->mobinas_cfg.frame_dir, mobinas_cfg->frame_dir);
-    strcpy(ctx->mobinas_cfg.serialize_dir, mobinas_cfg->serialize_dir);
+    assert (!(mobinas_cfg->profile_cache_reset && mobinas_cfg->apply_cache_reset));
 
-    //copy name
-    strcpy(ctx->mobinas_cfg.prefix, mobinas_cfg->prefix);
-    strcpy(ctx->mobinas_cfg.target_file, mobinas_cfg->target_file);
-    strcpy(ctx->mobinas_cfg.cache_file, mobinas_cfg->cache_file);
-    strcpy(ctx->mobinas_cfg.compare_file, mobinas_cfg->compare_file);
-
-    //copy log setting
-    ctx->mobinas_cfg.save_serialized_frame = mobinas_cfg->save_serialized_frame;
-    ctx->mobinas_cfg.save_decoded_frame = mobinas_cfg->save_decoded_frame;
-    ctx->mobinas_cfg.save_intermediate = mobinas_cfg->save_intermediate;
-    ctx->mobinas_cfg.save_final = mobinas_cfg->save_final;
-    ctx->mobinas_cfg.save_quality_result = mobinas_cfg->save_quality_result;
-    ctx->mobinas_cfg.save_decode_result = mobinas_cfg->save_decode_result;
-
-    //copy decoder setting
-    ctx->mobinas_cfg.mode = mobinas_cfg->mode;
-    ctx->mobinas_cfg.target_resolution = mobinas_cfg->target_resolution;
+    ctx->mobinas_cfg = mobinas_cfg;
 }
+
+//    //copy directory
+//    strcpy(ctx->mobinas_cfg.video_dir, mobinas_cfg->video_dir);
+//    strcpy(ctx->mobinas_cfg.log_dir, mobinas_cfg->log_dir);
+//    strcpy(ctx->mobinas_cfg.frame_dir, mobinas_cfg->frame_dir);
+//    strcpy(ctx->mobinas_cfg.serialize_dir, mobinas_cfg->serialize_dir);
+//    strcpy(ctx->mobinas_cfg.profile_dir, mobinas_cfg->profile_dir);
+//
+//    //copy name
+//    strcpy(ctx->mobinas_cfg.prefix, mobinas_cfg->prefix);
+//    strcpy(ctx->mobinas_cfg.target_file, mobinas_cfg->target_file);
+//    strcpy(ctx->mobinas_cfg.cache_file, mobinas_cfg->cache_file);
+//    strcpy(ctx->mobinas_cfg.compare_file, mobinas_cfg->compare_file);
+//
+//    //copy log setting
+//    ctx->mobinas_cfg.save_serialized_frame = mobinas_cfg->save_serialized_frame;
+//    ctx->mobinas_cfg.save_decoded_frame = mobinas_cfg->save_decoded_frame;
+//    ctx->mobinas_cfg.save_intermediate = mobinas_cfg->save_intermediate;
+//    ctx->mobinas_cfg.save_final = mobinas_cfg->save_final;
+//    ctx->mobinas_cfg.save_quality_result = mobinas_cfg->save_quality_result;
+//    ctx->mobinas_cfg.save_decode_result = mobinas_cfg->save_decode_result;
+//
+//    //copy adaptive cache setting
+//    ctx->mobinas_cfg.profile_cache_reset = mobinas_cfg->profile_cache_reset;
+//    ctx->mobinas_cfg.apply_cache_reset = mobinas_cfg->apply_cache_reset;
+//
+//    //copy decoder setting
+//    ctx->mobinas_cfg.mode = mobinas_cfg->mode;
+//    ctx->mobinas_cfg.target_resolution = mobinas_cfg->target_resolution;
+
+
 //여기서 set을 하고, 이후에 decode loop에서 가져오는 형식으로 하자. decode loop에서 NULL이 아니면 적용하는 방식. 나중에 destroy할때 free시켜줘야한다.
 // 1. API design + buffer handle (release) + decode에서는 NULL인지 check하고 넘어가는 방식으로 // cm에서 pointer만 가져오는 형식으로
 // 2. Check latency, quality on cache mode
@@ -781,7 +825,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     }
     else {
         cm = &ctx->pbi->common;
-        cm->mobinas_cfg = &ctx->mobinas_cfg;
         cm->buffer_pool->mode = cm->mobinas_cfg->mode;
     }
 
@@ -796,6 +839,8 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     struct timespec start_time, finish_time;
     double diff;
 #endif
+
+    //TODO: a) allocate vpx_cache_reset_profile_t, b) open a file (per-frame)
 
     if (frame_count > 0) {
         int i;

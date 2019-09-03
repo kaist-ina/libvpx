@@ -43,3 +43,6 @@ API_SRCS-yes += vpx_codec.mk
 API_SRCS-yes += vpx_frame_buffer.h
 API_SRCS-yes += vpx_image.h
 API_SRCS-yes += vpx_integer.h
+
+API_SRCS-yes += vpx_cache.h
+API_SRCS-yes += src/vpx_cache.c

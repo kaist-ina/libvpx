@@ -24,6 +24,7 @@
 #include "vp9/common/vp9_quant_common.h"
 #include "vp9/common/vp9_tile_common.h"
 #include <decode_test.h>
+#include <vpx/vpx_cache.h>
 
 #if CONFIG_VP9_POSTPROC
 #include "vp9/common/vp9_postproc.h"

@@ -378,6 +378,7 @@ typedef struct vpx_mobinas_cfg{
     char log_dir[PATH_MAX];
     char frame_dir[PATH_MAX];
     char serialize_dir[PATH_MAX];
+    char profile_dir[PATH_MAX];
 
     //name
     char prefix[PATH_MAX];
@@ -392,6 +393,10 @@ typedef struct vpx_mobinas_cfg{
     int save_final;
     int save_quality_result;
     int save_decode_result;
+
+    //adaptive cache
+    int profile_cache_reset;
+    int apply_cache_reset;
 
     //decoder
     DECODE_MODE mode;

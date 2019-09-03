@@ -43,7 +43,10 @@ typedef struct MobiNASWorkerData {
     int inter_count;
     int inter_noskip_count;
     int adaptive_cache_count;
+
     int index;
+    int reset_cache;
+    vpx_cache_reset_profile_t *cache_reset_profile;
 
     latency_info_t latency;
 
