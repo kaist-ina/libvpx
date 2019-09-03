@@ -39,6 +39,7 @@ vpx_cache_reset_profile_t* vpx_init_cache_reset_profile(const char* path, int lo
     vpx_cache_reset_profile_t *profile = (vpx_cache_reset_profile_t*) malloc(sizeof(vpx_cache_reset_profile_t));
 
     if (load_profile) {
+        memset(profile, 0, sizeof(vpx_cache_reset_profile_t));
         profile->file = fopen(path, "rb");
         if (profile->file == NULL) {
             LOGE("%s: cannot load a file %s", __func__, path);
@@ -64,8 +65,7 @@ vpx_cache_reset_profile_t* vpx_init_cache_reset_profile(const char* path, int lo
 void vpx_remove_cache_reset_profile(vpx_cache_reset_profile_t *profile) {
     if (profile != NULL) {
         if (profile->buffer != NULL) free(profile->buffer);
-        if (profile->file != NULL)
-            fclose(profile->file);
+        if (profile->file != NULL) fclose(profile->file);
         free(profile);
     }
 }
@@ -84,6 +84,8 @@ int vpx_read_cache_reset_profile(vpx_cache_reset_profile_t *profile) {
         LOGE("%s: reading offset value failed", __func__);
         return -1;
     }
+
+//    LOGD("%s: offset %d", __func__, offset);
 
     length = offset / 8 + 1;
     if (profile->buffer == NULL) {
@@ -109,6 +111,8 @@ int vpx_write_cache_reset_profile(vpx_cache_reset_profile_t *profile) {
     int offset = profile->offset;
     int length = offset / 8 + 1;
     size_t bytes_write;
+
+//    LOGD("%s: offset %d", __func__, offset);
 
     if (profile->file == NULL) {
         LOGE("%s: file does not exist");

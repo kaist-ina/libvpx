@@ -76,6 +76,7 @@
 #define DEBUG_ADAPTIVE_CACHE 0
 #define DEBUG_RESIDUAL 0
 #define BILLION  1E9
+#define CACHE_RESET_TRESHOLD 0.5
 
 static int is_compound_reference_allowed(const VP9_COMMON *cm) {
     int i;
@@ -1380,10 +1381,6 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
     return xd->mi[0];
 }
 
-//TODO (hyunho): intra-prediction requires docoded block of inter-prediction (or just apply resize)
-//TODO (hyunho): save intra-prediction and lr_resiudal in seperate buffer & apply loopfiltering (not sure)
-//TODO (hyunho): save a decoded frame for later intra-prediction
-
 static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                          int mi_col, BLOCK_SIZE bsize, int bwl,
                          int bhl) { //TODO (hyunho): understand bwl, bhl semantics
@@ -1477,6 +1474,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
             //Setup cache reset
             if (cm->mobinas_cfg->apply_cache_reset) mwd->reset_cache = vpx_read_cache_reset_bit(mwd->cache_reset_profile);
+//            mwd->reset_cache = 0;
 
             vp9_setup_sr_planes(xd->plane, get_sr_frame_new_buffer(cm), mi_row, mi_col, &cm->sf_upsample_inter); //check: sr frame
             vp9_setup_res_planes(xd->plane, mwd->lr_resiudal, mi_row, mi_col);
@@ -1540,8 +1538,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                 reconstruct_inter_block(twd, mi, plane, row, col, tx_size, cm);
             }
 
-            //TODO (hyunho): skip for super-resolutioned frame
-            //TODO: fix a bug for profiling
             if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
                 if (cm->mobinas_cfg->apply_cache_reset) {
                     if (mwd->reset_cache) {
@@ -2614,7 +2610,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
                 vpx_calc_block_psnr(hr_compare_frame, hr_reference_frame, &psnr_compare, widths, heights, x_offsets, y_offsets, cm->scale);
 
-                if (psnr_compare.psnr[0] + 0.5 > psnr_cache.psnr[0]) {
+                if (psnr_compare.psnr[0] + CACHE_RESET_TRESHOLD > psnr_cache.psnr[0]) {
                     mwd->adaptive_cache_count++;
 
                     //TODO: remove this (move to apply_cache_reset
@@ -2681,6 +2677,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 static int tile_worker_hook(void *arg1, void *arg2) {
     TileWorkerData *const tile_data = (TileWorkerData *) arg1;
     VP9Decoder *const pbi = (VP9Decoder *) arg2;
+    VP9_COMMON *const cm = &pbi->common;
+    MobiNASWorkerData *const mwd = tile_data->mobinas_worker_data;
 
     TileInfo *volatile tile = &tile_data->xd.tile;
     const int final_col = (1 << pbi->common.log2_tile_cols) - 1;
@@ -2697,9 +2695,13 @@ static int tile_worker_hook(void *arg1, void *arg2) {
 
     tile_data->xd.corrupted = 0;
 
-//    clock_t start, end;
-//    double cpu_time_used;
-//    start = clock();
+    //load a cache reset profile
+    if (cm->frame_type != KEY_FRAME && cm->mobinas_cfg->apply_cache_reset) {
+        if (vpx_read_cache_reset_profile(mwd->cache_reset_profile)) {
+            LOGE("%s: turn-off adaptive cache", __func__);
+            cm->mobinas_cfg->apply_cache_reset = 0;
+        }
+    }
 
     do {
         int mi_row, mi_col;
@@ -2719,7 +2721,6 @@ static int tile_worker_hook(void *arg1, void *arg2) {
             vp9_zero(tile_data->xd.left_seg_context);
             for (mi_col = tile->mi_col_start; mi_col < tile->mi_col_end;
                  mi_col += MI_BLOCK_SIZE) {
-//                LOGD("mi_row_start: %d, mi_row_end: %d, mi_col_start: %d, mi_col_end: %d", tile->mi_row_start, tile->mi_row_end, tile->mi_col_start, tile->mi_row_end);
                 decode_partition(tile_data, pbi, mi_row, mi_col, BLOCK_64X64, 4);
             }
         }
@@ -2728,10 +2729,6 @@ static int tile_worker_hook(void *arg1, void *arg2) {
             bit_reader_end = vpx_reader_find_end(&tile_data->bit_reader);
         }
     } while (!tile_data->xd.corrupted && ++n <= tile_data->buf_end);
-
-//    end = clock();
-//    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC * 1000;
-//    LOGD("tile_worker_hook: %.2fmsec", cpu_time_used);
 
     tile_data->data_end = bit_reader_end;
     return !tile_data->xd.corrupted;
@@ -2771,14 +2768,33 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     const int hr_frame_strides[MAX_MB_PLANE] = {hr_frame->y_stride, hr_frame->uv_stride,
                                                 hr_frame->uv_stride};
 
+    //high-resolution decodecd data (bilinear interpolation)
+    uint8_t *const hr_compare_frame_buffers[MAX_MB_PLANE] = {hr_compare_frame->y_buffer, hr_compare_frame->u_buffer,
+                                                             hr_compare_frame->v_buffer};
+    const int hr_compare_frame_strides[MAX_MB_PLANE] = {hr_compare_frame->y_stride, hr_compare_frame->uv_stride,
+                                                        hr_compare_frame->uv_stride};
+
+    if (cm->mobinas_cfg->profile_cache_reset) {
+        char file_path[PATH_MAX];
+        memset(file_path, 0, sizeof(char) * PATH_MAX);
+        sprintf(file_path, "%s/%d_%d_%s.serialize", cm->mobinas_cfg->serialize_dir,
+                cm->current_video_frame, cm->current_super_frame,
+                cm->mobinas_cfg->cache_file);
+        if (vpx_deserialize_load(mwd->hr_reference_frame, file_path,
+                                 get_sr_frame_new_buffer(cm)->y_crop_width, //check: sr frame
+                                 get_sr_frame_new_buffer(cm)->y_crop_height, //check: sr frame
+                                 cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
+            vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                               "deserialize failed");
+        }
+    }
+
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
     DecodeBlock *intra_block = mwd->intra_block_list->head;
     DecodeBlock *prev_block = NULL;
     while (intra_block != NULL) {
-//            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", intra_block->mi_row,
-//                 intra_block->mi_col, intra_block->n4_w[0], intra_block->n4_h[0]);
         const int widths[MAX_MB_PLANE] = {intra_block->n4_w[0] * 4, intra_block->n4_w[1] * 4,
                                           intra_block->n4_w[2] * 4};
         const int heights[MAX_MB_PLANE] = {intra_block->n4_h[0] * 4, intra_block->n4_h[1] * 4,
@@ -2841,10 +2857,40 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                                       x_offsets[plane], y_offsets[plane], widths[plane],
                                       heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
         }
+
+        //profile cache reset
+        if (cm->mobinas_cfg->profile_cache_reset) {
+            PSNR_STATS psnr_cache;
+            PSNR_STATS psnr_compare;
+
+            for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+                vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
+                                          hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane],
+                                          x_offsets[plane], y_offsets[plane], widths[plane],
+                                          heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+            }
+
+            vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
+            vpx_calc_block_psnr(hr_compare_frame, hr_reference_frame, &psnr_compare, widths, heights, x_offsets, y_offsets, cm->scale);
+
+            if (psnr_compare.psnr[0] + CACHE_RESET_TRESHOLD > psnr_cache.psnr[0]) {
+                mwd->adaptive_cache_count++;
+
+                //TODO: remove this (move to apply_cache_reset
+                for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+                    vpx_copy_buffer_uint8(hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane], hr_frame_buffers[plane],
+                                          hr_frame_strides[plane], x_offsets[plane], y_offsets[plane], widths[plane], heights[plane], cm->scale
+                    );
+                }
+                vpx_write_cache_reset_bit(mwd->cache_reset_profile, 1);
+            } else {
+                vpx_write_cache_reset_bit(mwd->cache_reset_profile, 0);
+            }
+        }
+
         prev_block = inter_block;
         inter_block = inter_block->next;
         vpx_free(prev_block);
-        /**********************/
     }
     mwd->inter_block_list->head = NULL;
     mwd->inter_block_list->tail = NULL;
@@ -2854,6 +2900,14 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     mwd->latency.interp_inter_residual += diff;
 #endif
+
+    if (cm->frame_type != KEY_FRAME && cm->mobinas_cfg->profile_cache_reset) {
+        if (vpx_write_cache_reset_profile(mwd->cache_reset_profile)) {
+            LOGE("%s: turn-off adaptive cache", __func__);
+            cm->mobinas_cfg->profile_cache_reset = 0;
+        }
+    }
+
     return 1;
 }
 
@@ -3592,7 +3646,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                                          &pbi->lf_row_sync);
             }
 
-            apply_bilinear_mt(pbi);
+            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) apply_bilinear_mt(pbi);
         } else {
             vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
                                "Decode failed. Frame data is corrupted.");
