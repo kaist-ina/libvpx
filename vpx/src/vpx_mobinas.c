@@ -375,7 +375,7 @@ void remove_bilinear_profile(mobinas_bilinear_profile_t *profile) {
         //scale x3
         remove_bilinear_config(&profile->config_TX_64X64_s3);
         //scale x2
-        remove_bilinear_config(&profile->config_TX_64X64_s3);
+        remove_bilinear_config(&profile->config_TX_64X64_s2);
 
         vpx_free(profile);
     }
