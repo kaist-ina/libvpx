@@ -27,35 +27,6 @@
 extern "C" {
 #endif
 
-/*******************Hyunho************************/
-typedef struct MobiNASWorkerData {
-    YV12_BUFFER_CONFIG *lr_reference_frame;
-    YV12_BUFFER_CONFIG *lr_resiudal;
-    YV12_BUFFER_CONFIG *hr_compare_frame;
-    YV12_BUFFER_CONFIG *hr_reference_frame;
-//    YV12_BUFFER_CONFIG *hr_debug_frame; //only used for internal process
-
-    DecodeBlockList *intra_block_list;
-    DecodeBlockList *inter_block_list;
-
-    int count;
-    int intra_count;
-    int inter_count;
-    int inter_noskip_count;
-    int adaptive_cache_count;
-
-    int index;
-    int reset_cache;
-    vpx_cache_reset_profile_t *cache_reset_profile;
-
-    latency_info_t latency;
-
-    FILE *latency_log;
-    FILE *metadata_log;
-} MobiNASWorkerData;
-
-void mobinas_worker_data_init(MobiNASWorkerData *mwd, int index);
-
 typedef struct TileBuffer {
     const uint8_t *data;
     size_t size;
@@ -64,7 +35,7 @@ typedef struct TileBuffer {
 
 typedef struct TileWorkerData {
     const uint8_t *data_end;
-    MobiNASWorkerData *mobinas_worker_data;
+    mobinas_worker_data_t *mobinas_worker_data;
     int buf_start, buf_end;  // pbi->tile_buffers to decode, inclusive
     vpx_reader bit_reader;
     FRAME_COUNTS counts;
@@ -105,7 +76,7 @@ typedef struct VP9Decoder {
   int hold_ref_buf;  // hold the reference buffer.
 
     /*******************Hyunho************************/
-    MobiNASWorkerData *mobinas_worker_data;
+    mobinas_worker_data_t *mobinas_worker_data;
     /*******************Hyunho************************/
 } VP9Decoder;
 

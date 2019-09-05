@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <android/log.h>
 #include <memory.h>
+#include <sys/param.h>
 
 #include "./vpx_config.h"
 #include "./vpx_dsp_rtcd.h"
@@ -39,8 +40,9 @@ static const int16_t delta = (1 << (FRACTION_BIT - 1));
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 //TODO: here, neon optimization slows down the performance for scale x4, but maybe faster in x3, x4 which requires a manual test
+//TODO: replace MIN operations
 #if 0
-static void vpx_bilinear_interp_horiz_neon_h8_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config)
+static void vpx_bilinear_interp_horiz_neon_h8_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config)
 {
     LOGF("Not implemented");
     assert(1);
@@ -57,7 +59,7 @@ static void load_u16_8x1(const int16_t *src, int16x8_t *dst, int *index){
     *dst = vld1q_lane_s16(src[index[7]], *dst, 7);
 };
 
-static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config)
+static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config)
 {
     int x, y;
 
@@ -103,7 +105,7 @@ static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff
 static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_stride,
                                               int16_t *dst, ptrdiff_t dst_stride, int width,
                                               int height, int scale,
-                                              const bilinear_config_t *config) {
+                                              const mobinas_bilinear_config_t *config) {
     int x, y;
 
     if (scale == 2 || scale == 3) {
@@ -115,8 +117,10 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
         for (x = 0; x < width * scale; x = x + 2) {
             const int left_x_index_0 = config->left_x_index[x];
             const int left_x_index_1 = config->left_x_index[x + 1];
-            const int right_x_index_0 = config->right_x_index[x];
-            const int right_x_index_1 = config->right_x_index[x + 1];
+//            const int right_x_index_0 = config->right_x_index[x];
+//            const int right_x_index_1 = config->right_x_index[x + 1];
+            const int right_x_index_0 = MIN(config->right_x_index[x], width - 1);
+            const int right_x_index_1 = MIN(config->right_x_index[x + 1], width - 1);
 
             const int16_t x_lerp_fixed_0 = config->x_lerp_fixed[x];
             const int16_t x_lerp_fixed_1 = config->x_lerp_fixed[x + 1];
@@ -138,7 +142,7 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
 static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_stride,
                                               int16_t *dst, ptrdiff_t dst_stride, int width,
                                               int height, int scale,
-                                              const bilinear_config_t *config) {
+                                              const mobinas_bilinear_config_t *config) {
     int x, y;
 
     if (scale == 2 || scale == 3) {
@@ -150,8 +154,10 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
         for (x = 0; x < width * scale; x = x + 2) {
             const int left_x_index_0 = config->left_x_index[x];
             const int left_x_index_1 = config->left_x_index[x + 1];
-            const int right_x_index_0 = config->right_x_index[x];
-            const int right_x_index_1 = config->right_x_index[x + 1];
+//            const int right_x_index_0 = config->right_x_index[x];
+//            const int right_x_index_1 = config->right_x_index[x + 1];
+            const int right_x_index_0 = MIN(config->right_x_index[x], width - 1);
+            const int right_x_index_1 = MIN(config->right_x_index[x + 1], width - 1);
 
             const int16_t x_lerp_fixed_0 = config->x_lerp_fixed[x];
             const int16_t x_lerp_fixed_1 = config->x_lerp_fixed[x + 1];
@@ -175,7 +181,7 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
 static void
 vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                        ptrdiff_t dst_stride, int width, int height, int scale,
-                                       const bilinear_config_t *config) {
+                                       const mobinas_bilinear_config_t *config) {
     int x, y;
 
     int16x8_t qS0_01234567_0, qS1_01234567_0;
@@ -188,7 +194,8 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
     for (y = 0; y < height * scale; ++y) {
         x = 0;
         const int top_y_index = config->top_y_index[y];
-        const int bottom_y_index = config->bottom_y_index[y];
+//        const int bottom_y_index = config->bottom_y_index[y];
+        const int bottom_y_index = MIN(config->bottom_y_index[y], height - 1);
         const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
         y_lerp_fixed_v = vdupq_n_s16(y_lerp_fixed);
 
@@ -255,7 +262,7 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
 static void
 vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                         ptrdiff_t dst_stride, int width, int height, int scale,
-                                        const bilinear_config_t *config) {
+                                        const mobinas_bilinear_config_t *config) {
     int x, y;
 
     int16x8_t qS0_01234567_0, qS0_01234567_1, qS1_01234567_0, qS1_01234567_1;
@@ -267,7 +274,8 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
     for (y = 0; y < height * scale; ++y) {
         x = 0;
         const int top_y_index = config->top_y_index[y];
-        const int bottom_y_index = config->bottom_y_index[y];
+//        const int bottom_y_index = config->bottom_y_index[y];
+        const int bottom_y_index = MIN(config->bottom_y_index[y], height - 1);
         y_lerp_fixed_v = vdupq_n_s16(config->y_lerp_fixed[y]);
 
         //1. process 8 values * 2 loop unrolling == 16
@@ -314,7 +322,7 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
 static void
 vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                        ptrdiff_t dst_stride, int width, int height, int scale,
-                                       const bilinear_config_t *config) {
+                                       const mobinas_bilinear_config_t *config) {
     LOGF("%s: Not tested yet", __func__);
     assert(1);
 
@@ -328,7 +336,8 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
     for (y = 0; y < height * scale; ++y) {
         x = 0;
         const int top_y_index = config->top_y_index[y];
-        const int bottom_y_index = config->bottom_y_index[y];
+//        const int bottom_y_index = config->bottom_y_index[y];
+        const int bottom_y_index = MIN(config->bottom_y_index[y], height - 1);
         const int16_t y_lerp_fixed = config->y_lerp_fixed[y];
         y_lerp_fixed_v = vdupq_n_s16(y_lerp_fixed);
 
@@ -384,7 +393,7 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
 static void
 vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                         ptrdiff_t dst_stride, int width, int height, int scale,
-                                        const bilinear_config_t *config) {
+                                        const mobinas_bilinear_config_t *config) {
     int x, y;
 
     int16x8_t qS0_01234567_0, qS0_01234567_1, qS1_01234567_0, qS1_01234567_1;
@@ -396,7 +405,8 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
     for (y = 0; y < height * scale; ++y) {
         x = 0;
         const int top_y_index = config->top_y_index[y];
-        const int bottom_y_index = config->bottom_y_index[y];
+//        const int bottom_y_index = config->bottom_y_index[y];
+        const int bottom_y_index = MIN(config->bottom_y_index[y], height - 1);
         y_lerp_fixed_v = vdupq_n_s16(config->y_lerp_fixed[y]);
 
         //1. process 8 values * 2 loop unrolling == 16
@@ -460,48 +470,46 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
 
 void vpx_bilinear_interp_int16_neon(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                    int height, int scale, const bilinear_config_t *config) {
-    int16_t temp[128 * 128];
+                                    int height, int scale, const mobinas_bilinear_config_t *config) {
+    int16_t temp[256 * 256];
     int h = height * scale;
 
-    assert(width <= 32);
-    assert(height <= 32);
+    assert(width <= 64);
+    assert(height <= 64);
     assert(scale <= 4 && scale >= 2);
 
     src = src + (y_offset * src_stride + x_offset);
     dst = dst + (y_offset * dst_stride + x_offset) * scale;
 
-    vpx_bilinear_interp_horiz_c_int16(src, src_stride, temp, 128, width, height, scale, config);
+    vpx_bilinear_interp_horiz_c_int16(src, src_stride, temp, 256, width, height, scale, config);
     if (h >= 16) {
-        vpx_bilinear_interp_vert_neon_w16_int16(temp, 128, dst, dst_stride, width, height, scale,
+        vpx_bilinear_interp_vert_neon_w16_int16(temp, 256, dst, dst_stride, width, height, scale,
                                                 config);
     } else {
-        vpx_bilinear_interp_vert_neon_w8_int16(temp, 128, dst, dst_stride, width, height, scale,
+        vpx_bilinear_interp_vert_neon_w8_int16(temp, 256, dst, dst_stride, width, height, scale,
                                                config);
     }
 }
 
-//TODO (hyunho): a) memory, b) block size (smaller than ...)
-//TODO: reset to int16
 void vpx_bilinear_interp_uint8_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                    int height, int scale, const bilinear_config_t *config) {
+                                    int height, int scale, const mobinas_bilinear_config_t *config) {
     int16_t temp[128 * 128];
     int h = height * scale;
 
-    assert(width <= 32);
-    assert(height <= 32);
+    assert(width <= 64);
+    assert(height <= 64);
     assert(scale <= 4 && scale >= 2);
 
     src = src + (y_offset * src_stride + x_offset);
     dst = dst + (y_offset * dst_stride + x_offset) * scale;
 
-    vpx_bilinear_interp_horiz_c_uint8(src, src_stride, temp, 128, width, height, scale, config);
+    vpx_bilinear_interp_horiz_c_uint8(src, src_stride, temp, 256, width, height, scale, config);
     if (h >= 16) {
-        vpx_bilinear_interp_vert_neon_w16_uint8(temp, 128, dst, dst_stride, width, height, scale,
+        vpx_bilinear_interp_vert_neon_w16_uint8(temp, 256, dst, dst_stride, width, height, scale,
                                                 config);
     } else {
-        vpx_bilinear_interp_vert_neon_w8_uint8(temp, 128, dst, dst_stride, width, height, scale,
+        vpx_bilinear_interp_vert_neon_w8_uint8(temp, 256, dst, dst_stride, width, height, scale,
                                                 config);
     }
 }

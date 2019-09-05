@@ -6,4 +6,4 @@ text vpx_codec_peek_stream_info
 text vpx_codec_register_put_frame_cb
 text vpx_codec_register_put_slice_cb
 text vpx_codec_set_frame_buffer_functions
-text vpx_mobinas_cfg_init
+text init_mobinas_cfg

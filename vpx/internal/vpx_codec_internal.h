@@ -269,7 +269,7 @@ typedef vpx_codec_err_t (*vpx_codec_enc_mr_get_mem_loc_fn_t)(
 
 /*******************Hyunho************************/
 typedef void (*vpx_mobinas_cfg_init_fn_t)(
-        vpx_codec_alg_priv_t *ctx, vpx_mobinas_cfg_t *mobinas_cfg);
+        vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg);
 /*******************Hyunho************************/
 
 /*!\brief usage configuration mapping
@@ -323,10 +323,10 @@ struct vpx_codec_iface {
         mr_get_mem_loc; /**< \copydoc ::vpx_codec_enc_mr_get_mem_loc_fn_t */
   } enc;
     /*******************Hyunho************************/
-    struct vpx_codec_sr_iface {
+    struct mobinas_iface {
         vpx_mobinas_cfg_init_fn_t
             mobinas_cfg_init;
-  } sr;
+  } mobinas;
     /*******************Hyunho************************/
 };
 

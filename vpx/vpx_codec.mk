@@ -44,5 +44,5 @@ API_SRCS-yes += vpx_frame_buffer.h
 API_SRCS-yes += vpx_image.h
 API_SRCS-yes += vpx_integer.h
 
-API_SRCS-yes += vpx_cache.h
-API_SRCS-yes += src/vpx_cache.c
+API_SRCS-yes += vpx_mobinas.h
+API_SRCS-yes += src/vpx_mobinas.c

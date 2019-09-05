@@ -50,6 +50,7 @@
 #include <vpx_dsp/psnr.h>
 #include <vpx_dsp/vpx_constant.h>
 #include <vpx_dsp/vpx_copy.h>
+#include <vpx/vpx_mobinas.h>
 
 #define TAG "vp9_decodeframe.c JNI"
 #define _UNKNOWN   0
@@ -76,7 +77,7 @@
 #define DEBUG_ADAPTIVE_CACHE 0
 #define DEBUG_RESIDUAL 0
 #define BILLION  1E9
-#define CACHE_RESET_TRESHOLD 0.5
+#define CACHE_RESET_TRESHOLD 1
 
 static int is_compound_reference_allowed(const VP9_COMMON *cm) {
     int i;
@@ -1392,7 +1393,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
     const int y_mis = VPXMIN(bh, cm->mi_rows - mi_row);
     vpx_reader *r = &twd->bit_reader;
     MACROBLOCKD *const xd = &twd->xd;
-    MobiNASWorkerData *mwd = twd->mobinas_worker_data;
+    mobinas_worker_data_t *mwd = twd->mobinas_worker_data;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
@@ -1451,10 +1452,18 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             //TODO (hyunho): skip for super-resolutioned frame
             if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type != KEY_FRAME) { //debug
                 if (plane == 0) {
-                    createBlock(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
-                                max_blocks_high, mi->interp_filter);
+                    create_mobinas_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
+                                                max_blocks_high);
                 } else {
-                    setBlock(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);
+                    set_mobinas_interp_block(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);
+                }
+            }
+            else if (cm->mobinas_cfg->mode == DECODE_BILINEAR) {
+                if (plane == 0) {
+                    create_mobinas_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
+                                                max_blocks_high);
+                } else {
+                    set_mobinas_interp_block(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);
                 }
             }
             /*******************Hyunho************************/
@@ -1473,8 +1482,8 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 #endif
         if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
             //Setup cache reset
-            if (cm->mobinas_cfg->apply_cache_reset) mwd->reset_cache = vpx_read_cache_reset_bit(mwd->cache_reset_profile);
-//            mwd->reset_cache = 0;
+            if (cm->mobinas_cfg->apply_cache_reset) mwd->reset_cache = read_mobinas_cache_reset_bit(mwd->cache_reset_profile);
+//            mwd->reset_cache = 1; //TODO: remove this (debuggin)
 
             vp9_setup_sr_planes(xd->plane, get_sr_frame_new_buffer(cm), mi_row, mi_col, &cm->sf_upsample_inter); //check: sr frame
             vp9_setup_res_planes(xd->plane, mwd->lr_resiudal, mi_row, mi_col);
@@ -1538,39 +1547,52 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                 reconstruct_inter_block(twd, mi, plane, row, col, tx_size, cm);
             }
 
+//            if (max_blocks_high != max_blocks_wide) {
+//                LOGE("num_4x4_w: %d, num_4x4_h: %d, max_blocks_high: %d, max_blocks_wide: %d", num_4x4_w * 4, num_4x4_h * 4, max_blocks_high * 4, max_blocks_wide * 4);
+//            }
+
             if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-                if (cm->mobinas_cfg->apply_cache_reset) {
+                if (cm->mobinas_cfg->apply_cache_reset) { //apply cache reset
                     if (mwd->reset_cache) {
                         if (plane == 0) {
-                            createBlock(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
-                                        max_blocks_high, mi->interp_filter);
+                            create_mobinas_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
+                                                        max_blocks_high);
                         } else {
-                            setBlock(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);
-                        }
-                    } else if (!mi->skip) {
-                        if (plane == 0) {
-                            createBlock(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
-                                        max_blocks_high, mi->interp_filter);
-                        } else {
-                            setBlock(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+                            set_mobinas_interp_block(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);
                         }
                     }
-                } else if (cm->mobinas_cfg->profile_cache_reset) {
+                    else if (!mi->skip) {
+                        if (plane == 0) {
+                            create_mobinas_interp_block(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
+                                                        max_blocks_high);
+                        } else {
+                            set_mobinas_interp_block(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+                        }
+                    }
+                } else if (cm->mobinas_cfg->profile_cache_reset) { //profile cache reset
                     if (plane == 0) {
-                        createBlock(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
-                                    max_blocks_high, mi->interp_filter);
+                        create_mobinas_interp_block(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
+                                                    max_blocks_high);
                     } else {
-                        setBlock(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+                        set_mobinas_interp_block(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
                     }
                 } else {
-                    if (!mi->skip) {
+                    if (!mi->skip) { //turn-off cache reset
                         if (plane == 0) {
-                            createBlock(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
-                                        max_blocks_high, mi->interp_filter);
+                            create_mobinas_interp_block(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
+                                                        max_blocks_high);
                         } else {
-                            setBlock(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+                            set_mobinas_interp_block(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
                         }
                     }
+                }
+            }
+            else if (cm->mobinas_cfg->mode == DECODE_BILINEAR) {
+                if (plane == 0) {
+                    create_mobinas_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
+                                                max_blocks_high);
+                } else {
+                    set_mobinas_interp_block(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);
                 }
             }
         }
@@ -2257,7 +2279,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     int tile_row, tile_col;
     int mi_row, mi_col;
     TileWorkerData *tile_data = NULL;
-    MobiNASWorkerData *mwd = pbi->tile_worker_data->mobinas_worker_data;
+    mobinas_worker_data_t *mwd = pbi->tile_worker_data->mobinas_worker_data;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
@@ -2267,7 +2289,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     //TODO: replace key_frame
     if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type != KEY_FRAME) {
         if (cm->mobinas_cfg->apply_cache_reset) {
-            if (vpx_read_cache_reset_profile(mwd->cache_reset_profile)) {
+            if (read_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
                 LOGE("%s: turn-off adaptive cache", __func__);
                 cm->mobinas_cfg->apply_cache_reset = 0;
             }
@@ -2439,10 +2461,12 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     /*******************Hyunho************************/
     //TODO (add new decode option if adaptive cache encoding phase is needed)
     //TODO add a debug frame
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR) {
         //setup frames
         YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
-        YV12_BUFFER_CONFIG *hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+        YV12_BUFFER_CONFIG *hr_frame;
+        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+        if (cm->mobinas_cfg->mode == DECODE_BILINEAR) hr_frame = cm->hr_bilinear_frame; //check: sr frame
         YV12_BUFFER_CONFIG *hr_compare_frame = mwd->hr_compare_frame;
         YV12_BUFFER_CONFIG *hr_reference_frame = mwd->hr_reference_frame;
         YV12_BUFFER_CONFIG *lr_residual = mwd->lr_resiudal;
@@ -2504,8 +2528,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             }
         }
 
-        DecodeBlock *intra_block = mwd->intra_block_list->head;
-        DecodeBlock *prev_block = NULL;
+        mobinas_interp_block_t *intra_block = mwd->intra_block_list->head;
+        mobinas_interp_block_t *prev_block = NULL;
 
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -2533,7 +2557,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                           hr_frame_buffers[plane], hr_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
-                                          heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+                                          heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
             }
             prev_block = intra_block;
             intra_block = intra_block->next;
@@ -2551,8 +2575,8 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 #endif
 
 
-//        DecodeBlock *inter_block = cm->inter_block_list->head;
-        DecodeBlock *inter_block = mwd->inter_block_list->head;
+//        mobinas_interp_block_t *inter_block = cm->inter_block_list->head;
+        mobinas_interp_block_t *inter_block = mwd->inter_block_list->head;
 
 #if DEBUG_ADAPTIVE_CACHE
         //copy a cached frame
@@ -2570,7 +2594,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         int num_blocks = 0; //number of blocks which cache is reset
         int tmp = 0;
         while (inter_block != NULL) {
-//            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", inter_block->mi_row,
+//            if (inter_block->n4_w[0] != inter_block->n4_h[0]) LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", inter_block->mi_row,
 //                 inter_block->mi_col, inter_block->n4_w[0], inter_block->n4_h[0]);
             const int widths[MAX_MB_PLANE] = {inter_block->n4_w[0] * 4, inter_block->n4_w[1] * 4,
                                               inter_block->n4_w[2] * 4};
@@ -2593,7 +2617,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                           hr_frame_buffers[plane], hr_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
-                                          heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+                                          heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
             }
 
             if (cm->mobinas_cfg->profile_cache_reset) {
@@ -2604,7 +2628,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                     vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                               hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane],
                                               x_offsets[plane], y_offsets[plane], widths[plane],
-                                              heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+                                              heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
                 }
 
                 vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
@@ -2625,9 +2649,9 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                                     cm->scale, 255);
 #endif
                     }
-                    vpx_write_cache_reset_bit(mwd->cache_reset_profile, 1);
+                    write_mobinas_cache_reset_bit(mwd->cache_reset_profile, 1);
                 } else {
-                    vpx_write_cache_reset_bit(mwd->cache_reset_profile, 0);
+                    write_mobinas_cache_reset_bit(mwd->cache_reset_profile, 0);
                 }
             }
 
@@ -2661,7 +2685,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         /*******************Hyunho************************/
         //TODO: replace KEY_FRAME
         if (cm->frame_type != KEY_FRAME && cm->mobinas_cfg->profile_cache_reset) {
-            if (vpx_write_cache_reset_profile(mwd->cache_reset_profile)) {
+            if (write_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
                 LOGE("%s: turn-off adaptive cache", __func__);
                 cm->mobinas_cfg->profile_cache_reset = 0;
             }
@@ -2678,7 +2702,7 @@ static int tile_worker_hook(void *arg1, void *arg2) {
     TileWorkerData *const tile_data = (TileWorkerData *) arg1;
     VP9Decoder *const pbi = (VP9Decoder *) arg2;
     VP9_COMMON *const cm = &pbi->common;
-    MobiNASWorkerData *const mwd = tile_data->mobinas_worker_data;
+    mobinas_worker_data_t *const mwd = tile_data->mobinas_worker_data;
 
     TileInfo *volatile tile = &tile_data->xd.tile;
     const int final_col = (1 << pbi->common.log2_tile_cols) - 1;
@@ -2697,7 +2721,7 @@ static int tile_worker_hook(void *arg1, void *arg2) {
 
     //load a cache reset profile
     if (cm->frame_type != KEY_FRAME && cm->mobinas_cfg->apply_cache_reset) {
-        if (vpx_read_cache_reset_profile(mwd->cache_reset_profile)) {
+        if (read_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
             LOGE("%s: turn-off adaptive cache", __func__);
             cm->mobinas_cfg->apply_cache_reset = 0;
         }
@@ -2738,14 +2762,18 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     TileWorkerData *const tile_data = (TileWorkerData *) arg1;
     VP9Decoder *const pbi = (VP9Decoder *) arg2;
     VP9_COMMON *cm = &pbi->common;
-    MobiNASWorkerData *mwd = tile_data->mobinas_worker_data;
+    mobinas_worker_data_t *mwd = tile_data->mobinas_worker_data;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
 #endif
 
+    assert (cm->mobinas_cfg->mode == DECODE_SR_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR);
+
     YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
-    YV12_BUFFER_CONFIG *hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+    YV12_BUFFER_CONFIG *hr_frame;
+    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+    if (cm->mobinas_cfg->mode == DECODE_BILINEAR) hr_frame = cm->hr_bilinear_frame; //check: sr frame
     YV12_BUFFER_CONFIG *hr_compare_frame = mwd->hr_compare_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame = mwd->hr_reference_frame;
     YV12_BUFFER_CONFIG *lr_residual = mwd->lr_resiudal;
@@ -2792,8 +2820,8 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    DecodeBlock *intra_block = mwd->intra_block_list->head;
-    DecodeBlock *prev_block = NULL;
+    mobinas_interp_block_t *intra_block = mwd->intra_block_list->head;
+    mobinas_interp_block_t *prev_block = NULL;
     while (intra_block != NULL) {
         const int widths[MAX_MB_PLANE] = {intra_block->n4_w[0] * 4, intra_block->n4_w[1] * 4,
                                           intra_block->n4_w[2] * 4};
@@ -2815,7 +2843,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
             vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                       hr_frame_buffers[plane], hr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
-                                      heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+                                      heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
         }
         prev_block = intra_block;
         intra_block = intra_block->next;
@@ -2830,7 +2858,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     mwd->latency.interp_intra_block += diff;
 #endif
 
-    DecodeBlock *inter_block = mwd->inter_block_list->head;
+    mobinas_interp_block_t *inter_block = mwd->inter_block_list->head;
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
@@ -2855,7 +2883,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
             vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                       hr_frame_buffers[plane], hr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
-                                      heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+                                      heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
         }
 
         //profile cache reset
@@ -2867,7 +2895,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                 vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                           hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
-                                          heights[plane], cm->scale, get_bilinear_config(&cm->bl_profile, cm->scale, widths[plane]));
+                                          heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
             }
 
             vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
@@ -2882,9 +2910,9 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                                           hr_frame_strides[plane], x_offsets[plane], y_offsets[plane], widths[plane], heights[plane], cm->scale
                     );
                 }
-                vpx_write_cache_reset_bit(mwd->cache_reset_profile, 1);
+                write_mobinas_cache_reset_bit(mwd->cache_reset_profile, 1);
             } else {
-                vpx_write_cache_reset_bit(mwd->cache_reset_profile, 0);
+                write_mobinas_cache_reset_bit(mwd->cache_reset_profile, 0);
             }
         }
 
@@ -2902,7 +2930,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
 #endif
 
     if (cm->frame_type != KEY_FRAME && cm->mobinas_cfg->profile_cache_reset) {
-        if (vpx_write_cache_reset_profile(mwd->cache_reset_profile)) {
+        if (write_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
             LOGE("%s: turn-off adaptive cache", __func__);
             cm->mobinas_cfg->profile_cache_reset = 0;
         }
@@ -3587,15 +3615,17 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     //clear memory
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
     for (int i = 0; i < num_threads; i++) {
-        memset(pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc_sz);
-        memset(&pbi->mobinas_worker_data[i].latency, 0, sizeof(latency_info_t));
+        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+            memset(pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc_sz);
+        }
+
+        memset(&pbi->mobinas_worker_data[i].latency, 0, sizeof(mobinas_latency_info_t));
         pbi->mobinas_worker_data[i].count = 0;
         pbi->mobinas_worker_data[i].intra_count = 0;
         pbi->mobinas_worker_data[i].inter_count = 0;
         pbi->mobinas_worker_data[i].inter_noskip_count = 0;
         pbi->mobinas_worker_data[i].adaptive_cache_count = 0;
     }
-
     /*******************Hyunho************************/
 
 
@@ -3646,7 +3676,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                                          &pbi->lf_row_sync);
             }
 
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) apply_bilinear_mt(pbi);
+            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR) apply_bilinear_mt(pbi);
         } else {
             vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
                                "Decode failed. Frame data is corrupted.");

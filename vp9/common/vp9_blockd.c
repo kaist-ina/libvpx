@@ -10,35 +10,6 @@
 
 #include "vp9/common/vp9_blockd.h"
 
-//TODO (hyunho): multi-thread version requires a mutex + implementation in decode_tiles_mt()
-/*******************Hyunho************************/
-void createBlock(struct DecodeBlockList *L, int mi_col, int mi_row, int n4_w, int n4_h, INTERP_FILTER interp_filter) {
-  DecodeBlock *newBlock = (DecodeBlock *) vpx_calloc (1, sizeof(DecodeBlock));
-  newBlock->mi_col = mi_col;
-  newBlock->mi_row = mi_row;
-  newBlock->n4_w[0] = n4_w;
-  newBlock->n4_h[0] = n4_h;
-  newBlock->interp_filter = interp_filter;
-  newBlock->next = NULL;
-
-  if(L->head == NULL && L->tail == NULL) {
-    L->head = L->tail = newBlock;
-  }
-  else {
-    L->tail->next = newBlock;
-    L->tail = newBlock;
-  }
-
-  L->cur = newBlock;
-}
-
-void setBlock(struct DecodeBlockList *L, int plane, int n4_w, int n4_h) {
-  DecodeBlock *currentBlock = L->cur;
-  currentBlock->n4_w[plane] = n4_w;
-  currentBlock->n4_h[plane] = n4_h;
-}
-/*******************Hyunho************************/
-
 PREDICTION_MODE vp9_left_block_mode(const MODE_INFO *cur_mi,
                                     const MODE_INFO *left_mi, int b) {
   if (b == 0 || b == 2) {

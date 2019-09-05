@@ -67,60 +67,6 @@
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 #define BILLION  1E9
 
-static void bilinear_config_init(bilinear_config_t *config, int scale, int width, int height) {
-    int x, y;
-
-    float *x_lerp = config->x_lerp;
-    int16_t *x_lerp_fixed = config->x_lerp_fixed;
-    float *y_lerp = config->y_lerp;
-    int16_t *y_lerp_fixed = config->y_lerp_fixed;
-    int *top_y_index = config->top_y_index;
-    int *bottom_y_index = config->bottom_y_index;
-    int *left_x_index = config->left_x_index;
-    int *right_x_index = config->right_x_index;
-
-    for (x = 0; x < width * scale; ++x) {
-        const float in_x = (x + 0.5f) / scale - 0.5f;
-        left_x_index[x] = MAX(floor(in_x), 0);
-        right_x_index[x] = MIN(ceil(in_x), width - 1);
-        x_lerp[x] = in_x - floor(in_x);
-        x_lerp_fixed[x] = x_lerp[x] * FRACTION_SCALE;
-    }
-
-    for (y = 0; y < height * scale; ++y) {
-        const float in_y = (y + 0.5f) / scale - 0.5f;
-        top_y_index[y] = MAX(floor(in_y), 0);
-        bottom_y_index[y] = MIN(ceil(in_y), height - 1);
-        y_lerp[y] = in_y - floor(in_y);
-        y_lerp_fixed[y] = y_lerp[y] * FRACTION_SCALE;
-    }
-}
-
-static void init_bilinear_profile(vpx_codec_alg_priv_t *ctx){
-    VP9_COMMON *cm = &ctx->pbi->common;
-    bilinear_profile_t *profile = &cm->bl_profile;
-
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-        //scale x4
-        bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
-        bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
-        bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
-        bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
-
-        //scale x3
-        bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
-        bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
-        bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
-        bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
-
-        //scale x2
-        bilinear_config_init(get_bilinear_config(profile, 4, 4), 4, 4, 4);
-        bilinear_config_init(get_bilinear_config(profile, 4, 8), 4, 8, 8);
-        bilinear_config_init(get_bilinear_config(profile, 4, 16), 4, 16, 16);
-        bilinear_config_init(get_bilinear_config(profile, 4, 32), 4, 32, 32);
-    }
-}
-
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
     // This function only allocates space for the vpx_codec_alg_priv_t
@@ -141,10 +87,6 @@ static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
             priv->cfg = *ctx->config.dec;
             ctx->config.dec = &priv->cfg;
         }
-        /*******************Hyunho************************/
-//        memset(&priv->mobinas_cfg, 0, sizeof(priv->mobinas_cfg));
-//        priv->mobinas_cfg.mode = DECODE; //hyunho: default mode is DECODE.
-        /*******************Hyunho************************/
     }
 
     return VPX_CODEC_OK;
@@ -316,7 +258,7 @@ static void init_buffer_callbacks(vpx_codec_alg_priv_t *ctx) {
         pool->cb_priv = &pool->int_frame_buffers;
     }
 
-    pool->mode = cm->mobinas_cfg->mode;
+    pool->mode = ctx->mobinas_cfg->mode;
 }
 
 static void set_default_ppflags(vp8_postproc_cfg_t *cfg) {
@@ -332,63 +274,10 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
-static void init_mobinas_worker(vpx_codec_alg_priv_t *ctx) {
-    char file_path[PATH_MAX];
-    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
-    VP9_COMMON *cm = &ctx->pbi->common;
-    cm->mobinas_cfg = ctx->mobinas_cfg;
+static void init_mobinas(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
+    assert (!(mobinas_cfg->profile_cache_reset && mobinas_cfg->apply_cache_reset));
 
-    //init mobinas_worker_data
-    if (ctx->pbi->mobinas_worker_data == NULL) {
-        const size_t mwd_size = num_threads * sizeof(MobiNASWorkerData);
-        CHECK_MEM_ERROR(cm, ctx->pbi->mobinas_worker_data, vpx_memalign(32, mwd_size));
-
-        for (int i = 0; i < num_threads; ++i) {
-            mobinas_worker_data_init(&ctx->pbi->mobinas_worker_data[i], i);
-
-            if (cm->mobinas_cfg->save_decode_result == 1) {
-                memset(file_path, 0, PATH_MAX);
-                sprintf(file_path, "%s/latency_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
-                ctx->pbi->mobinas_worker_data[i].latency_log = fopen(file_path, "w");
-                memset(file_path, 0, PATH_MAX);
-                sprintf(file_path, "%s/metadata_%s_thread%d.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix, i);
-                ctx->pbi->mobinas_worker_data[i].metadata_log = fopen(file_path, "w");
-            }
-        }
-    }
-}
-
-static void init_cache_reset_profile(vpx_codec_alg_priv_t *ctx) {
-    char file_path[PATH_MAX];
-    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
-    VP9_COMMON *cm = &ctx->pbi->common;
-
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-        for (int i = 0; i < num_threads; ++i) {
-            MobiNASWorkerData *mwd = &ctx->pbi->mobinas_worker_data[i];
-
-            memset(file_path, 0, sizeof(file_path));
-            sprintf(file_path, "%s/cache_reset_%s_thread%d", cm->mobinas_cfg->profile_dir, cm->mobinas_cfg->prefix, mwd->index);
-
-            if (cm->mobinas_cfg->profile_cache_reset) {
-                mwd->cache_reset_profile = vpx_init_cache_reset_profile(file_path, 0);
-
-                if (mwd->cache_reset_profile == NULL) {
-                    LOGE("%s: turn-off cache reset", __func__);
-                    cm->mobinas_cfg->profile_cache_reset = 0;
-                }
-            }
-
-            if (cm->mobinas_cfg->apply_cache_reset) {
-                mwd->cache_reset_profile = vpx_init_cache_reset_profile(file_path, 1);
-
-                if (mwd->cache_reset_profile == NULL) {
-                    LOGE("%s: turn-off cache reset", __func__);
-                    cm->mobinas_cfg->apply_cache_reset = 0;
-                }
-            }
-        }
-    }
+    ctx->mobinas_cfg = mobinas_cfg;
 }
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
@@ -412,16 +301,35 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     if (!ctx->postproc_cfg_set && (ctx->base.init_flags & VPX_CODEC_USE_POSTPROC))
         set_default_ppflags(&ctx->postproc_cfg);
 
-    /*******************Hyunho************************/
-    VP9_COMMON *cm = &ctx->pbi->common;
-    cm->mobinas_cfg = ctx->mobinas_cfg;
-
-    init_mobinas_worker(ctx);
-    init_bilinear_profile(ctx);
-    init_cache_reset_profile(ctx);
-    /*******************Hyunho************************/
-
     init_buffer_callbacks(ctx);
+
+    /*******************Hyunho************************/
+    const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
+    ctx->pbi->mobinas_worker_data = (mobinas_worker_data_t *) vpx_malloc(sizeof(struct mobinas_worker_data) * num_threads);
+    init_mobinas_worker(ctx->pbi->mobinas_worker_data, num_threads, ctx->mobinas_cfg);
+    ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
+
+
+    if (ctx->mobinas_cfg->mode == DECODE_SR_CACHE) {
+        ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
+        init_mobinas_bilinear_profile(ctx->pbi->common.bl_profile);
+    }
+    else if (ctx->mobinas_cfg->mode == DECODE_BILINEAR) {
+        ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+        ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
+        init_mobinas_bilinear_profile(ctx->pbi->common.bl_profile);
+    }
+
+    if (ctx->mobinas_cfg->save_quality_result) {
+        char file_path[PATH_MAX];
+        memset(file_path, 0, PATH_MAX);
+        sprintf(file_path, "%s/quality_%s.log", ctx->mobinas_cfg->log_dir, ctx->mobinas_cfg->prefix);
+
+        ctx->pbi->common.quality_log = fopen(file_path, "w");
+        ctx->pbi->common.hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //adaptive cache o
+        ctx->pbi->common.lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //vp9_dx_iface x
+    }
+    /*******************Hyunho************************/
 
     return VPX_CODEC_OK;
 }
@@ -580,32 +488,13 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
     }
 }
 
-//static void save_sr_cache_decode_result(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
-//{
-//    char log[LOG_MAX];
-//
-//    //latency log
-//    memset(log, 0, LOG_MAX);
-//    sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
-//            current_super_frame, cm->latency.decode_frame,
-//            cm->latency.interp_intra_block, cm->latency.interp_inter_residual,
-//            cm->latency.decode_intra_block, cm->latency.decode_inter_block,
-//            cm->latency.decode_inter_residual);
-//    fputs(log, cm->latency_log);
-//
-//    //metadata log
-//    memset(log, 0, LOG_MAX);
-//    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, cm->count, cm->intra_count, cm->inter_count, cm->inter_noskip_count, cm->adaptive_cache_count); //TODO: 추가...
-//    fputs(log, cm->metadata_log);
-//}
-
-static void save_sr_cache_decode_result(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
+static void save_decode_result(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
 {
     char log[LOG_MAX];
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (int i = 0; i < num_threads; ++i) {
-        MobiNASWorkerData *mwd = &pbi->mobinas_worker_data[i];
+        mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
 
         //latency log
         memset(log, 0, sizeof(log));
@@ -624,7 +513,6 @@ static void save_sr_cache_decode_result(VP9Decoder *pbi, int current_video_frame
     }
 }
 
-//TODO: check it's only for super-resolution
 static void save_sr_cache_quality_result(VP9_COMMON *cm){
     char file_path[PATH_MAX];
     char log[LOG_MAX];
@@ -642,9 +530,39 @@ static void save_sr_cache_quality_result(VP9_COMMON *cm){
     }
 
     double weight;
-    double ssim = vpx_calc_ssim(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &weight); //check: sr frame
+//    double ssim = vpx_calc_ssim(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &weight); //check: sr frame
     vpx_calc_psnr(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &psnr); //check: sr frame
-    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
+    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB", cm->current_video_frame - 1, psnr.psnr[0]);
+//    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
+
+    //qualtiy log
+    memset(log, 0, LOG_MAX);
+    sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", cm->current_video_frame - 1, psnr.psnr[0], psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
+
+    fputs(log, cm->quality_log);
+}
+
+static void save_sr_quality_result(VP9_COMMON *cm){
+    char file_path[PATH_MAX];
+    char log[LOG_MAX];
+    PSNR_STATS psnr;
+    memset(file_path, 0, sizeof(char) * PATH_MAX);
+    int width_ = get_frame_new_buffer(cm)->y_width; //check: sr frame
+    int height_ = get_frame_new_buffer(cm)->y_height; //check: sr frame
+//    LOGD("width_:%d, height_: %d", width_, height_);
+    sprintf(file_path, "%s/%d_%s.serialize", cm->mobinas_cfg->serialize_dir, cm->current_video_frame - 1, cm->mobinas_cfg->compare_file);
+    if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width_, height_,
+                            cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+    {
+        vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                           "deserialize failed");
+    }
+
+    double weight;
+//    double ssim = vpx_calc_ssim(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &weight); //check: sr frame
+    vpx_calc_psnr(get_frame_new_buffer(cm), cm->hr_reference_frame, &psnr); //check: sr frame
+    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB", cm->current_video_frame - 1, psnr.psnr[0]);
+//    LOGD("High-resolution SR-cache quality, %d, PSNR %.2fdB, SSIM %.2f", cm->current_video_frame - 1, psnr.psnr[0], ssim);
 
     //qualtiy log
     memset(log, 0, LOG_MAX);
@@ -674,55 +592,12 @@ static void show_lr_cache_quality(VP9_COMMON *cm, int current_video_frame,
     LOGD("Low-resolution quality, %d, %d, %.2fdB", current_video_frame, current_super_frame, psnr.psnr[0]);
 }
 
-static void apply_bilinear(VP9_COMMON *cm) {
-    YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm); //check: original frame
-    uint8_t *const lr_frame_buffers[MAX_MB_PLANE] = {lr_frame->y_buffer, lr_frame->u_buffer,
-                                                     lr_frame->v_buffer};
-    const int lr_frame_strides[MAX_MB_PLANE] = {lr_frame->y_stride, lr_frame->uv_stride,
-                                                lr_frame->uv_stride};
-    const int max_heights[MAX_MB_PLANE] = {lr_frame->y_crop_height, lr_frame->uv_crop_height,
-                                           lr_frame->uv_crop_height};
-    const int max_widths[MAX_MB_PLANE] = {lr_frame->y_crop_width, lr_frame->uv_crop_width,
-                                          lr_frame->uv_crop_width};
-
-    YV12_BUFFER_CONFIG *hr_debug_frame = cm->hr_bilinear_frame;
-    uint8_t *const hr_debug_frame_buffers[MAX_MB_PLANE] = {hr_debug_frame->y_buffer, hr_debug_frame->u_buffer,
-                                                           hr_debug_frame->v_buffer};
-    const int hr_debug_frame_strides[MAX_MB_PLANE] = {hr_debug_frame->y_stride, hr_debug_frame->uv_stride,
-                                                      hr_debug_frame->uv_stride};
-
-    //1. make own bilinear config
-    bilinear_config_t config;
-
-    //2. aaply bilinear interpolation
-    LOGF("%s: Need to test", __func__);
-    for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-        bilinear_config_init(&config, cm->scale, max_widths[plane], max_heights[plane]);
-        vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
-                                       hr_debug_frame_buffers[plane], hr_debug_frame_strides[plane],
-                                       0, 0, max_widths[plane], max_heights[plane], cm->scale,
-                                       get_bilinear_config(&cm->bl_profile, cm->scale, max_widths[plane]));
-    }
-}
-
 static void save_bilinear_quality_result(VP9_COMMON *cm) {
     char file_path[PATH_MAX];
     char log[LOG_MAX];
-    FILE *quality_log;
+
     int target_width = get_frame_new_buffer(cm)->y_crop_width * cm->scale; //check: original frame
     int target_height = get_frame_new_buffer(cm)->y_crop_height * cm->scale; //check: original frame
-
-    if (cm->current_video_frame == 1) {
-        memset(file_path, 0, PATH_MAX);
-        sprintf(file_path, "%s/quality_bilinear_%dp_%s.log", cm->mobinas_cfg->log_dir,
-                target_height, cm->mobinas_cfg->prefix);
-        quality_log = fopen(file_path, "w");
-    } else {
-        memset(file_path, 0, PATH_MAX);
-        sprintf(file_path, "%s/quality_bilinear_%dp_%s.log", cm->mobinas_cfg->log_dir,
-                target_height, cm->mobinas_cfg->prefix);
-        quality_log = fopen(file_path, "a");
-    }
 
     PSNR_STATS psnr;
     memset(file_path, 0, sizeof(char) * PATH_MAX);
@@ -743,45 +618,8 @@ static void save_bilinear_quality_result(VP9_COMMON *cm) {
     LOGD("Bilinear quality, %d, PSNR %.2fdB", cm->current_video_frame - 1, psnr.psnr[0]);
 
     //TODO: move to decoder_destroy()
-    fputs(log, quality_log);
-    if (quality_log != NULL) fclose(quality_log);
+    fputs(log, cm->quality_log);
 }
-
-static void mobinas_init(vpx_codec_alg_priv_t *ctx, vpx_mobinas_cfg_t *mobinas_cfg) {
-    assert (!(mobinas_cfg->profile_cache_reset && mobinas_cfg->apply_cache_reset));
-
-    ctx->mobinas_cfg = mobinas_cfg;
-}
-
-//    //copy directory
-//    strcpy(ctx->mobinas_cfg.video_dir, mobinas_cfg->video_dir);
-//    strcpy(ctx->mobinas_cfg.log_dir, mobinas_cfg->log_dir);
-//    strcpy(ctx->mobinas_cfg.frame_dir, mobinas_cfg->frame_dir);
-//    strcpy(ctx->mobinas_cfg.serialize_dir, mobinas_cfg->serialize_dir);
-//    strcpy(ctx->mobinas_cfg.profile_dir, mobinas_cfg->profile_dir);
-//
-//    //copy name
-//    strcpy(ctx->mobinas_cfg.prefix, mobinas_cfg->prefix);
-//    strcpy(ctx->mobinas_cfg.target_file, mobinas_cfg->target_file);
-//    strcpy(ctx->mobinas_cfg.cache_file, mobinas_cfg->cache_file);
-//    strcpy(ctx->mobinas_cfg.compare_file, mobinas_cfg->compare_file);
-//
-//    //copy log setting
-//    ctx->mobinas_cfg.save_serialized_frame = mobinas_cfg->save_serialized_frame;
-//    ctx->mobinas_cfg.save_decoded_frame = mobinas_cfg->save_decoded_frame;
-//    ctx->mobinas_cfg.save_intermediate = mobinas_cfg->save_intermediate;
-//    ctx->mobinas_cfg.save_final = mobinas_cfg->save_final;
-//    ctx->mobinas_cfg.save_quality_result = mobinas_cfg->save_quality_result;
-//    ctx->mobinas_cfg.save_decode_result = mobinas_cfg->save_decode_result;
-//
-//    //copy adaptive cache setting
-//    ctx->mobinas_cfg.profile_cache_reset = mobinas_cfg->profile_cache_reset;
-//    ctx->mobinas_cfg.apply_cache_reset = mobinas_cfg->apply_cache_reset;
-//
-//    //copy decoder setting
-//    ctx->mobinas_cfg.mode = mobinas_cfg->mode;
-//    ctx->mobinas_cfg.target_resolution = mobinas_cfg->target_resolution;
-
 
 //여기서 set을 하고, 이후에 decode loop에서 가져오는 형식으로 하자. decode loop에서 NULL이 아니면 적용하는 방식. 나중에 destroy할때 free시켜줘야한다.
 // 1. API design + buffer handle (release) + decode에서는 NULL인지 check하고 넘어가는 방식으로 // cm에서 pointer만 가져오는 형식으로
@@ -815,13 +653,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         if (res != VPX_CODEC_OK) return res;
 
         cm = &ctx->pbi->common;
-
-        if(cm->mobinas_cfg->save_quality_result) {
-            char file_path[PATH_MAX];
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/quality_%s.log", cm->mobinas_cfg->log_dir, cm->mobinas_cfg->prefix);
-            cm->quality_log = fopen(file_path, "w");
-        }
     }
     else {
         cm = &ctx->pbi->common;
@@ -840,7 +671,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     double diff;
 #endif
 
-    //TODO: a) allocate vpx_cache_reset_profile_t, b) open a file (per-frame)
+    //TODO: a) allocate mobinas_cache_reset_profile_t, b) open a file (per-frame)
 
     if (frame_count > 0) {
         int i;
@@ -882,12 +713,10 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                                     cm->current_super_frame);
             }
 
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-                if (cm->mobinas_cfg->save_decode_result) save_sr_cache_decode_result(ctx->pbi, current_video_frame, cm->current_super_frame);
+            if (cm->mobinas_cfg->save_decode_result) save_decode_result(ctx->pbi, current_video_frame, cm->current_super_frame);
 #if DEBUG_LR_QUALITY
-                if (cm->mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, current_video_frame, cm->current_super_frame);
+            if (cm->mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, current_video_frame, cm->current_super_frame);
 #endif
-            }
 
             cm->current_super_frame++;
             /*******************Hyunho************************/
@@ -915,7 +744,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
                 ++data_start;
             }
-
             /*******************Hyunho************************/
             if (cm->mobinas_cfg->save_intermediate) {
                 if (cm->mobinas_cfg->save_serialized_frame) save_serialized_intermediate_frame(cm,
@@ -928,13 +756,11 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                                                                          cm->current_super_frame);
             }
 
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-                if (cm->mobinas_cfg->save_decode_result) save_sr_cache_decode_result(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
+            if (cm->mobinas_cfg->save_decode_result) save_decode_result(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
 
 #if DEBUG_LR_QUALITY
-                if (cm->mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
+            if (cm->mobinas_cfg->save_quality_result) show_lr_cache_quality(cm, cm->current_video_frame - 1, cm->current_super_frame);
 #endif
-            }
             /*******************Hyunho************************/
         }
     }
@@ -950,11 +776,10 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         if (cm->mobinas_cfg->save_quality_result) save_sr_cache_quality_result(cm);
     }
     else if (cm->mobinas_cfg->mode == DECODE_BILINEAR){ //calculate bilinear interpolation quality
-        //apply bilinear interpolation
-        apply_bilinear(cm);
-
-        //measure quality and save a log
-        save_bilinear_quality_result(cm);
+        if (cm->mobinas_cfg->save_quality_result) save_bilinear_quality_result(cm);
+    }
+    else if (cm->mobinas_cfg->mode == DECODE_SR) {
+        if (cm->mobinas_cfg->save_quality_result) save_sr_quality_result(cm);
     }
     LOGD("decoding latency %d: %.2f msec", cm->current_video_frame - 1, cm->latency.decode_frame);
     /*******************Hyunho************************/
@@ -1278,6 +1103,6 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
                 NULL   // vpx_codec_enc_mr_get_mem_loc_fn_t
         },
         {
-            mobinas_init
+            init_mobinas
         }
 };

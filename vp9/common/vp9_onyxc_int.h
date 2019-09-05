@@ -24,7 +24,7 @@
 #include "vp9/common/vp9_quant_common.h"
 #include "vp9/common/vp9_tile_common.h"
 #include <decode_test.h>
-#include <vpx/vpx_cache.h>
+#include <vpx/vpx_mobinas.h>
 
 #if CONFIG_VP9_POSTPROC
 #include "vp9/common/vp9_postproc.h"
@@ -92,18 +92,6 @@ typedef struct BufferPool {
     InternalFrameBufferList int_frame_buffers;
 } BufferPool;
 
-/*******************Hyunho************************/
-typedef struct LatencyInfo{
-    double decode_frame;
-    double interp_intra_block;
-    double interp_inter_residual;
-    double decode_intra_block;
-    double decode_inter_block;
-    double decode_inter_residual;
-} latency_info_t;
-/*******************Hyunho************************/
-
-
 typedef struct VP9Common {
     struct vpx_internal_error_info error;
     vpx_color_space_t color_space;
@@ -131,10 +119,10 @@ typedef struct VP9Common {
     //General
     struct scale_factors sf_upsample_inter;
     int scale;
-    vpx_mobinas_cfg_t *mobinas_cfg;
     FILE *quality_log;
-    latency_info_t latency; //logging decoding end-to-end latency
-    bilinear_profile_t bl_profile;
+    mobinas_cfg_t *mobinas_cfg;
+    mobinas_latency_info_t latency; //logging decoding end-to-end latency
+    mobinas_bilinear_profile_t *bl_profile;
 
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;

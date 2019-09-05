@@ -31,27 +31,6 @@ extern "C" {
 
 #define MAX_MB_PLANE 3
 
-/*******************Hyunho************************/
-typedef struct DecodeBlockList{
-    struct DecodeBlock *cur;
-    struct DecodeBlock *head;
-    struct DecodeBlock *tail;
-} DecodeBlockList;
-
-typedef struct DecodeBlock{
-    int mi_row;
-    int mi_col;
-    int n4_w[3];
-    int n4_h[3];
-    INTERP_FILTER interp_filter;
-    struct DecodeBlock *next;
-} DecodeBlock;
-
-void createBlock(struct DecodeBlockList *L, int mi_col, int mi_row, int n4_w, int n4_h, INTERP_FILTER interp_filter);
-
-void setBlock(struct DecodeBlockList *L, int plane, int n4_w, int n4_h);
-/*******************Hyunho************************/
-
 typedef enum {
   KEY_FRAME = 0,
   INTER_FRAME = 1,

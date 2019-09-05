@@ -33,6 +33,7 @@ extern "C" {
 #include <math.h>
 #include "./vpx_codec.h"
 #include "./vpx_frame_buffer.h"
+#include "vpx_mobinas.h"
 
 /*!\brief Current ABI version number
  *
@@ -362,48 +363,8 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
 /*!@} - end defgroup decoder*/
 
-typedef enum{
-    DECODE,
-    DECODE_SR,
-    LOAD_SR,
-    DECODE_SR_CACHE,
-    DECODE_BILINEAR,
-    PROFILE_ADAPTIVE_CACHE,
-} DECODE_MODE;
-
-typedef struct vpx_mobinas_cfg{
-    /*** belows are used for development ***/
-    //directory
-    char video_dir[PATH_MAX];
-    char log_dir[PATH_MAX];
-    char frame_dir[PATH_MAX];
-    char serialize_dir[PATH_MAX];
-    char profile_dir[PATH_MAX];
-
-    //name
-    char prefix[PATH_MAX];
-    char target_file[PATH_MAX];
-    char cache_file[PATH_MAX];
-    char compare_file[PATH_MAX];
-
-    //log
-    int save_serialized_frame;
-    int save_decoded_frame;
-    int save_intermediate;
-    int save_final;
-    int save_quality_result;
-    int save_decode_result;
-
-    //adaptive cache
-    int profile_cache_reset;
-    int apply_cache_reset;
-
-    //decoder
-    DECODE_MODE mode;
-    int target_resolution; //TODO: to set this dyanmically, make a new API.
-} vpx_mobinas_cfg_t;
-
-void vpx_mobinas_cfg_init(vpx_codec_ctx_t *ctx, vpx_mobinas_cfg_t *mobinas_cfg);
+//config
+void init_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
 
 #ifdef __cplusplus
 }
