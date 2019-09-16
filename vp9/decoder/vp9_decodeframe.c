@@ -77,7 +77,7 @@
 #define DEBUG_ADAPTIVE_CACHE 0
 #define DEBUG_RESIDUAL 0
 #define BILLION  1E9
-#define CACHE_RESET_TRESHOLD 1
+#define CACHE_RESET_TRESHOLD 0
 
 static int is_compound_reference_allowed(const VP9_COMMON *cm) {
     int i;
