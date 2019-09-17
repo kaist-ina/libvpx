@@ -287,6 +287,10 @@ static void init_mobinas(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t * mobina
         if (ctx->mobinas_cfg->dnn_mode == ONLINE_DNN) {
             //TODO (chanju): check runtime availability, design when it fails
         }
+
+        if (ctx->mobinas_cfg->cache_policy == PROFILE_CACHE) {
+            //TODO (hyunho): read a cache profile
+        }
     }
 }
 
@@ -335,12 +339,6 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
             ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
             ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
-            break;
-
-        case DECODE_SR:
-            break;
-
-        case DECODE:
             break;
     }
 

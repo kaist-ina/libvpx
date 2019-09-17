@@ -127,6 +127,8 @@ typedef struct VP9Common {
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;
     YV12_BUFFER_CONFIG *hr_bilinear_frame;
+
+    int apply_dnn;
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;

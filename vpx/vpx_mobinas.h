@@ -32,6 +32,12 @@ typedef enum{
 } mobinas_cache_mode;
 
 typedef enum{
+    PROFILE_CACHE,
+    KEY_FRAME_CACHE,
+    NO_CACHE_POLICY,
+} mobinas_cache_policy;
+
+typedef enum{
     ONLINE_DNN,
     OFFLINE_DNN,
     NO_DNN,
@@ -65,6 +71,7 @@ typedef struct mobinas_cfg{
     mobinas_decode_mode decode_mode;
     mobinas_cache_mode cache_mode;
     mobinas_dnn_mode dnn_mode;
+    mobinas_cache_policy cache_policy;
 
     int target_resolution; //TODO: to set this dyanmically, make a new API.
 } mobinas_cfg_t;
