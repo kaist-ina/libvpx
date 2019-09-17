@@ -126,7 +126,7 @@ static INLINE void decrease_ref_count(int idx, RefCntBuffer *const frame_bufs,
     if (!frame_bufs[idx].released && frame_bufs[idx].ref_count == 0 &&
         frame_bufs[idx].raw_frame_buffer.priv) {
       pool->release_fb_cb(pool->cb_priv, &frame_bufs[idx].raw_frame_buffer);
-      if (pool->mode == DECODE_SR_CACHE) {
+      if (pool->mode == DECODE_CACHE) {
         pool->release_fb_cb(pool->cb_priv, &frame_bufs[idx].raw_sr_frame_buffer);
       }
       frame_bufs[idx].released = 1;

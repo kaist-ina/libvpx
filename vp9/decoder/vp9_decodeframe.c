@@ -502,7 +502,7 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
     // TODO (hyunho): implement neon-based lr_resiudal decode & copy
     // TODO (hyunho): a) residual을 다른 dummy frame에 더하고 (debug frame set도 해야한다.), b) copy add를 만들어서 넣자. (TX size에 따라서 switch 만들어 줘야한다.)
     if (eob > 0) {
-        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
 #if !DEBUG_RESIDUAL
             inverse_transform_block_inter_copy(
                     xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
@@ -1251,7 +1251,7 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
         RefCntBuffer *const ref_frame_buf = &pool->frame_bufs[idx];
 
         if (!vp9_is_valid_scale(sf) && pbi->common.mobinas_cfg->mode !=
-                                       DECODE_SR_CACHE) //TODO (hyunho): how to check valid scale in DECODE_SR_CACHE mode?
+                                       DECODE_CACHE) //TODO (hyunho): how to check valid scale in DECODE_CACHE mode?
             vpx_internal_error(xd->error_info, VPX_CODEC_UNSUP_BITSTREAM,
                                "Reference frame has invalid dimensions");
 
@@ -1371,7 +1371,7 @@ static MODE_INFO *set_offsets(VP9_COMMON *const cm, MACROBLOCKD *const xd,
 
     /*******************Hyunho************************/
     vp9_setup_dst_planes(xd->plane, get_frame_new_buffer(cm), mi_row, mi_col);
-//    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+//    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
 //        vp9_setup_dst_planes(xd->plane, get_frame_new_buffer_lr(cm), mi_row, mi_col);
 //
 //    } else {
@@ -1450,7 +1450,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             /*******************Hyunho************************/
             //TODO (hyunho): max block size를 넘어설수 있다.
             //TODO (hyunho): skip for super-resolutioned frame
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type != KEY_FRAME) { //debug
+            if (cm->mobinas_cfg->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) { //debug
                 if (plane == 0) {
                     create_mobinas_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
                                                 max_blocks_high);
@@ -1480,7 +1480,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
             //Setup cache reset
             if (cm->mobinas_cfg->apply_cache_reset) mwd->reset_cache = read_mobinas_cache_reset_bit(mwd->cache_reset_profile);
 //            mwd->reset_cache = 1; //TODO: remove this (debuggin)
@@ -1551,7 +1551,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 //                LOGE("num_4x4_w: %d, num_4x4_h: %d, max_blocks_high: %d, max_blocks_wide: %d", num_4x4_w * 4, num_4x4_h * 4, max_blocks_high * 4, max_blocks_wide * 4);
 //            }
 
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+            if (cm->mobinas_cfg->mode == DECODE_CACHE) {
                 if (cm->mobinas_cfg->apply_cache_reset) { //apply cache reset
                     if (mwd->reset_cache) {
                         if (plane == 0) {
@@ -1989,7 +1989,7 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
 
     /*******************Hyunho************************/
     cm->scale = floor(cm->mobinas_cfg->target_resolution / (float) cm->height);
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -2070,7 +2070,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                 /*******************Hyunho************************/
                 width = buf->y_crop_width;
                 height = buf->y_crop_height;
-//                if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+//                if (cm->mobinas_cfg->mode == DECODE_CACHE) {
 //                    width = buf->y_crop_width / cm->scale;
 //                    height = buf->y_crop_height / cm->scale;
 //                } else {
@@ -2103,8 +2103,8 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                 (ref_frame->idx != INVALID_IDX &&
                  valid_ref_frame_size(ref_frame->buf->y_crop_width,
                                       ref_frame->buf->y_crop_height, width, height));
-//        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
-//            has_valid_ref_frame = 1; //TODO (hyunho): Hyunho: how to check valid frame size in DECODE_SR_CACHE mode?
+//        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
+//            has_valid_ref_frame = 1; //TODO (hyunho): Hyunho: how to check valid frame size in DECODE_CACHE mode?
 //        } else {
 //            has_valid_ref_frame |=
 //                    (ref_frame->idx != INVALID_IDX &&
@@ -2131,7 +2131,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -2287,7 +2287,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
     /*******************Hyunho************************/
     //TODO: replace key_frame
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type != KEY_FRAME) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE && cm->frame_type != KEY_FRAME) {
         if (cm->mobinas_cfg->apply_cache_reset) {
             if (read_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
                 LOGE("%s: turn-off adaptive cache", __func__);
@@ -2310,7 +2310,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
             // Be sure to sync as we might be resuming after a failed frame decode.
@@ -2385,7 +2385,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             }
 
             /*******************Hyunho************************/
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+            if (cm->mobinas_cfg->mode == DECODE_CACHE) {
                 // Loopfilter one row.
                 if (cm->lf.filter_level && !cm->skip_loop_filter) {
                     const int lf_start = mi_row - MI_BLOCK_SIZE;
@@ -2434,7 +2434,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
         // Loopfilter remaining rows in the frame.
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
@@ -2461,11 +2461,11 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     /*******************Hyunho************************/
     //TODO (add new decode option if adaptive cache encoding phase is needed)
     //TODO add a debug frame
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR) {
         //setup frames
         YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
         YV12_BUFFER_CONFIG *hr_frame;
-        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+        if (cm->mobinas_cfg->mode == DECODE_CACHE) hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
         if (cm->mobinas_cfg->mode == DECODE_BILINEAR) hr_frame = cm->hr_bilinear_frame; //check: sr frame
         YV12_BUFFER_CONFIG *hr_compare_frame = mwd->hr_compare_frame;
         YV12_BUFFER_CONFIG *hr_reference_frame = mwd->hr_reference_frame;
@@ -2768,11 +2768,11 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     double diff;
 #endif
 
-    assert (cm->mobinas_cfg->mode == DECODE_SR_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR);
+    assert (cm->mobinas_cfg->mode == DECODE_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR);
 
     YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *hr_frame;
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
+    if (cm->mobinas_cfg->mode == DECODE_CACHE) hr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
     if (cm->mobinas_cfg->mode == DECODE_BILINEAR) hr_frame = cm->hr_bilinear_frame; //check: sr frame
     YV12_BUFFER_CONFIG *hr_compare_frame = mwd->hr_compare_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame = mwd->hr_reference_frame;
@@ -3344,7 +3344,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
 #else
                 /*******************Hyunho************************/
                 //LOGD("y_crop_width: %d, cm->width: %d", ref_buf->buf->y_crop_width, cm->width);
-                if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+                if (cm->mobinas_cfg->mode == DECODE_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf_sr, ref_buf->buf_sr->y_crop_width,
                             ref_buf->buf_sr->y_crop_height, cm->width, cm->height, false, false, 1);
@@ -3427,7 +3427,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
 
     /*******************Hyunho************************/
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
 //        vp9_setup_scale_factors_for_sr_frame(
 //                &cm->sf_upsample_intra, cm->scale,
 //                cm->scale, 1, 1, true, false, cm->scale);
@@ -3543,7 +3543,6 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
 }
 
 
-//TODO (hyunho): current version only utilizes single thread by calling decode_tiles()
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
     VP9_COMMON *const cm = &pbi->common;
@@ -3612,10 +3611,9 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    //clear memory
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
     for (int i = 0; i < num_threads; i++) {
-        if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
             memset(pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc_sz);
         }
 
@@ -3628,10 +3626,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
     /*******************Hyunho************************/
 
-
-    //TODO (hyunho): SNPE integration
     /***
-    1. create two different modes: DECODE_CACHE_OFFLINE, DECODE_CACHE_ONLINE
+    1. create two different option: load_sr_online, load_sr_offline
     2. replace apply_sr by bit shifting & matching: 100 (0: x apply sr, 0: x apply sr, 1: apply sr)
     3. decoder reads cfg each byte and manages bit count & byte count and
 
@@ -3658,12 +3654,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         return 0 or -1
     }
     ***/
-    int current_video_frame;
-//    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type == KEY_FRAME) {
-//    LOGD('%s', 'HELLO WORLD');
 
-    //TODO (hyunho): implement multi-thread version, add cache inside decode_tiles_mt() (need to investigate)
-//    LOGD("pbi->max_threads: %d, tile_rows: %d, tile_cols: %d", pbi->max_threads, tile_rows, tile_cols);
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
         // Multi-threaded tile decoder
         *p_data_end = decode_tiles_mt(pbi, data + first_partition_size, data_end);
@@ -3676,7 +3667,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                                          &pbi->lf_row_sync);
             }
 
-            if (cm->mobinas_cfg->mode == DECODE_SR_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR) apply_bilinear_mt(pbi);
+            if (cm->mobinas_cfg->mode == DECODE_CACHE || cm->mobinas_cfg->mode == DECODE_BILINEAR) apply_bilinear_mt(pbi);
         } else {
             vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
                                "Decode failed. Frame data is corrupted.");
@@ -3685,20 +3676,14 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         *p_data_end = decode_tiles(pbi, data + first_partition_size, data_end);
     }
 
-//    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->current_super_frame == cm->mobinas_cfg->apply_sr) { //TODO: replace by a cache profile
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE && cm->frame_type == KEY_FRAME) {
-        //if (cm->current_super_frame > 0) current_video_frame = cm->current_video_frame + 1;
-        //else current_video_frame = cm->current_video_frame;
-        current_video_frame = cm->current_video_frame;
-        LOGD("apply sr at video_frame %d super_frame %d frame_dtype %d", current_video_frame,
+    if (cm->mobinas_cfg->mode == DECODE_CACHE && cm->frame_type == KEY_FRAME) {
+        LOGD("apply sr at video_frame %d super_frame %d frame_dtype %d", cm->current_video_frame,
              cm->current_super_frame, cm->frame_type);
         char frame_path[PATH_MAX];
         memset(frame_path, 0, sizeof(char) * PATH_MAX);
 
         sprintf(frame_path, "%s/%d_%d_%s.serialize", cm->mobinas_cfg->serialize_dir,
-                current_video_frame, cm->current_super_frame, cm->mobinas_cfg->cache_file);
-//        if (cm->current_video_frame == 1 && cm->current_video_frame == 0) sprintf(frame_path, "%s/%d_%d_hr_%s.serialize", cm->mobinas_cfg->serialize_dir, current_video_frame, cm->current_super_frame, cm->mobinas_cfg->prefix);
-//        else sprintf(frame_path, "%s/%d_%d_%s.serialize", cm->mobinas_cfg->serialize_dir, current_video_frame, cm->current_super_frame, cm->mobinas_cfg->cache_file);
+                cm->current_video_frame, cm->current_super_frame, cm->mobinas_cfg->cache_file);
 
         if (vpx_deserialize_copy(get_sr_frame_new_buffer(cm), frame_path, cm->width * cm->scale, //check: sr frame
                                  cm->height * cm->scale, cm->subsampling_x,
@@ -3706,13 +3691,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                "Deseriazlie key frames failed.");
         }
-//        sprintf(frame_path, "%s/%d_%d_%s.serialize", cm->mobinas_cfg->serialize_dir, current_video_frame, cm->current_super_frame, cm->mobinas_cfg->target_file);
-//        if (vpx_deserialize_copy(get_frame_new_buffer_lr(cm), frame_path, cm->width,
-//                                 cm->height, cm->subsampling_x,
-//                                 cm->subsampling_y, cm->byte_alignment)) {
-//            vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
-//                               "Deseriazlie key frames failed.");
-//        }
 //        *p_data_end = data_end; //TODO (hyunho): check whether this approach is valid (?)
     }
 

@@ -271,7 +271,7 @@ void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cf
             mwd[i].metadata_log = fopen(file_path, "w");
         }
 
-        if (mobinas_cfg->mode == DECODE_SR_CACHE) {
+        if (mobinas_cfg->mode == DECODE_CACHE) {
             memset(file_path, 0, sizeof(file_path));
             sprintf(file_path, "%s/cache_reset_%s_thread%d", mobinas_cfg->profile_dir, mobinas_cfg->prefix, mwd[i].index);
 

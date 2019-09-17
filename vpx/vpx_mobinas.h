@@ -21,10 +21,8 @@ typedef struct mobinas_latency_info {
 typedef enum{
     DECODE,
     DECODE_SR,
-    LOAD_SR,
-    DECODE_SR_CACHE,
+    DECODE_CACHE,
     DECODE_BILINEAR,
-    PROFILE_ADAPTIVE_CACHE,
 } mobinas_decode_mode;
 
 typedef struct mobinas_cfg{
