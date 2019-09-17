@@ -271,26 +271,26 @@ void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cf
             mwd[i].metadata_log = fopen(file_path, "w");
         }
 
-        if (mobinas_cfg->mode == DECODE_CACHE) {
+        if (mobinas_cfg->decode_mode == DECODE_CACHE) {
             memset(file_path, 0, sizeof(file_path));
             sprintf(file_path, "%s/cache_reset_%s_thread%d", mobinas_cfg->profile_dir, mobinas_cfg->prefix, mwd[i].index);
 
-            if (mobinas_cfg->profile_cache_reset) {
-                mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 0);
+            switch (mobinas_cfg->cache_mode) {
+                case PROFILE_CACHE_RESET:
+                    mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 0);
+                    if (mwd[i].cache_reset_profile == NULL) {
+                        LOGE("%s: turn-off cache reset", __func__);
+                        mobinas_cfg->cache_mode = NO_CACHE_RESET;
+                    }
+                    break;
+                case APPLY_CACHE_RESET:
+                    mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 1);
 
-                if (mwd[i].cache_reset_profile == NULL) {
-                    LOGE("%s: turn-off cache reset", __func__);
-                    mobinas_cfg->profile_cache_reset = 0;
-                }
-            }
-
-            if (mobinas_cfg->apply_cache_reset) {
-                mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 1);
-
-                if (mwd[i].cache_reset_profile == NULL) {
-                    LOGE("%s: turn-off cache reset", __func__);
-                    mobinas_cfg->apply_cache_reset = 0;
-                }
+                    if (mwd[i].cache_reset_profile == NULL) {
+                        LOGE("%s: turn-off cache reset", __func__);
+                        mobinas_cfg->cache_mode = NO_CACHE_RESET;
+                    }
+                    break;
             }
         }
     }

@@ -258,7 +258,7 @@ static void init_buffer_callbacks(vpx_codec_alg_priv_t *ctx) {
         pool->cb_priv = &pool->int_frame_buffers;
     }
 
-    pool->mode = ctx->mobinas_cfg->mode;
+    pool->mode = ctx->mobinas_cfg->decode_mode;
 }
 
 static void set_default_ppflags(vp8_postproc_cfg_t *cfg) {
@@ -274,10 +274,20 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
-static void init_mobinas(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
-    assert (!(mobinas_cfg->profile_cache_reset && mobinas_cfg->apply_cache_reset));
+static void init_mobinas(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t * mobinas_cfg) {
+    assert(mobinas_cfg != NULL);
 
-    ctx->mobinas_cfg = mobinas_cfg;
+    if (mobinas_cfg == NULL) {
+        ctx->mobinas_cfg = (mobinas_cfg_t *) vpx_calloc(sizeof(mobinas_cfg_t), 1);
+        ctx->mobinas_cfg->decode_mode = DECODE;
+    }
+    else {
+        ctx->mobinas_cfg = mobinas_cfg;
+
+        if (ctx->mobinas_cfg->dnn_mode == ONLINE_DNN) {
+            //TODO (chanju): check runtime availability, design when it fails
+        }
+    }
 }
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
@@ -304,20 +314,34 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     init_buffer_callbacks(ctx);
 
     /*******************Hyunho************************/
+    if (ctx->mobinas_cfg == NULL) {
+        set_error_detail(ctx, "mobinas_cfg is not allocated");
+        return VPX_MOBINAS_ERROR;
+    }
+
     const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
     ctx->pbi->mobinas_worker_data = (mobinas_worker_data_t *) vpx_malloc(sizeof(struct mobinas_worker_data) * num_threads);
     init_mobinas_worker(ctx->pbi->mobinas_worker_data, num_threads, ctx->mobinas_cfg);
     ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
+    ctx->pbi->common.buffer_pool->mode = ctx->mobinas_cfg->decode_mode;
 
+    switch(ctx->mobinas_cfg->decode_mode) {
+        case DECODE_CACHE:
+            ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
+            init_mobinas_bilinear_profile(ctx->pbi->common.bl_profile);
+            break;
 
-    if (ctx->mobinas_cfg->mode == DECODE_CACHE) {
-        ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
-        init_mobinas_bilinear_profile(ctx->pbi->common.bl_profile);
-    }
-    else if (ctx->mobinas_cfg->mode == DECODE_BILINEAR) {
-        ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-        ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
-        init_mobinas_bilinear_profile(ctx->pbi->common.bl_profile);
+        case DECODE_BILINEAR:
+            ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+            ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+            ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
+            break;
+
+        case DECODE_SR:
+            break;
+
+        case DECODE:
+            break;
     }
 
     if (ctx->mobinas_cfg->save_quality_result) {
@@ -382,7 +406,7 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
 static void save_serialized_intermediate_frame(VP9_COMMON *cm, int current_video_frame, int current_super_frame)
 {
     char file_path[PATH_MAX];
-    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
         memset(file_path, 0, sizeof(char) * PATH_MAX);
         sprintf(file_path, "%s/%d_%d_hr_%s.serialize", cm->mobinas_cfg->serialize_dir, current_video_frame, current_super_frame, cm->mobinas_cfg->prefix);
         if (vpx_serialize_save(file_path, get_sr_frame_new_buffer(cm))) { //check: sr frame
@@ -406,7 +430,7 @@ static void save_serialized_intermediate_frame(VP9_COMMON *cm, int current_video
 static void save_serialized_final_frame(VP9_COMMON *cm, int current_video_frame)
 {
     char file_path[PATH_MAX];
-    if (cm->mobinas_cfg->mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
         memset(file_path, 0, sizeof(char) * PATH_MAX);
         sprintf(file_path, "%s/%d_hr_%s.serialize", cm->mobinas_cfg->serialize_dir, current_video_frame, cm->mobinas_cfg->prefix);
         if (vpx_serialize_save(file_path, get_sr_frame_new_buffer(cm))) { //check: sr frame
@@ -433,7 +457,7 @@ static void save_decoded_intermediate_frame(VP9_COMMON *cm, int current_video_fr
     char file_path[PATH_MAX];
     if (cm->mobinas_cfg->save_decoded_frame && cm->mobinas_cfg->save_intermediate)
     {
-        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
+        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_%d_hr_%s.y", cm->mobinas_cfg->frame_dir, current_video_frame, current_super_frame, cm->mobinas_cfg->prefix);
             if (vpx_write_y_frame(file_path, get_sr_frame_new_buffer(cm))) //check: sr frame
@@ -463,7 +487,7 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
     char file_path[PATH_MAX];
     if (cm->mobinas_cfg->save_decoded_frame && cm->mobinas_cfg->save_intermediate)
     {
-        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
+        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_hr_%s.y", cm->mobinas_cfg->frame_dir, current_video_frame, cm->mobinas_cfg->prefix);
             if (vpx_write_y_frame(file_path, get_sr_frame_new_buffer(cm))) //check: sr frame
@@ -640,13 +664,8 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     if (ctx->pbi == NULL) {
         const vpx_codec_err_t res = init_decoder(ctx);
         if (res != VPX_CODEC_OK) return res;
-
-        cm = &ctx->pbi->common;
     }
-    else {
-        cm = &ctx->pbi->common;
-        cm->buffer_pool->mode = cm->mobinas_cfg->mode;
-    }
+    cm = &ctx->pbi->common;
 
     res = vp9_parse_superframe_index(data, data_sz, frame_sizes, &frame_count,
                                      ctx->decrypt_cb, ctx->decrypt_state);
@@ -661,7 +680,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 #endif
 
     //TODO: a) allocate mobinas_cache_reset_profile_t, b) open a file (per-frame)
-
     if (frame_count > 0) {
         int i;
         int current_video_frame;
@@ -756,7 +774,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
     if (cm->mobinas_cfg->save_quality_result)
     {
-        switch(cm->mobinas_cfg->mode) {
+        switch(cm->mobinas_cfg->decode_mode) {
             case DECODE_CACHE:
                 save_sr_cache_quality_result(cm, cm->current_video_frame - 1);
                 break;
@@ -765,11 +783,15 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                 save_bilinear_quality_result(cm, cm->current_video_frame - 1);
                 break;
 
+            case DECODE_SR:
+                break;
+
             case DECODE:
                 save_quality_result(cm, cm->current_video_frame - 1);
                 break;
 
-            default: break;
+            default:
+                break;
         }
     }
 

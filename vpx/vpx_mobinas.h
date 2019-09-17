@@ -25,6 +25,20 @@ typedef enum{
     DECODE_BILINEAR,
 } mobinas_decode_mode;
 
+typedef enum{
+    PROFILE_CACHE_RESET,
+    APPLY_CACHE_RESET,
+    NO_CACHE_RESET,
+} mobinas_cache_mode;
+
+typedef enum{
+    ONLINE_DNN,
+    OFFLINE_DNN,
+    NO_DNN,
+} mobinas_dnn_mode;
+
+//TODO (chanju): define struct for SNPE and add in mobinas_cfg
+
 typedef struct mobinas_cfg{
     //directory
     char video_dir[PATH_MAX];
@@ -47,12 +61,11 @@ typedef struct mobinas_cfg{
     int save_quality_result;
     int save_decode_result;
 
-    //adaptive cache
-    int profile_cache_reset;
-    int apply_cache_reset;
+    //mode
+    mobinas_decode_mode decode_mode;
+    mobinas_cache_mode cache_mode;
+    mobinas_dnn_mode dnn_mode;
 
-    //decoder
-    mobinas_decode_mode mode;
     int target_resolution; //TODO: to set this dyanmically, make a new API.
 } mobinas_cfg_t;
 
