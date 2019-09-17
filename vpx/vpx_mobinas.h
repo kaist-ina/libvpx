@@ -43,7 +43,7 @@ typedef enum{
     NO_DNN,
 } mobinas_dnn_mode;
 
-//TODO (chanju): define struct for SNPE and add in mobinas_cfg
+//TODO (chanju): define struct for SNPE
 
 typedef struct mobinas_cfg{
     //directory

@@ -274,24 +274,28 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
-static void init_mobinas(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t * mobinas_cfg) {
+static vpx_codec_err_t mobinas_init(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t *mobinas_cfg) {
     assert(mobinas_cfg != NULL);
 
     if (mobinas_cfg == NULL) {
-        ctx->mobinas_cfg = (mobinas_cfg_t *) vpx_calloc(sizeof(mobinas_cfg_t), 1);
-        ctx->mobinas_cfg->decode_mode = DECODE;
+//        ctx->mobinas_cfg = (mobinas_cfg_t *) vpx_calloc(sizeof(mobinas_cfg_t), 1);
+//        ctx->mobinas_cfg->decode_mode = DECODE;
+        return VPX_MOBINAS_ERROR;
     }
     else {
         ctx->mobinas_cfg = mobinas_cfg;
 
         if (ctx->mobinas_cfg->dnn_mode == ONLINE_DNN) {
-            //TODO (chanju): check runtime availability, design when it fails
+            //TODO (chanju): check runtime availability
+            //TODO (chanju): handle failure
         }
 
         if (ctx->mobinas_cfg->cache_policy == PROFILE_CACHE) {
             //TODO (hyunho): read a cache profile
         }
     }
+
+    return VPX_CODEC_OK;
 }
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
@@ -328,6 +332,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     init_mobinas_worker(ctx->pbi->mobinas_worker_data, num_threads, ctx->mobinas_cfg);
     ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
     ctx->pbi->common.buffer_pool->mode = ctx->mobinas_cfg->decode_mode;
+    //TODO (chanju): copy SNPE variable as above line
 
     switch(ctx->mobinas_cfg->decode_mode) {
         case DECODE_CACHE:
@@ -1125,6 +1130,6 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
                 NULL   // vpx_codec_enc_mr_get_mem_loc_fn_t
         },
         {
-            init_mobinas
+            mobinas_init
         }
 };

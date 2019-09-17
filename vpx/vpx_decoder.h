@@ -363,8 +363,7 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
 /*!@} - end defgroup decoder*/
 
-//config
-void init_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
+vpx_codec_err_t vpx_mobinas_init(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
 
 #ifdef __cplusplus
 }
