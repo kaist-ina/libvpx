@@ -11,30 +11,9 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
-#include <android/log.h>
 
 #include "./vpx_dsp_rtcd.h"
 #include "vpx_dsp/inv_txfm.h"
-
-#define TAG "inv_txfm.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 void vpx_iwht4x4_16_add_c(const tran_low_t *input, uint8_t *dest, int stride) {
   /* 4-point reversible, orthonormal inverse Walsh-Hadamard in 3.5 adds,
@@ -217,7 +196,6 @@ void vpx_idct4x4_16_copy_add_c(const tran_low_t *input, uint8_t *dest, int strid
             dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
                                                   ROUND_POWER_OF_TWO(temp_out[j], 4));
             residual[j * res_stride + i] = clip_pixel_int16(ROUND_POWER_OF_TWO(temp_out[j], 4));
-//            LOGD("temp_out[j]: %d, lr_resiudal[j * res_stride +i] : %d", ROUND_POWER_OF_TWO(temp_out[j], 4), lr_resiudal[j * res_stride + i]);
         }
     }
 }
@@ -863,7 +841,6 @@ void idct16_c(const tran_low_t *input, tran_low_t *output) {
 
 void vpx_idct16x16_256_add_c(const tran_low_t *input, uint8_t *dest,
                              int stride) {
-//  LOGD("non-neon implementation is called");
   int i, j;
   tran_low_t out[16 * 16];
   tran_low_t *outptr = out;
@@ -883,14 +860,12 @@ void vpx_idct16x16_256_add_c(const tran_low_t *input, uint8_t *dest,
     for (j = 0; j < 16; ++j) {
       dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
                                             ROUND_POWER_OF_TWO(temp_out[j], 6));
-//      LOGD("lr_resiudal: %d", ROUND_POWER_OF_TWO(temp_out[j], 6));
     }
   }
 }
 
 void vpx_idct16x16_256_copy_add_c(const tran_low_t *input, uint8_t *dest,
                              int stride, int16_t *residual, int res_stride) {
-//  LOGD("non-neon implementation is called");
     int i, j;
     tran_low_t out[16 * 16];
     tran_low_t *outptr = out;
@@ -911,14 +886,12 @@ void vpx_idct16x16_256_copy_add_c(const tran_low_t *input, uint8_t *dest,
             dest[j * stride + i] = clip_pixel_add(dest[j * stride + i],
                                                   ROUND_POWER_OF_TWO(temp_out[j], 6));
             residual[j * res_stride + i] = clip_pixel_int16(ROUND_POWER_OF_TWO(temp_out[j], 6));
-//      LOGD("lr_resiudal: %d", ROUND_POWER_OF_TWO(temp_out[j], 6));
         }
     }
 }
 
 void vpx_idct16x16_38_add_c(const tran_low_t *input, uint8_t *dest,
                             int stride) {
-//  LOGD("non-neon implementation is called");
   int i, j;
   tran_low_t out[16 * 16] = { 0 };
   tran_low_t *outptr = out;
@@ -945,7 +918,6 @@ void vpx_idct16x16_38_add_c(const tran_low_t *input, uint8_t *dest,
 
 void vpx_idct16x16_38_copy_add_c(const tran_low_t *input, uint8_t *dest,
                             int stride, int16_t *residual, int res_stride) {
-//  LOGD("non-neon implementation is called");
     int i, j;
     tran_low_t out[16 * 16] = { 0 };
     tran_low_t *outptr = out;
@@ -973,7 +945,6 @@ void vpx_idct16x16_38_copy_add_c(const tran_low_t *input, uint8_t *dest,
 
 void vpx_idct16x16_10_add_c(const tran_low_t *input, uint8_t *dest,
                             int stride) {
-//  LOGD("non-neon implementation is called");
   int i, j;
   tran_low_t out[16 * 16] = { 0 };
   tran_low_t *outptr = out;
@@ -1000,7 +971,6 @@ void vpx_idct16x16_10_add_c(const tran_low_t *input, uint8_t *dest,
 
 void vpx_idct16x16_10_copy_add_c(const tran_low_t *input, uint8_t *dest,
                             int stride, int16_t *residual, int res_stride) {
-//  LOGD("non-neon implementation is called");
     int i, j;
     tran_low_t out[16 * 16] = { 0 };
     tran_low_t *outptr = out;
@@ -1027,7 +997,6 @@ void vpx_idct16x16_10_copy_add_c(const tran_low_t *input, uint8_t *dest,
 }
 
 void vpx_idct16x16_1_add_c(const tran_low_t *input, uint8_t *dest, int stride) {
-//  LOGD("non-neon implementation is called");
   int i, j;
   tran_high_t a1;
   tran_low_t out =
@@ -1042,7 +1011,6 @@ void vpx_idct16x16_1_add_c(const tran_low_t *input, uint8_t *dest, int stride) {
 }
 
 void vpx_idct16x16_1_copy_add_c(const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride) {
-//  LOGD("non-neon implementation is called");
     int i, j;
     tran_high_t a1;
     tran_low_t out =

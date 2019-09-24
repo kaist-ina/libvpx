@@ -11,6 +11,8 @@
 #ifndef VP9_COMMON_VP9_ONYXC_INT_H_
 #define VP9_COMMON_VP9_ONYXC_INT_H_
 
+#include <vpx/vpx_mobinas.h>
+
 #include "./vpx_config.h"
 #include "vpx/internal/vpx_codec_internal.h"
 #include "vpx_util/vpx_thread.h"
@@ -23,8 +25,6 @@
 #include "vp9/common/vp9_frame_buffers.h"
 #include "vp9/common/vp9_quant_common.h"
 #include "vp9/common/vp9_tile_common.h"
-#include <decode_test.h>
-#include <vpx/vpx_mobinas.h>
 
 #if CONFIG_VP9_POSTPROC
 #include "vp9/common/vp9_postproc.h"

@@ -45,32 +45,11 @@
 
 #define MAX_VP9_HEADER_SIZE 80
 
-#include <android/log.h>
 #include <vpx_util/vpx_write_yuv_frame.h>
 #include <vpx_dsp/psnr.h>
 #include <vpx_dsp/vpx_constant.h>
 #include <vpx_dsp/vpx_copy.h>
 #include <vpx/vpx_mobinas.h>
-
-#define TAG "vp9_decodeframe.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 //Hyunho: for debuggin
 #define DEBUG_LATENCY 1
@@ -589,9 +568,6 @@ static void build_mc_border(const uint8_t *src, int src_stride, uint8_t *dst,
 
         copy = b_w - left - right;
 
-//        LOGD("dst_stride * b_h: %d, dst_stride: %d, b_h"
-//             ": %d left: %d, copy: %d, right:%d", dst_stride * b_h, dst_stride, b_h, left, copy, right);
-
         if (left) memset(dst, ref_row[0], left);
 
         if (copy) memcpy(dst + left, ref_row + x + left, copy);
@@ -706,7 +682,6 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
                                         2]); //TODO (hyunho): check whether extending this array size can occur abnormal behavior
     const uint8_t *buf_ptr;
 
-    //LOGD("b_w: %d, b_h: %d, frame_width: %d, frame_height: %d, pre_buf_stride: %d, border_offset: %d", b_w, b_h, frame_width, frame_height, pre_buf_stride, border_offset);
     build_mc_border(buf_ptr1, pre_buf_stride, mc_buf, b_w, x0, y0, b_w, b_h,
                     frame_width, frame_height);
 
@@ -881,8 +856,6 @@ static void dec_build_inter_predictors(
             const int b_h = y1 - y0 + 1;
             const int border_offset = y_pad * 3 * b_w + x_pad * 3;
 
-            //LOGD("buf_ptr1: %p, dst: %p", buf_ptr, dst);
-
             extend_and_predict(buf_ptr1, buf_stride, x0, y0, b_w, b_h, frame_width,
                                frame_height, border_offset, dst, dst_buf->stride,
                                subpel_x, subpel_y, kernel, sf,
@@ -917,7 +890,6 @@ static void dec_build_sr_inter_predictors(
     struct macroblockd_plane *const pd = &xd->plane[plane];
 
     int scale = (sf->x_scale_fp >> REF_SCALE_SHIFT); //TODO: bug
-    //LOGD("scale: %d", scale);
 
     /*******************Hyunho************************/
     uint8_t *const dst = is_sr ? dst_buf->buf + dst_buf->stride * scale * y + scale * x :
@@ -963,7 +935,6 @@ static void dec_build_sr_inter_predictors(
 //        const MV mv_q4 = clamp_mv_to_umv_border_sb(
 //                xd, mv, bw, bh, pd->subsampling_x, pd->subsampling_y);
         // Co-ordinate of containing block to pixel precision.
-//        LOGD("mv_q4.x: %d, mv_q4.y: %d, mv_q4.x: %d, mv_q4.y: %d", mv_q4.row, mv_q4.col, mv_q4.row >> SUBPEL_BITS, mv_q4.col >> SUBPEL_BITS);
         int x_start = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x));
         int y_start = (-xd->mb_to_top_edge >> (3 + pd->subsampling_y));
 #if 0  // CONFIG_BETTER_HW_COMPATIBILITY
@@ -994,8 +965,6 @@ static void dec_build_sr_inter_predictors(
         scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
         xs = sf->x_step_q4;
         ys = sf->y_step_q4;
-
-//        LOGD("[scaled] mv_q4.x: %d, mv_q4.y: %d, mv_q4.x: %d, mv_q4.y: %d", scaled_mv.row, scaled_mv.col, scaled_mv.row >> SUBPEL_BITS, scaled_mv.col >> SUBPEL_BITS);
     } else {
         // Co-ordinate of containing block to pixel precision.
         x0 = (-xd->mb_to_left_edge >> (3 + pd->subsampling_x)) + x;
@@ -1099,7 +1068,6 @@ static void dec_build_sr_inter_predictors(
 
     /*******************Hyunho************************/
     if (is_sr) {
-//        if (mi_x == 52 * MI_BLOCK_SIZE && mi_y == 28 * MI_BLOCK_SIZE) LOGD("resize_and_predict");
         int proc_size = 64, height, width;
         if (w > proc_size && h > proc_size) {
             for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
@@ -1237,7 +1205,6 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
     int is_scaled;
 
     for (ref = 0; ref < 1 + is_compound; ++ref) {
-//        if (ref == 1) LOGD("is_compound");
         const MV_REFERENCE_FRAME frame = mi->ref_frame[ref];
         RefBuffer *ref_buf = &pbi->common.frame_refs[frame - LAST_FRAME];
         /*******************Hyunho************************/
@@ -1256,7 +1223,6 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
                                "Reference frame has invalid dimensions");
 
         is_scaled = vp9_is_scaled(sf);
-//        LOGD("is_scaled: %d", is_scaled);
         /*******************Hyunho************************/
         if (is_sr) vp9_setup_pre_planes(xd, ref, ref_buf->buf_sr, mi_row, mi_col, is_scaled ? sf : NULL);
         else vp9_setup_pre_planes(xd, ref, ref_buf->buf, mi_row, mi_col, is_scaled ? sf : NULL);
@@ -1284,7 +1250,6 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
                 for (y = 0; y < num_4x4_h; ++y) {
                     for (x = 0; x < num_4x4_w; ++x) {
                         const MV mv = average_split_mvs(pd, mi, ref, i++);
-//                        LOGD("sf pointer location: %p", &ref_buf->sf_lr);
                         /*******************Hyunho************************/
                         dec_build_sr_inter_predictors(xd, plane, n4w_x4, n4h_x4, 4 * x, 4 * y,
                                                       4, 4, mi_x, mi_y, kernel, sf, pre_buf,
@@ -1297,7 +1262,6 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
         } else {
             const MV mv = mi->mv[ref].as_mv;
             for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
-                //LOGD("here: plane %d, block: %d", plane, pbi->common.inter_count);
                 struct macroblockd_plane *const pd = &xd->plane[plane];
                 /*******************Hyunho************************/
                 //struct buf_2d *const dst_buf = &pd->dst;
@@ -1314,7 +1278,6 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
                 const int n4h_x4 = 4 * num_4x4_h;
                 struct buf_2d *const pre_buf = &pd->pre[ref];
                 /*******************Hyunho************************/
-//                LOGD("sf pointer location: %p", &ref_buf->sf_lr);
                 dec_build_sr_inter_predictors(xd, plane, n4w_x4, n4h_x4, 0, 0, n4w_x4,
                                               n4h_x4, mi_x, mi_y, kernel, sf, pre_buf,
                                               dst_buf, &mv, ref_frame_buf, is_scaled, ref, is_sr);
@@ -1916,7 +1879,6 @@ static void resize_context_buffers(VP9_COMMON *cm, int width, int height) {
 }
 
 static void setup_bilinear_frame_size(VP9_COMMON *cm) {
-//    LOGD("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
     if (vpx_realloc_frame_buffer(
             cm->hr_bilinear_frame, cm->width * cm->scale, cm->height * cm->scale,
             cm->subsampling_x,
@@ -1932,8 +1894,6 @@ static void setup_bilinear_frame_size(VP9_COMMON *cm) {
 }
 
 static void setup_residual_size(VP9_COMMON *cm, YV12_BUFFER_CONFIG *frame) {
-//    LOGD("width %d, height: %d, scale: %d, subsamply_x: %d, subsamply_y: %d", cm->width, cm->height, cm->scale, cm->subsampling_x, cm->subsampling_y);
-//    LOGD("frame: %p", frame);
     if (vpx_realloc_frame_buffer(
             frame, cm->width * 2, cm->height, cm->subsampling_x,
             cm->subsampling_y,
@@ -2270,7 +2230,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     /*******************Hyunho************************/
     if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == APPLY_CACHE_RESET) {
         if (read_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
-            LOGE("%s: turn-off adaptive cache", __func__);
+            fprintf(stderr, "%s: turn-off adaptive cache", __func__);
             cm->mobinas_cfg->cache_mode = NO_CACHE_RESET;
         }
     }
@@ -2512,8 +2472,6 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
         while (intra_block != NULL) {
-//            LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", intra_block->mi_row,
-//                 intra_block->mi_col, intra_block->n4_w[0], intra_block->n4_h[0]);
             const int widths[MAX_MB_PLANE] = {intra_block->n4_w[0] * 4, intra_block->n4_w[1] * 4,
                                               intra_block->n4_w[2] * 4};
             const int heights[MAX_MB_PLANE] = {intra_block->n4_h[0] * 4, intra_block->n4_h[1] * 4,
@@ -2558,7 +2516,6 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 #if DEBUG_ADAPTIVE_CACHE
         //copy a cached frame
         for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-            LOGD("hr_frame_buffers: %p, hr_compare_frame_buffers: %p", hr_frame_buffers[0], hr_compare_frame_buffers[0]);
             vpx_copy_c(hr_frame_buffers[plane], hr_frame_strides[plane],
                                         hr_debug_frame_buffers[plane], hr_debug_frame_strides[plane],
                                         0, 0, max_widths[plane], max_heights[plane], cm->scale);
@@ -2571,8 +2528,6 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         int num_blocks = 0; //number of blocks which cache is reset
         int tmp = 0;
         while (inter_block != NULL) {
-//            if (inter_block->n4_w[0] != inter_block->n4_h[0]) LOGD("mi_row: %d, mi_col: %d, n4_w[0]: %d, n4_h[0]: %d", inter_block->mi_row,
-//                 inter_block->mi_col, inter_block->n4_w[0], inter_block->n4_h[0]);
             const int widths[MAX_MB_PLANE] = {inter_block->n4_w[0] * 4, inter_block->n4_w[1] * 4,
                                               inter_block->n4_w[2] * 4};
             const int heights[MAX_MB_PLANE] = {inter_block->n4_h[0] * 4, inter_block->n4_h[1] * 4,
@@ -2590,7 +2545,6 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
             //TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
             for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
-//                LOGD("width: %d, height: %d, x_offset: %d, y_offset: %d", widths[plane], heights[plane], x_offsets[plane], y_offsets[plane]);
                 vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                           hr_frame_buffers[plane], hr_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
@@ -2653,16 +2607,13 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         memset(file_path, 0, sizeof(char) * PATH_MAX);
         sprintf(file_path, "%s/%d_%d_debug_%s.y", cm->mobinas_cfg->frame_dir,
                 cm->current_video_frame, cm->current_super_frame, cm->mobinas_cfg->prefix);
-        if (vpx_write_y_frame(file_path, cm->hr_bilinear_frame)) {
-//        if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) {
-            LOGE("save a decoded frame fail");
-        }
+        vpx_write_y_frame(file_path, cm->hr_bilinear_frame));
 #endif
 
         /*******************Hyunho************************/
         if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == PROFILE_CACHE_RESET) {
             if (write_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
-                LOGE("%s: turn-off adaptive cache", __func__);
+                fprintf(stdout, "%s: turn-off adaptive cache", __func__);
                 cm->mobinas_cfg->cache_mode = NO_CACHE_RESET;
             }
         }
@@ -2698,7 +2649,7 @@ static int tile_worker_hook(void *arg1, void *arg2) {
     //load a cache reset profile
     if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == APPLY_CACHE_RESET) {
         if (read_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
-            LOGE("%s: turn-off adaptive cache", __func__);
+            fprintf(stdout, "%s: turn-off adaptive cache", __func__);
             cm->mobinas_cfg->cache_mode = NO_CACHE_RESET;
         }
     }
@@ -2907,7 +2858,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
 
     if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == PROFILE_CACHE_RESET) {
         if (write_mobinas_cache_reset_profile(mwd->cache_reset_profile)) {
-            LOGE("%s: turn-off adaptive cache", __func__);
+            fprintf(stdout, "%s: turn-off adaptive cache", __func__);
             cm->mobinas_cfg->cache_mode = NO_CACHE_RESET;
         }
     }
@@ -3071,7 +3022,7 @@ static const uint8_t *decode_tiles_mt(VP9Decoder *pbi, const uint8_t *data,
     return bit_reader_end;
 }
 
-static const uint8_t *apply_bilinear_mt(VP9Decoder *pbi) {
+static void apply_bilinear_mt(VP9Decoder *pbi) {
     VP9_COMMON *const cm = &pbi->common;
     const VPxWorkerInterface *const winterface = vpx_get_worker_interface();
     const uint8_t *bit_reader_end = NULL;
@@ -3319,7 +3270,6 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                     cm->use_highbitdepth);
 #else
                 /*******************Hyunho************************/
-                //LOGD("y_crop_width: %d, cm->width: %d", ref_buf->buf->y_crop_width, cm->width);
                 if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf_sr, ref_buf->buf_sr->y_crop_width,
@@ -3472,7 +3422,6 @@ static int read_compressed_header(VP9Decoder *pbi, const uint8_t *data,
                 vp9_diff_update_prob(&r, &fc->partition_prob[j][i]);
 
         read_mv_probs(nmvc, cm->allow_high_precision_mv, &r);
-//        LOGD("allow_high_precision_mv: %d", cm->allow_high_precision_mv);
     }
 
     return vpx_reader_has_error(&r);

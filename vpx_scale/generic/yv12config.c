@@ -16,29 +16,6 @@
 #include "vpx_mem/vpx_mem.h"
 #include "vpx_ports/mem.h"
 
-#include <android/log.h>
-
-#define TAG "yv12config.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
-
-
 /****************************************************************************
 *  Exports
 ****************************************************************************/
@@ -144,7 +121,7 @@ int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s) {
     FILE *serialize_file = fopen(file_path, "wb");
     if(serialize_file == NULL)
     {
-        LOGE("%s: %s", __func__, file_path);
+        fprintf(stderr, "%s: fail to save a file to %s", __func__, file_path);
         return -1;
     }
 
@@ -209,15 +186,12 @@ int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s) {
 }
 
 int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment) {
-    //LOGD("width: %d, height: %d, subsampling_x: %d, subsampling_y: %d, byte_alignment: %d", width, height, subsampling_x, subsampling_y, byte_alignment);
-    //LOGD("width: %d, height: %d", s->y_crop_width, s->y_crop_height);
-
     int ret = 0;
 
     FILE *serialize_file = fopen(file_path, "rb");
     if(serialize_file == NULL)
     {
-        LOGE("%s: %s", __func__, file_path);
+        fprintf(stderr, "%s: fail to open a file from %s", __func__, file_path);
         return -1;
     }
 
@@ -283,25 +257,23 @@ int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int 
 
 int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height,
                          int subsampling_x, int subsampling_y, int byte_alignment) {
-    //LOGD("width: %d, height: %d, subsampling_x: %d, subsampling_y: %d, byte_alignment: %d", width, height, subsampling_x, subsampling_y, byte_alignment);
-
     int ret = 0;
 
     FILE *serialize_file = fopen(file_path, "rb");
     if(serialize_file == NULL)
     {
-        LOGE("%s: %s", __func__, file_path);
+        fprintf(stderr, "%s: fail to open a file from %s", __func__, file_path);
         return -1;
     }
 
-    if (ret = vpx_realloc_frame_buffer(
+    if ((ret = vpx_realloc_frame_buffer(
             s, width, height, subsampling_x,
             subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
             cm->use_highbitdepth,
 #endif
             VP9_DEC_BORDER_IN_PIXELS, byte_alignment,
-            NULL, NULL, NULL)) {
+            NULL, NULL, NULL)) != 0) {
         fclose(serialize_file);
         return ret;
     };
@@ -380,7 +352,7 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
     int h = s->y_crop_height;
 
     do {
-        if (ret = memcmp(src, dst, s->y_crop_width)) return ret;
+        if ((ret = memcmp(src, dst, s->y_crop_width)) != 0) return ret;
         src += s->y_stride;
         dst += s_->y_stride;
     } while (--h);
@@ -389,7 +361,7 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
     dst = s_->u_buffer;
     h = s->uv_crop_height;
     do {
-        if (ret = memcmp(src, dst, s->uv_crop_width)) return ret;
+        if ((ret = memcmp(src, dst, s->uv_crop_width)) != 0) return ret;
         src += s->uv_stride;
         dst += s_->uv_stride;
     } while (--h);
@@ -398,7 +370,7 @@ int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_) {
     dst = s_->v_buffer;
     h = s->uv_crop_height;
     do {
-        if (ret = memcmp(src, dst, s->uv_crop_width)) return ret;
+        if ((ret = memcmp(src, dst, s->uv_crop_width)) != 0) return ret;
         src += s->uv_stride;
         dst += s_->uv_stride;
     } while (--h);

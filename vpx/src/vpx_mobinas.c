@@ -6,33 +6,11 @@
 #include <stdio.h>
 #include <malloc.h>
 #include <assert.h>
-#include <android/log.h>
 #include <vpx_scale/yv12config.h>
 #include <vpx_mem/vpx_mem.h>
 #include <sys/param.h>
 #include <math.h>
 #include "vpx/vpx_mobinas.h"
-#include "vpx/vpx_mobinas.h"
-
-#define TAG "vpx_cache.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 #define BUFFER_UNIT_LEN 1000
 #define FRACTION_BIT (5)
@@ -48,7 +26,7 @@ static mobinas_cache_reset_profile_t *init_mobinas_cache_reset_profile(const cha
         memset(profile, 0, sizeof(mobinas_cache_reset_profile_t));
         profile->file = fopen(path, "rb");
         if (profile->file == NULL) {
-            LOGE("%s: cannot load a file %s", __func__, path);
+            fprintf(stderr, "%s: fail to open a file %s", __func__, path);
 
             vpx_free(profile);
             return NULL;
@@ -57,7 +35,7 @@ static mobinas_cache_reset_profile_t *init_mobinas_cache_reset_profile(const cha
     else {
         profile->file = fopen(path, "wb");
         if (profile->file == NULL) {
-            LOGE("%s: cannot create a file %s", __func__, path);
+            fprintf(stderr, "%s: fail to open a file %s", __func__, path);
 
             vpx_free(profile);
             return NULL;
@@ -73,29 +51,25 @@ static mobinas_cache_reset_profile_t *init_mobinas_cache_reset_profile(const cha
 }
 
 void remove_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile) {
-    if (profile != NULL) {
+	if (profile != NULL) {
         if (profile->buffer != NULL) free(profile->buffer);
         if (profile->file != NULL) fclose(profile->file);
         vpx_free(profile);
     }
 }
 
-//offset 정보랑 buffer 저장
 int read_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile) {
-    size_t bytes_read;
-    int offset, length;
+    size_t bytes_read, offset, length;
 
     if (profile->file == NULL) {
-        LOGE("%s: file does not exist");
+        fprintf(stderr, "%s: profile is NULL", __func__);
         return -1;
     }
     bytes_read = fread(&offset, sizeof(int), 1, profile->file);
     if(bytes_read != 1) {
-        LOGE("%s: reading offset value failed", __func__);
+        fprintf(stderr, "%s: fail to read offset values", __func__);
         return -1;
     }
-
-//    LOGD("%s: offset %d", __func__, offset);
 
     length = offset / 8 + 1;
     if (profile->buffer == NULL) {
@@ -107,7 +81,7 @@ int read_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile) {
 
     bytes_read = fread(profile->buffer, sizeof(uint8_t), length, profile->file); //TODO: length or length +- 1
     if(bytes_read != length) {
-        LOGE("%s: reading buffer failed", __func__);
+        fprintf(stderr, "%s: fail to read buffer values", __func__);
         return -1;
     }
 
@@ -118,26 +92,24 @@ int read_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile) {
 }
 
 int write_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile) {
-    int offset = profile->offset;
-    int length = offset / 8 + 1;
+    size_t offset = profile->offset;
+    size_t length = offset / 8 + 1;
     size_t bytes_write;
 
-//    LOGD("%s: offset %d", __func__, offset);
-
     if (profile->file == NULL) {
-        LOGE("%s: file does not exist");
+        fprintf(stderr, "%s: profile is NULL", __func__);
         return -1;
     }
 
     bytes_write = fwrite(&offset, sizeof(int), 1, profile->file);
     if (bytes_write != 1) {
-        LOGE("%s: writing offset value failed", __func__);
+        fprintf(stderr, "%s: fail to write offset values", __func__);
         return -1;
     }
 
     bytes_write = fwrite(profile->buffer, sizeof(uint8_t), length, profile->file);
     if(bytes_write != length) {
-        LOGE("%s: writing buffer failed", __func__);
+        fprintf(stderr, "%s: fail to write buffer values", __func__);
         return -1;
     }
 
@@ -155,13 +127,11 @@ uint8_t read_mobinas_cache_reset_bit(mobinas_cache_reset_profile_t *profile){
 
     //TODO: refactor, this is worting
     if (byte_offset + 1 > profile->length) {
-        LOGE("%s: invalid cache reset profile | byte_offset: %d, profile->legnth: %d"  , __func__, byte_offset, profile->length);
+        fprintf(stderr, "%s: invalid cache reset profile | byte_offset: %d, profile->legnth: %d"  , __func__, byte_offset, profile->length);
         return 0; // don't reset cache
     }
 
     profile->offset += 1;
-
-//    LOGD("offset: %d, byte_offset: %d, bit_offset: %d, value: %d, bit: %d", offset, byte_offset, bit_offset, profile->buffer[byte_offset], (profile->buffer[byte_offset] & mask) >> bit_offset);
 
     return (profile->buffer[byte_offset] & mask) >> bit_offset;
 }
@@ -279,15 +249,14 @@ void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cf
                 case PROFILE_CACHE_RESET:
                     mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 0);
                     if (mwd[i].cache_reset_profile == NULL) {
-                        LOGE("%s: turn-off cache reset", __func__);
+                        fprintf(stdout, "%s: turn-off cache reset", __func__);
                         mobinas_cfg->cache_mode = NO_CACHE_RESET;
                     }
                     break;
                 case APPLY_CACHE_RESET:
                     mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 1);
-
                     if (mwd[i].cache_reset_profile == NULL) {
-                        LOGE("%s: turn-off cache reset", __func__);
+                        fprintf(stdout, "%s: turn-off cache reset", __func__);
                         mobinas_cfg->cache_mode = NO_CACHE_RESET;
                     }
                     break;
@@ -308,6 +277,7 @@ mobinas_bilinear_config_t *get_mobinas_bilinear_config(mobinas_bilinear_profile_
             return &bilinear_profile->config_TX_64X64_s4;
         default:
             assert("%s: invalid scale");
+            return NULL;
         }
 }
 
@@ -328,7 +298,7 @@ void init_mobinas_bilinear_config(mobinas_bilinear_config_t *config, int width, 
     config->bottom_y_index = (int *) vpx_malloc(sizeof(int) * height * scale);
 
     for (x = 0; x < width * scale; ++x) {
-        const float in_x = (x + 0.5f) / scale - 0.5f;
+        const double in_x = (x + 0.5f) / scale - 0.5f;
         config->left_x_index[x] = MAX(floor(in_x), 0);
         config->right_x_index[x] = MIN(ceil(in_x), width - 1);
         config->x_lerp[x] = in_x - floor(in_x);
@@ -336,7 +306,7 @@ void init_mobinas_bilinear_config(mobinas_bilinear_config_t *config, int width, 
     }
 
     for (y = 0; y < height * scale; ++y) {
-        const float in_y = (y + 0.5f) / scale - 0.5f;
+        const double in_y = (y + 0.5f) / scale - 0.5f;
         config->top_y_index[y] = MAX(floor(in_y), 0);
         config->bottom_y_index[y] = MIN(ceil(in_y), height - 1);
         config->y_lerp[y] = in_y - floor(in_y);
