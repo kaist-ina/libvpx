@@ -232,18 +232,18 @@ void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cf
     for (int i = 0; i < num_threads; ++i) {
         init_mobinas_worker_data(&mwd[i], i);
 
-        if (mobinas_cfg->save_decode_result == 1) {
+        if (mobinas_cfg->save_latency_result == 1) {
             memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/latency_%s_thread%d.log", mobinas_cfg->log_dir, mobinas_cfg->prefix, i);
+            sprintf(file_path, "%s/%s/latency_thread%d.log", mobinas_cfg->save_dir, mobinas_cfg->prefix, i);
             mwd[i].latency_log = fopen(file_path, "w");
             memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/metadata_%s_thread%d.log", mobinas_cfg->log_dir, mobinas_cfg->prefix, i);
+            sprintf(file_path, "%s/%s/metadata_thread%d.log", mobinas_cfg->save_dir, mobinas_cfg->prefix, i);
             mwd[i].metadata_log = fopen(file_path, "w");
         }
 
         if (mobinas_cfg->decode_mode == DECODE_CACHE) {
             memset(file_path, 0, sizeof(file_path));
-            sprintf(file_path, "%s/cache_reset_%s_thread%d", mobinas_cfg->profile_dir, mobinas_cfg->prefix, mwd[i].index);
+            sprintf(file_path, "%s/profile/cache_reset_thread%d", mobinas_cfg->save_dir, mwd[i].index);
 
             switch (mobinas_cfg->cache_mode) {
                 case PROFILE_CACHE_RESET:
@@ -375,4 +375,17 @@ void set_mobinas_interp_block(mobinas_interp_block_list_t *L, int plane, int n4_
     mobinas_interp_block_t *currentBlock = L->cur;
     currentBlock->n4_w[plane] = n4_w;
     currentBlock->n4_h[plane] = n4_h;
+}
+
+int default_scale_policy (int resolution){
+    switch(resolution){
+        case 270:
+            return 4;
+        case 360:
+            return 3;
+        case 480:
+            return 2;
+        default:
+            return 1;
+    }
 }

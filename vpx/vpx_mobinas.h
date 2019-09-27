@@ -9,6 +9,10 @@
 #include "./vpx_config.h"
 #include "vpx_scale/yv12config.h"
 
+typedef int (*mobinas_get_scale_fn_t) (int);
+
+int default_scale_policy (int resolution);
+
 typedef struct mobinas_latency_info {
     double decode_frame;
     double interp_intra_block;
@@ -43,15 +47,17 @@ typedef enum{
     NO_DNN,
 } mobinas_dnn_mode;
 
+typedef enum{
+    DECODED_FRAME,
+    SERIALIZED_FRAME,
+    ALL_FRAME,
+} mobinas_frame_type;
+
 //TODO (chanju): define struct for SNPE
 
 typedef struct mobinas_cfg{
     //directory
-    char video_dir[PATH_MAX];
-    char log_dir[PATH_MAX];
-    char frame_dir[PATH_MAX];
-    char serialize_dir[PATH_MAX];
-    char profile_dir[PATH_MAX];
+    char save_dir[PATH_MAX];
 
     //name
     char prefix[PATH_MAX];
@@ -60,20 +66,23 @@ typedef struct mobinas_cfg{
     char compare_file[PATH_MAX];
 
     //log
-    int save_serialized_frame;
-    int save_decoded_frame;
-    int save_intermediate;
-    int save_final;
+    mobinas_frame_type frame_type;
+    int save_intermediate_frame;
+    int save_final_frame;
     int save_quality_result;
-    int save_decode_result;
+    int save_latency_result;
+    int save_metadata_result;
 
     //mode
     mobinas_decode_mode decode_mode;
+    mobinas_decode_mode saved_decode_mode;
     mobinas_cache_mode cache_mode;
     mobinas_dnn_mode dnn_mode;
     mobinas_cache_policy cache_policy;
 
-    int target_resolution; //TODO: to set this dyanmically, make a new API.
+    //scale
+    mobinas_get_scale_fn_t get_scale;
+//    int target_resolution; //deprecated
 } mobinas_cfg_t;
 
 typedef struct mobinas_bilinear_config{
