@@ -118,10 +118,10 @@ static const arg_def_t decodemodearg =
         "decode mode for a MobiNAS decoder (0: DECODE, 1: DECODE_SR, 2: DECODE_CACHE, 3: DECODE_BILINEAR)");
 static const arg_def_t dnnmodearg =
         ARG_DEF(NULL, "dnn-mode", 1,
-        "DNN mode for A MobiNAS decoder (0: PROFILE_CACHE, 1: KEY_FRMAE_CACHE, 2: NO_CACHE_POLICY)");
+        "DNN mode for A MobiNAS decoder (0: NO_DNN, 1: ONLINE_DNN, 2: OFFLINE_DNN) ");
 static const arg_def_t cachepolicyarg =
         ARG_DEF(NULL, "cache-policy", 1,
-        "cache policy for A MobiNAS decoder (0: ONLINE_DNN, 1: OFFLINE_DNN, 2: NO_DNN)");
+        "cache policy for A MobiNAS decoder (0: NO_CACHE_PLICY, 1: PROFILE_CACHE, 2: KEY_FRMAE_CACHE)");
 static const arg_def_t saveintermediatedarg =
         ARG_DEF(NULL, "save-intermediate", 0, "Save intermediate frames");
 static const arg_def_t savefinaldarg =
@@ -826,13 +826,13 @@ static int main_loop(int argc, const char **argv_)
             switch (arg_parse_uint(&arg))
             {
             case PROFILE_CACHE:
-                mobinas_cfg.dnn_mode = PROFILE_CACHE;
+                mobinas_cfg.cache_policy = PROFILE_CACHE;
                 break;
             case KEY_FRAME_CACHE:
-                mobinas_cfg.dnn_mode = KEY_FRAME_CACHE;
+                mobinas_cfg.cache_policy = KEY_FRAME_CACHE;
                 break;
             case NO_CACHE_POLICY:
-                mobinas_cfg.dnn_mode = NO_CACHE_POLICY;
+                mobinas_cfg.cache_policy = NO_CACHE_POLICY;
                 break;
             default:
                 die("Invalid cache policy: %d.\n", arg.val);
@@ -864,6 +864,8 @@ static int main_loop(int argc, const char **argv_)
             die("Error: Unrecognized option %s\n", *argi);
 
     /* Setup MobiNAS configuration */
+    mobinas_cfg.get_scale = default_scale_policy;
+
     switch (mobinas_cfg.decode_mode) {
     case DECODE:
         sprintf(mobinas_cfg.prefix, "%s", mobinas_cfg.target_file);

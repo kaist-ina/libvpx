@@ -1411,7 +1411,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                     predict_and_reconstruct_intra_block(twd, mi, plane, row, col,
                                                         tx_size);
             /*******************Hyunho************************/
-            //TODO (hyunho): max block size를 넘어설수 있다.
+            //TODO (hyunho): handle if it is bigger than max block size
             if (!cm->apply_dnn) {
                 switch(cm->mobinas_cfg->decode_mode) {
                     case DECODE_CACHE:
@@ -1930,7 +1930,17 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
     setup_render_size(cm, rb);
 
     /*******************Hyunho************************/
-    //cm->scale = floor(cm->mobinas_cfg->target_resolution / (float) cm->height); //deprecated
+     //handle adaptive streaming
+     cm->scale = (cm->mobinas_cfg->get_scale ? cm->mobinas_cfg->get_scale(cm->height) : 1);
+     if (cm->scale == 1) {
+         cm->mobinas_cfg->saved_decode_mode = cm->mobinas_cfg->decode_mode;
+         cm->mobinas_cfg->decode_mode = DECODE;
+     }
+     else {
+         if (cm->mobinas_cfg->decode_mode == DECODE)
+             cm->mobinas_cfg->decode_mode = cm->mobinas_cfg->saved_decode_mode;
+     }
+
     if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
@@ -2447,14 +2457,12 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
 
         //load a reference SR frame for applying adaptive caching
         if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == PROFILE_CACHE_RESET) {
-            char file_path[PATH_MAX];
-            memset(file_path, 0, sizeof(char) * PATH_MAX);
+            char file_path[PATH_MAX] = {0};
+            int width = get_sr_frame_new_buffer(cm)->y_crop_width;
+            int height = get_sr_frame_new_buffer(cm)->y_crop_height;
+
             sprintf(file_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
-                    cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale); //TODO: current_video_frame에서 -1하는게 맞는지?
-//            if (vpx_deserialize_load(cm->hr_reference_frame, file_path,
-//                                     get_sr_frame_new_buffer(cm)->y_crop_width, //check: sr frame
-//                                     get_sr_frame_new_buffer(cm)->y_crop_height, //check: sr frame
-//                                     cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
+                    cm->current_video_frame, cm->current_super_frame, height); //TODO: current_video_frame - 1 ?
             if (vpx_deserialize_load(mwd->hr_reference_frame, file_path,
                                      get_sr_frame_new_buffer(cm)->y_crop_width, //check: sr frame
                                      get_sr_frame_new_buffer(cm)->y_crop_height, //check: sr frame
@@ -2618,6 +2626,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
         }
         /*******************Hyunho************************/
     }
+
     return vpx_reader_find_end(&tile_data->bit_reader);
 }
 
@@ -2729,13 +2738,15 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                                                         hr_compare_frame->uv_stride};
 
     if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == PROFILE_CACHE_RESET) {
-        char file_path[PATH_MAX];
-        memset(file_path, 0, sizeof(char) * PATH_MAX);
+        char file_path[PATH_MAX] = {0};
+        int width = get_sr_frame_new_buffer(cm)->y_crop_width;
+        int height = get_sr_frame_new_buffer(cm)->y_crop_height;
+
         sprintf(file_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
-                cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale);
+                cm->current_video_frame, cm->current_super_frame, height);
         if (vpx_deserialize_load(mwd->hr_reference_frame, file_path,
-                                 get_sr_frame_new_buffer(cm)->y_crop_width, //check: sr frame
-                                 get_sr_frame_new_buffer(cm)->y_crop_height, //check: sr frame
+                                 width, //check: sr frame
+                                 height, //check: sr frame
                                  cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
             vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                                "deserialize failed");
@@ -3208,19 +3219,6 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             memset(&cm->ref_frame_map, -1, sizeof(cm->ref_frame_map));
             pbi->need_resync = 0;
         }
-
-        /*******************Hyunho************************/
-        //handle adaptive streaming
-        cm->scale = (cm->mobinas_cfg->get_scale ? cm->mobinas_cfg->get_scale(cm->height) : 1);
-        if (cm->scale == 1) {
-            cm->mobinas_cfg->saved_decode_mode = cm->mobinas_cfg->decode_mode;
-            cm->mobinas_cfg->decode_mode = DECODE;
-        }
-        else {
-            if (cm->mobinas_cfg->decode_mode == DECODE)
-                cm->mobinas_cfg->decode_mode = cm->mobinas_cfg->saved_decode_mode;
-        }
-        /*******************Hyunho************************/
     } else {
         cm->intra_only = cm->show_frame ? 0 : vpx_rb_read_bit(rb);
 
@@ -3595,18 +3593,20 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
+    fprintf(stderr, "cm->apply_dnn: %d, cache policy: %d\n", cm->apply_dnn, cm->mobinas_cfg->cache_policy);
     if(cm->apply_dnn) {
         char frame_path[PATH_MAX];
+//        int width = //TODO
+//        int height = //TODO
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
                 //TODO (chanju): apply model here
                 break;
             case OFFLINE_DNN:
-                memset(frame_path, 0, sizeof(char) * PATH_MAX);
-
                 sprintf(frame_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
                         cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale);
+                fprintf(stderr, "frame_path: %s\n", frame_path);
 
                 if (vpx_deserialize_copy(get_sr_frame_new_buffer(cm), frame_path, cm->width * cm->scale, //check: sr frame
                                          cm->height * cm->scale, cm->subsampling_x,

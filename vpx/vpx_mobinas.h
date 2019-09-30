@@ -30,21 +30,21 @@ typedef enum{
 } mobinas_decode_mode;
 
 typedef enum{
+    NO_CACHE_RESET,
     PROFILE_CACHE_RESET,
     APPLY_CACHE_RESET,
-    NO_CACHE_RESET,
 } mobinas_cache_mode;
 
 typedef enum{
+    NO_CACHE_POLICY,
     PROFILE_CACHE,
     KEY_FRAME_CACHE,
-    NO_CACHE_POLICY,
 } mobinas_cache_policy;
 
 typedef enum{
+    NO_DNN,
     ONLINE_DNN,
     OFFLINE_DNN,
-    NO_DNN,
 } mobinas_dnn_mode;
 
 typedef enum{

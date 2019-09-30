@@ -254,25 +254,50 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
+static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
+    if (mobinas_cfg == NULL) {
+        return -1;
+    }
+    else {
+        switch (mobinas_cfg->decode_mode)
+        {
+        case DECODE_CACHE:
+            if (mobinas_cfg->get_scale == NULL)
+            {
+                fprintf(stderr, "%s: scale policy is not set", __func__);
+                return -1;
+            }
+            break;
+        case DECODE_BILINEAR:
+            if (mobinas_cfg->get_scale == NULL)
+            {
+                fprintf(stderr, "%s: scale policy is not set", __func__);
+                return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static vpx_codec_err_t mobinas_init(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t *mobinas_cfg) {
     assert(mobinas_cfg != NULL);
 
-    if (mobinas_cfg == NULL) {
-//        ctx->mobinas_cfg = (mobinas_cfg_t *) vpx_calloc(sizeof(mobinas_cfg_t), 1);
-//        ctx->mobinas_cfg->decode_mode = DECODE;
+    if (is_valid_mobinas_cfg(mobinas_cfg)) {
+        fprintf(stderr, "%s: invalid mobinas cfg config");
         return VPX_MOBINAS_ERROR;
     }
-    else {
-        ctx->mobinas_cfg = mobinas_cfg;
 
-        if (ctx->mobinas_cfg->dnn_mode == ONLINE_DNN) {
-            //TODO (chanju): check runtime availability
-            //TODO (chanju): handle failure
-        }
+    ctx->mobinas_cfg = mobinas_cfg;
+    if (ctx->mobinas_cfg->dnn_mode == ONLINE_DNN)
+    {
+        //TODO (chanju): check runtime availability
+        //TODO (chanju): handle failure
+    }
 
-        if (ctx->mobinas_cfg->cache_policy == PROFILE_CACHE) {
-            //TODO (hyunho): read a cache profile
-        }
+    if (ctx->mobinas_cfg->cache_policy == PROFILE_CACHE)
+    {
+        //TODO (hyunho): read a cache profile
     }
 
     return VPX_CODEC_OK;
@@ -327,10 +352,9 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     }
 
     if (ctx->mobinas_cfg->save_quality_result) {
-        char file_path[PATH_MAX];
-        memset(file_path, 0, PATH_MAX);
-        sprintf(file_path, "%s/%s/log/quality.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+        char file_path[PATH_MAX] = {0};
 
+        sprintf(file_path, "%s/%s/log/quality.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
         ctx->pbi->common.quality_log = fopen(file_path, "w");
         ctx->pbi->common.hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //adaptive cache o
         ctx->pbi->common.lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //vp9_dx_iface x
@@ -562,16 +586,15 @@ static void save_metadata_result(VP9Decoder *pbi, int current_video_frame, int c
 }
 
 static void save_cache_quality_result(VP9_COMMON *cm, int current_video_frame){
-    char file_path[PATH_MAX];
-    char log[LOG_MAX];
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
     PSNR_STATS psnr_sr, psnr_lr;
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
 
     //measure sr-cached frame quality
-    int width = get_sr_frame_new_buffer(cm)->y_width; //check: sr frame
-    int height = get_sr_frame_new_buffer(cm)->y_height; //check: sr frame
+    int width = get_sr_frame_new_buffer(cm)->y_crop_width; //check: sr frame
+    int height = get_sr_frame_new_buffer(cm)->y_crop_height; //check: sr frame
 
-    sprintf(file_path, "%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->compare_file, cm->current_video_frame - 1);
+    sprintf(file_path, "%s/%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->compare_file, current_video_frame, height);
     if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width, height,
                             cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
     {
@@ -581,12 +604,14 @@ static void save_cache_quality_result(VP9_COMMON *cm, int current_video_frame){
     vpx_calc_psnr(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &psnr_sr); //check: sr frame
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr_sr.psnr[0], psnr_sr.psnr[1], psnr_sr.psnr[2], psnr_sr.psnr[3]);
     fputs(log, cm->quality_log);
+    fprintf(stderr, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr_sr.psnr[0]);
 
     //measure lr frame quality (it should be 100.0 dB)
 #if DEBUG_LR
-    width = get_frame_new_buffer(cm)->y_width;
-    height = get_frame_new_buffer(cm)->y_height;
-    sprintf(file_path, "%s/%d_%s.serialize", cm->mobinas_cfg->serialize_dir, current_video_frame, cm->mobinas_cfg->target_file);
+    printf("debug_lr is not false");
+    width = get_frame_new_buffer(cm)->y_crop_width;
+    height = get_frame_new_buffer(cm)->y_crop_height;
+    sprintf(file_path, "%s/%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->target_file, current_video_frame, height);
     if(vpx_deserialize_load(cm->lr_reference_frame, file_path, width, height,
                             cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
     {
@@ -598,23 +623,22 @@ static void save_cache_quality_result(VP9_COMMON *cm, int current_video_frame){
     fprintf(stdout, "[PSNR] %d sr-cached frame: %.2fdB, lr frame: %.2fdB", current_video_frame, psnr_sr.psnr[0], psnr_lr.psnr[0]);
 
     //qualtiy log
-    memset(log, 0, LOG_MAX);
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr_lr.psnr[0], psnr_lr.psnr[1], psnr_lr.psnr[2], psnr_lr.psnr[3]);
-
     fputs(log, cm->quality_log);
+    fprintf(stderr, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr_lr.psnr[0]);
 #endif
 }
 
 static void save_decoded_quality_result(VP9_COMMON *cm, int current_video_frame){
-    char file_path[PATH_MAX];
-    char log[LOG_MAX];
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
     PSNR_STATS psnr;
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
-    int width_ = get_frame_new_buffer(cm)->y_width; //check: sr frame
-    int height_ = get_frame_new_buffer(cm)->y_height; //check: sr frame
 
-    sprintf(file_path, "%s/%s/serialize/%d_%s.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->prefix, cm->current_video_frame - 1, cm->mobinas_cfg->compare_file);
-    if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width_, height_,
+    int width = get_frame_new_buffer(cm)->y_crop_width; //check: sr frame
+    int height = get_frame_new_buffer(cm)->y_crop_height; //check: sr frame
+
+    sprintf(file_path, "%s/%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->compare_file, current_video_frame, height);
+    if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width, height,
                             cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
     {
         vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
@@ -622,42 +646,36 @@ static void save_decoded_quality_result(VP9_COMMON *cm, int current_video_frame)
     }
 
     vpx_calc_psnr(get_frame_new_buffer(cm), cm->hr_reference_frame, &psnr); //check: sr frame
-    fprintf(stdout, "[PSNR] %d frame: %.2fdB", current_video_frame, psnr.psnr[0]);
 
     //qualtiy log
-    memset(log, 0, LOG_MAX);
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr.psnr[0], psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
-
     fputs(log, cm->quality_log);
+    fprintf(stderr, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr.psnr[0]);
+
 }
 
 static void save_bilinear_quality_result(VP9_COMMON *cm, int current_video_frame) {
-    char file_path[PATH_MAX];
-    char log[LOG_MAX];
-
-    int target_width = get_frame_new_buffer(cm)->y_crop_width * cm->scale; //check: original frame
-    int target_height = get_frame_new_buffer(cm)->y_crop_height * cm->scale; //check: original frame
-
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
     PSNR_STATS psnr;
-    memset(file_path, 0, sizeof(char) * PATH_MAX);
 
-    sprintf(file_path, "%s/%s/serialize/%d_%s.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->prefix,
-            cm->current_video_frame - 1, cm->mobinas_cfg->compare_file);
+    int target_width = cm->hr_bilinear_frame->y_crop_width; //check: original frame
+    int target_height = cm->hr_bilinear_frame->y_crop_height; //check: original frame
+
+    sprintf(file_path, "%s/%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->compare_file,
+            current_video_frame, target_height);
     if (vpx_deserialize_load(cm->hr_reference_frame, file_path, target_width, target_height,
                              cm->subsampling_x, cm->subsampling_y, cm->byte_alignment)) {
         vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
                            "deserialize failed");
     }
     vpx_calc_psnr(cm->hr_bilinear_frame, cm->hr_reference_frame, &psnr);
-    fprintf(stdout, "[PSNR] %d frame: %.2fdB", current_video_frame, psnr.psnr[0]);
 
     //qualtiy log
-    memset(log, 0, LOG_MAX);
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr.psnr[0],
             psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
-    fprintf(stdout, "Bilinear quality, %d, PSNR %.2fdB", current_video_frame, psnr.psnr[0]);
-
     fputs(log, cm->quality_log);
+    fprintf(stdout, "[PSNR] %d frame: %.2fdB", current_video_frame, psnr.psnr[0]);
 }
 
 static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
