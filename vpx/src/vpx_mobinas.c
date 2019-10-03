@@ -10,16 +10,90 @@
 #include <vpx_mem/vpx_mem.h>
 #include <sys/param.h>
 #include <math.h>
+#include <libgen.h>
+
+
 #include "vpx/vpx_mobinas.h"
 
 #define BUFFER_UNIT_LEN 1000
 #define FRACTION_BIT (5)
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 
+mobinas_cfg_t *init_mobinas_cfg() {
+    mobinas_cfg_t *config = (mobinas_cfg_t *) vpx_calloc(1, sizeof(mobinas_cfg_t));
+
+    config->decode_mode = DECODE;
+    config->dnn_mode = NO_DNN;
+    config->cache_policy = NO_CACHE;
+    config->cache_mode = NO_CACHE_RESET;
+
+    return config;
+}
+
+void remove_mobinas_cfg(mobinas_cfg_t *config) {
+    if (config) {
+        remove_mobinas_cache_profile(config->cache_profile);
+        remove_vp9_bilinear_profile(config->bilinear_profile);
+        vpx_free(config);
+    }
+}
+
+mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path) {
+    char tmp[PATH_MAX];
+
+    mobinas_cache_profile_t *profile = (mobinas_cache_profile_t *) vpx_calloc(1, sizeof(mobinas_cache_profile_t));
+
+    if ((profile->file = fopen(path, "rb")) == NULL) {
+        fprintf(stderr, "%s: fail to open a file %s", __func__, path);
+        vpx_free(profile);
+        return NULL;
+    }
+
+    sprintf(tmp, "%s", path);
+    sprintf(profile->name, "%s", basename(tmp));
+
+    return profile;
+}
+
+void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile) {
+    if (profile) {
+        if (profile->file) fclose(profile->file);
+        vpx_free(profile->name);
+        vpx_free(profile);
+    }
+}
+
+int read_cache_profile(mobinas_cache_profile_t *profile) {
+    size_t bytes_read;
+    uint8_t byte_value, apply_dnn;
+
+
+    if (profile == NULL) {
+        fprintf(stderr, "%s: profile is NULL", __func__);
+        return -1;
+    }
+
+    if (profile->file == NULL) {
+        fprintf(stderr, "%s: profile->file is NULL", __func__);
+        return -1;
+    }
+
+    if (profile->offset % 8 == 0) {
+        if (fread(&profile->byte_value, sizeof(uint8_t), 1, profile->file) != 1)
+        {
+            fprintf(stderr, "%s: fail to read a cache profile", __func__);
+            return -1;
+        }
+    }
+
+    apply_dnn = profile->byte_value & (1 << (profile->offset % 8));
+    profile->offset += 1;
+
+    return apply_dnn;
+}
+
 //TODO: reset cache reset
 static mobinas_cache_reset_profile_t *init_mobinas_cache_reset_profile(const char *path, int load_profile) {
-    assert (path != NULL);
-
     mobinas_cache_reset_profile_t *profile = (mobinas_cache_reset_profile_t*) vpx_malloc(sizeof(mobinas_cache_reset_profile_t));
 
     if (load_profile) {
@@ -27,7 +101,6 @@ static mobinas_cache_reset_profile_t *init_mobinas_cache_reset_profile(const cha
         profile->file = fopen(path, "rb");
         if (profile->file == NULL) {
             fprintf(stderr, "%s: fail to open a file %s", __func__, path);
-
             vpx_free(profile);
             return NULL;
         }
@@ -36,7 +109,6 @@ static mobinas_cache_reset_profile_t *init_mobinas_cache_reset_profile(const cha
         profile->file = fopen(path, "wb");
         if (profile->file == NULL) {
             fprintf(stderr, "%s: fail to open a file %s", __func__, path);
-
             vpx_free(profile);
             return NULL;
         }
@@ -223,39 +295,89 @@ static void init_mobinas_worker_data(mobinas_worker_data_t *mwd, int index){
     mwd->metadata_log = NULL;
 }
 
-void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cfg_t *mobinas_cfg) {
-    char file_path[PATH_MAX];
+mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobinas_cfg) {
+    char latency_log_path[PATH_MAX];
+    char metadata_log_path[PATH_MAX];
+    char cache_reset_profile_path[PATH_MAX];
 
-    assert (mobinas_cfg != NULL);
-    assert (num_threads > 0);
+    if (!mobinas_cfg) {
+        fprintf(stderr, "%s: mobinas_cfg is NULL");
+        return NULL;
+    }
+
+    if (num_threads <= 0) {
+        fprintf(stderr, "%s: num_threads is equal or less than 0");
+        return NULL;
+    }
+
+    mobinas_worker_data_t *mwd = (mobinas_worker_data_t *) vpx_malloc(sizeof(mobinas_worker_data_t) * num_threads);
 
     for (int i = 0; i < num_threads; ++i) {
         init_mobinas_worker_data(&mwd[i], i);
 
         if (mobinas_cfg->save_latency_result == 1) {
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/%s/latency_thread%d.log", mobinas_cfg->save_dir, mobinas_cfg->prefix, i);
-            mwd[i].latency_log = fopen(file_path, "w");
-            memset(file_path, 0, PATH_MAX);
-            sprintf(file_path, "%s/%s/metadata_thread%d.log", mobinas_cfg->save_dir, mobinas_cfg->prefix, i);
-            mwd[i].metadata_log = fopen(file_path, "w");
+            switch (mobinas_cfg->decode_mode)
+            {
+            case DECODE:
+                sprintf(latency_log_path, "%s/%s/log/latency_thread%d%d.log", mobinas_cfg->save_dir, mobinas_cfg->prefix,
+                        mwd[i].index, num_threads);
+                sprintf(metadata_log_path, "%s/%s/log/metadata_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                break;
+            case DECODE_SR:
+                sprintf(latency_log_path, "%s/%s/log/latency_sr_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                sprintf(metadata_log_path, "%s/%s/log/metadata_sr_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                break;
+            case DECODE_BILINEAR:
+                sprintf(latency_log_path, "%s/%s/log/latency_bilinear_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                sprintf(metadata_log_path, "%s/%s/log/metadata_bilinear_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                break;
+            case DECODE_CACHE:
+                switch (mobinas_cfg->cache_policy)
+                {
+                case KEY_FRAME_CACHE:
+                    sprintf(latency_log_path, "%s/%s/log/latency_cache_key_frame_thread%d%d.log", mobinas_cfg->save_dir,
+                            mobinas_cfg->prefix, mwd[i].index, num_threads);
+                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_key_frame_thread%d%d.log", mobinas_cfg->save_dir,
+                            mobinas_cfg->prefix, mwd[i].index, num_threads);
+                    break;
+                case PROFILE_CACHE:
+                    sprintf(latency_log_path, "%s/%s/log/latency_cache_%s_thread%d%d.log", mobinas_cfg->save_dir,
+                            mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
+                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_%s_thread%d%d.log", mobinas_cfg->save_dir,
+                            mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
+                    break;
+                }
+                break;
+            }
+
+            if ((mwd[i].latency_log = fopen(latency_log_path, "w")) == NULL) {
+                fprintf(stderr, "%s: cannot open a file %s", __func__, latency_log_path);
+                mobinas_cfg->save_latency_result = 0;
+            }
+
+            if ((mwd[i].metadata_log = fopen(metadata_log_path, "w")) == NULL) {
+                fprintf(stderr, "%s: cannot open a file %s", __func__, metadata_log_path);
+                mobinas_cfg->save_metadata_result = 0;
+            }
         }
 
         if (mobinas_cfg->decode_mode == DECODE_CACHE) {
-            memset(file_path, 0, sizeof(file_path));
-            sprintf(file_path, "%s/profile/cache_reset_thread%d", mobinas_cfg->save_dir, mwd[i].index);
+            sprintf(cache_reset_profile_path, "%s/profile/cache_reset_thread%d%d", mobinas_cfg->save_dir, mwd[i].index, num_threads);
 
             switch (mobinas_cfg->cache_mode) {
                 case PROFILE_CACHE_RESET:
-                    mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 0);
-                    if (mwd[i].cache_reset_profile == NULL) {
+                    if ((mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(cache_reset_profile_path, 0)) == NULL) {
                         fprintf(stdout, "%s: turn-off cache reset", __func__);
                         mobinas_cfg->cache_mode = NO_CACHE_RESET;
                     }
                     break;
                 case APPLY_CACHE_RESET:
-                    mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(file_path, 1);
-                    if (mwd[i].cache_reset_profile == NULL) {
+                    if ((mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(cache_reset_profile_path, 1)) == NULL) {
                         fprintf(stdout, "%s: turn-off cache reset", __func__);
                         mobinas_cfg->cache_mode = NO_CACHE_RESET;
                     }
@@ -263,9 +385,11 @@ void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cf
             }
         }
     }
+
+    return mwd;
 }
 
-mobinas_bilinear_config_t *get_mobinas_bilinear_config(mobinas_bilinear_profile_t *bilinear_profile, int scale) {
+bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale) {
     assert(scale == 4 || scale ==3 || scale ==2);
 
     switch (scale) {
@@ -281,7 +405,7 @@ mobinas_bilinear_config_t *get_mobinas_bilinear_config(mobinas_bilinear_profile_
         }
 }
 
-void init_mobinas_bilinear_config(mobinas_bilinear_config_t *config, int width, int height, int scale) {
+void init_bilinear_config(bilinear_config_t *config, int width, int height, int scale) {
     int x, y;
 
     assert (config != NULL);
@@ -314,7 +438,21 @@ void init_mobinas_bilinear_config(mobinas_bilinear_config_t *config, int width, 
     }
 }
 
-void remove_bilinear_config(mobinas_bilinear_config_t *config) {
+//TODO: refactor to cover all BLOCK type used in vp9
+vp9_bilinear_profile_t *init_vp9_bilinear_profile(){
+    vp9_bilinear_profile_t *profile = (vp9_bilinear_profile_t *) vpx_calloc(1, sizeof(vp9_bilinear_profile_t));
+
+    //scale x4
+    init_bilinear_config(&profile->config_TX_64X64_s4, 64, 64, 4);
+    //scale x3
+    init_bilinear_config(&profile->config_TX_64X64_s3, 64, 64, 3);
+    //scale x2
+    init_bilinear_config(&profile->config_TX_64X64_s2, 64, 64, 2);
+
+    return profile;
+}
+
+void remove_bilinear_config(bilinear_config_t *config) {
     if (config != NULL) {
         vpx_free(config->x_lerp);
         vpx_free(config->x_lerp_fixed);
@@ -328,17 +466,7 @@ void remove_bilinear_config(mobinas_bilinear_config_t *config) {
     }
 }
 
-void init_mobinas_bilinear_profile(mobinas_bilinear_profile_t *profile){
-    assert(profile != NULL);
-    //scale x4
-    init_mobinas_bilinear_config(&profile->config_TX_64X64_s4, 64, 64, 4);
-    //scale x3
-    init_mobinas_bilinear_config(&profile->config_TX_64X64_s3, 64, 64, 3);
-    //scale x2
-    init_mobinas_bilinear_config(&profile->config_TX_64X64_s2, 64, 64, 2);
-}
-
-void remove_bilinear_profile(mobinas_bilinear_profile_t *profile) {
+void remove_vp9_bilinear_profile(vp9_bilinear_profile_t *profile) {
     if (profile != NULL) {
         //scale x4
         remove_bilinear_config(&profile->config_TX_64X64_s4);

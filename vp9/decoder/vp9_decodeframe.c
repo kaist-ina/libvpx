@@ -2499,7 +2499,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                           hr_frame_buffers[plane], hr_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
-                                          heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
+                                          heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
             }
             prev_block = intra_block;
             intra_block = intra_block->next;
@@ -2555,7 +2555,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                 vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                           hr_frame_buffers[plane], hr_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
-                                          heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
+                                          heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
             }
 
             if (!cm->apply_dnn && cm->mobinas_cfg->cache_mode == PROFILE_CACHE_RESET) {
@@ -2566,7 +2566,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                     vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                               hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane],
                                               x_offsets[plane], y_offsets[plane], widths[plane],
-                                              heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
+                                              heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
                 }
 
                 vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
@@ -2779,7 +2779,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
             vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                       hr_frame_buffers[plane], hr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
-                                      heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
+                                      heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
         }
         prev_block = intra_block;
         intra_block = intra_block->next;
@@ -2819,7 +2819,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
             vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                       hr_frame_buffers[plane], hr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
-                                      heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
+                                      heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
         }
 
         //profile cache reset
@@ -2831,7 +2831,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                 vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                           hr_compare_frame_buffers[plane], hr_compare_frame_strides[plane],
                                           x_offsets[plane], y_offsets[plane], widths[plane],
-                                          heights[plane], cm->scale, get_mobinas_bilinear_config(cm->bl_profile, cm->scale));
+                                          heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
             }
 
             vpx_calc_block_psnr(hr_frame, hr_reference_frame, &psnr_cache, widths, heights, x_offsets, y_offsets, cm->scale);
@@ -3561,6 +3561,12 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     switch(cm->mobinas_cfg->cache_policy) {
         case PROFILE_CACHE:
             //TODO (hyunho): read a cache profile
+            if ((cm->apply_dnn = read_cache_profile(cm->mobinas_cfg->cache_profile)) == -1)
+            {
+                fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                cm->mobinas_cfg->cache_policy = NO_CACHE;
+                cm->apply_dnn = 0;
+            }
             break;
         case KEY_FRAME_CACHE:
             cm->apply_dnn = (cm->frame_type == KEY_FRAME ? 1 : 0);
@@ -3593,7 +3599,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    fprintf(stderr, "cm->apply_dnn: %d, cache policy: %d\n", cm->apply_dnn, cm->mobinas_cfg->cache_policy);
+//    fprintf(stderr, "cm->apply_dnn: %d, cache policy: %d\n", cm->apply_dnn, cm->mobinas_cfg->cache_policy);
     if(cm->apply_dnn) {
         char frame_path[PATH_MAX];
 //        int width = //TODO

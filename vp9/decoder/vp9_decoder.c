@@ -125,11 +125,8 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
     /*******************Hyunho************************/
     pbi->mobinas_worker_data = NULL;
-
     cm->quality_log = NULL;
     cm->mobinas_cfg = NULL;
-    cm->bl_profile = NULL;
-
     cm->lr_reference_frame = NULL;
     cm->hr_reference_frame = NULL;
     cm->hr_bilinear_frame = NULL;
@@ -171,7 +168,6 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
 
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
     remove_mobinas_worker(pbi->mobinas_worker_data, num_threads);
-    remove_bilinear_profile(pbi->common.bl_profile);
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);

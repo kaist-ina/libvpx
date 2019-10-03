@@ -254,37 +254,94 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
+/* Validate MobiNAS configuration */
 static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
     if (mobinas_cfg == NULL) {
+        fprintf(stderr, "%s: mobinas_cfg is NULL\n", __func__);
         return -1;
     }
-    else {
-        switch (mobinas_cfg->decode_mode)
+
+    switch (mobinas_cfg->decode_mode)
+    {
+    case DECODE_BILINEAR:
+        if (!mobinas_cfg->get_scale)
         {
-        case DECODE_CACHE:
-            if (mobinas_cfg->get_scale == NULL)
+            fprintf(stderr, "%s: get_scale is NULL\n", __func__);
+            return -1;
+        }
+        if (!mobinas_cfg->bilinear_profile)
+        {
+            fprintf(stderr, "%s: bilinear_profile is NULL\n", __func__);
+            return -1;
+        }
+        break;
+    case DECODE_SR:
+        switch (mobinas_cfg->dnn_mode)
+        {
+        case NO_DNN:
+            fprintf(stderr, "%s: invalid dnn mode\n", __func__);
+            return -1;
+        case OFFLINE_DNN:
+            //TODO: check a dnn file is valid
+            break;
+        case ONLINE_DNN:
+            //TODO: check a dnn is valid
+            break;
+        }
+        break;
+    case DECODE_CACHE:
+        if (!mobinas_cfg->get_scale)
+        {
+            fprintf(stderr, "%s: get_scale is NULL\n", __func__);
+            return -1;
+        }
+        if (!mobinas_cfg->bilinear_profile)
+        {
+            fprintf(stderr, "%s: bilinear_profile is NULL\n", __func__);
+            return -1;
+        }
+        switch (mobinas_cfg->cache_policy)
+        {
+        case NO_CACHE:
+            fprintf(stderr, "%s: invalid cache policy\n", __func__);
+            return -1;
+        case PROFILE_CACHE:
+            if (!mobinas_cfg->cache_profile)
             {
-                fprintf(stderr, "%s: scale policy is not set", __func__);
+                fprintf(stderr, "%s: cache_profile is NULL\n", __func__);
                 return -1;
             }
             break;
-        case DECODE_BILINEAR:
-            if (mobinas_cfg->get_scale == NULL)
-            {
-                fprintf(stderr, "%s: scale policy is not set", __func__);
-                return -1;
-            }
         }
+        switch (mobinas_cfg->dnn_mode)
+        {
+        case NO_DNN:
+            fprintf(stderr, "%s: invalid dnn mode\n", __func__);
+            return -1;
+        case OFFLINE_DNN:
+            //TODO: check a dnn file is valid
+            break;
+        case ONLINE_DNN:
+            //TODO: check a dnn is valid
+            break;
+        }
+        break;
+    }
+
+    if (mobinas_cfg->save_quality_result)
+    {
+        //TODO: check a compare file is valid
     }
 
     return 0;
 }
 
-static vpx_codec_err_t mobinas_init(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t *mobinas_cfg) {
+//check whether mobinas_cfg is valid and runtime configuration
+static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t *mobinas_cfg) {
     assert(mobinas_cfg != NULL);
 
     if (is_valid_mobinas_cfg(mobinas_cfg)) {
-        fprintf(stderr, "%s: invalid mobinas cfg config");
+        fprintf(stderr, "%s: invalid mobinas cfg config\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
 
@@ -295,15 +352,12 @@ static vpx_codec_err_t mobinas_init(vpx_codec_alg_priv_t *ctx, const mobinas_cfg
         //TODO (chanju): handle failure
     }
 
-    if (ctx->mobinas_cfg->cache_policy == PROFILE_CACHE)
-    {
-        //TODO (hyunho): read a cache profile
-    }
-
     return VPX_CODEC_OK;
 }
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
+    char file_path[PATH_MAX] = {0};
+
     ctx->last_show_frame = -1;
     ctx->need_resync = 1;
     ctx->flushed = 0;
@@ -333,29 +387,45 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     }
 
     const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
-    ctx->pbi->mobinas_worker_data = (mobinas_worker_data_t *) vpx_malloc(sizeof(struct mobinas_worker_data) * num_threads);
-    init_mobinas_worker(ctx->pbi->mobinas_worker_data, num_threads, ctx->mobinas_cfg);
-    ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
-    ctx->pbi->common.buffer_pool->mode = ctx->mobinas_cfg->decode_mode;
-    //TODO (chanju): copy SNPE variable as above line
-
-    switch(ctx->mobinas_cfg->decode_mode) {
-        case DECODE_CACHE:
-            ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
-            init_mobinas_bilinear_profile(ctx->pbi->common.bl_profile);
-            break;
-
-        case DECODE_BILINEAR:
-            ctx->pbi->common.bl_profile = (mobinas_bilinear_profile_t *) vpx_malloc(sizeof(mobinas_bilinear_profile_t));
-            ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-            break;
+    if ((ctx->pbi->mobinas_worker_data = init_mobinas_worker(num_threads, ctx->mobinas_cfg)) == NULL) {
+        set_error_detail(ctx, "Failed to allocate mobinas_worker_data");
+        return VPX_MOBINAS_ERROR;
     }
 
-    if (ctx->mobinas_cfg->save_quality_result) {
-        char file_path[PATH_MAX] = {0};
+    ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
+    ctx->pbi->common.buffer_pool->mode = ctx->mobinas_cfg->decode_mode;
 
-        sprintf(file_path, "%s/%s/log/quality.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
-        ctx->pbi->common.quality_log = fopen(file_path, "w");
+    if (ctx->mobinas_cfg->decode_mode == DECODE_BILINEAR)
+        ctx->pbi->common.hr_bilinear_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+
+    if (ctx->mobinas_cfg->save_quality_result) {
+        switch(ctx->mobinas_cfg->decode_mode) {
+        case DECODE:
+            sprintf(file_path, "%s/%s/log/quality.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+            break;
+        case DECODE_SR:
+            sprintf(file_path, "%s/%s/log/quality_sr.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+            break;
+        case DECODE_BILINEAR:
+            sprintf(file_path, "%s/%s/log/quality_bilinear.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+            break;
+        case DECODE_CACHE:
+            switch(ctx->mobinas_cfg->cache_policy) {
+            case KEY_FRAME_CACHE:
+                sprintf(file_path, "%s/%s/log/quality_cache_key_frame.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+                break;
+            case PROFILE_CACHE:
+                sprintf(file_path, "%s/%s/log/quality_cache_%s.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix, ctx->mobinas_cfg->cache_profile->name);
+                break;
+            }
+            break;
+        }
+
+        if ((ctx->pbi->common.quality_log = fopen(file_path, "w")) == NULL) {
+            fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
+            ctx->mobinas_cfg->save_quality_result = 0;
+        };
+
         ctx->pbi->common.hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //adaptive cache o
         ctx->pbi->common.lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //vp9_dx_iface x
     }
@@ -579,7 +649,7 @@ static void save_metadata_result(VP9Decoder *pbi, int current_video_frame, int c
 
         //metadata log
         memset(log, 0, sizeof(log));
-        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, mwd->count, mwd->intra_count, mwd->inter_count,
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, mwd->count, mwd->intra_count, mwd->inter_count,
                 mwd->inter_noskip_count, mwd->adaptive_cache_count);
         fputs(log, mwd->metadata_log);
     }
@@ -1125,6 +1195,6 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
                 NULL   // vpx_codec_enc_mr_get_mem_loc_fn_t
         },
         {
-            mobinas_init
+            load_mobinas_cfg
         }
 };

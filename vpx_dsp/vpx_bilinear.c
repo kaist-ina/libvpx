@@ -15,7 +15,7 @@
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 static const int16_t delta = (1 << (FRACTION_BIT - 1));
 
-static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height; ++y) {
@@ -44,7 +44,7 @@ static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_
     }
 }
 
-static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height; ++y) {
@@ -73,7 +73,7 @@ static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_
     }
 }
 
-static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height * scale; ++y) {
@@ -97,7 +97,7 @@ static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_s
     }
 }
 
-static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height * scale; ++y) {
@@ -121,7 +121,7 @@ static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_s
     }
 }
 
-void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const bilinear_config_t *config){
     int16_t temp[256 * 256];
 
     assert(width <= 64);
@@ -135,7 +135,7 @@ void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8
     vpx_bilinear_interp_vert_uint8_c(temp, 256, dst, dst_stride, width, height, scale, config);
 }
 
-void vpx_bilinear_interp_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+void vpx_bilinear_interp_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const bilinear_config_t *config){
     int16_t temp[256 * 256];
 
     assert(width <= 64);
