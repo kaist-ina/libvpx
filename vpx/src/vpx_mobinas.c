@@ -58,7 +58,6 @@ mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path) {
 void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile) {
     if (profile) {
         if (profile->file) fclose(profile->file);
-        vpx_free(profile->name);
         vpx_free(profile);
     }
 }
@@ -86,7 +85,7 @@ int read_cache_profile(mobinas_cache_profile_t *profile) {
         }
     }
 
-    apply_dnn = profile->byte_value & (1 << (profile->offset % 8));
+    apply_dnn = (profile->byte_value & (1 << (profile->offset % 8))) >> (profile->offset % 8); //TODO: 1, 0
     profile->offset += 1;
 
     return apply_dnn;
@@ -321,19 +320,13 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
             case DECODE:
                 sprintf(latency_log_path, "%s/%s/log/latency_thread%d%d.log", mobinas_cfg->save_dir, mobinas_cfg->prefix,
                         mwd[i].index, num_threads);
-                sprintf(metadata_log_path, "%s/%s/log/metadata_thread%d%d.log", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
                 break;
             case DECODE_SR:
                 sprintf(latency_log_path, "%s/%s/log/latency_sr_thread%d%d.log", mobinas_cfg->save_dir,
                         mobinas_cfg->prefix, mwd[i].index, num_threads);
-                sprintf(metadata_log_path, "%s/%s/log/metadata_sr_thread%d%d.log", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
                 break;
             case DECODE_BILINEAR:
                 sprintf(latency_log_path, "%s/%s/log/latency_bilinear_thread%d%d.log", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
-                sprintf(metadata_log_path, "%s/%s/log/metadata_bilinear_thread%d%d.log", mobinas_cfg->save_dir,
                         mobinas_cfg->prefix, mwd[i].index, num_threads);
                 break;
             case DECODE_CACHE:
@@ -342,13 +335,9 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
                 case KEY_FRAME_CACHE:
                     sprintf(latency_log_path, "%s/%s/log/latency_cache_key_frame_thread%d%d.log", mobinas_cfg->save_dir,
                             mobinas_cfg->prefix, mwd[i].index, num_threads);
-                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_key_frame_thread%d%d.log", mobinas_cfg->save_dir,
-                            mobinas_cfg->prefix, mwd[i].index, num_threads);
                     break;
                 case PROFILE_CACHE:
                     sprintf(latency_log_path, "%s/%s/log/latency_cache_%s_thread%d%d.log", mobinas_cfg->save_dir,
-                            mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
-                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_%s_thread%d%d.log", mobinas_cfg->save_dir,
                             mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
                     break;
                 }
@@ -359,8 +348,42 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
                 fprintf(stderr, "%s: cannot open a file %s", __func__, latency_log_path);
                 mobinas_cfg->save_latency_result = 0;
             }
+        }
 
-            if ((mwd[i].metadata_log = fopen(metadata_log_path, "w")) == NULL) {
+        if (mobinas_cfg->save_metadata_result == 1){
+            switch (mobinas_cfg->decode_mode)
+            {
+            case DECODE:
+                sprintf(metadata_log_path, "%s/%s/log/metadata_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                break;
+            case DECODE_SR:
+                sprintf(metadata_log_path, "%s/%s/log/metadata_sr_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                break;
+            case DECODE_BILINEAR:
+                sprintf(metadata_log_path, "%s/%s/log/metadata_bilinear_thread%d%d.log", mobinas_cfg->save_dir,
+                        mobinas_cfg->prefix, mwd[i].index, num_threads);
+                break;
+            case DECODE_CACHE:
+                switch (mobinas_cfg->cache_policy)
+                {
+                case KEY_FRAME_CACHE:
+                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_key_frame_thread%d%d.log",
+                            mobinas_cfg->save_dir, mobinas_cfg->prefix, mwd[i].index, num_threads);
+                    break;
+                case PROFILE_CACHE:
+                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_%s_thread%d%d.log", mobinas_cfg->save_dir,
+                            mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
+                    break;
+                }
+                break;
+            }
+
+            fprintf(stderr, "%s: %s\n", __func__, metadata_log_path);
+
+            if ((mwd[i].metadata_log = fopen(metadata_log_path, "w")) == NULL)
+            {
                 fprintf(stderr, "%s: cannot open a file %s", __func__, metadata_log_path);
                 mobinas_cfg->save_metadata_result = 0;
             }

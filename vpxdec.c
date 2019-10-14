@@ -948,11 +948,10 @@ static int main_loop(int argc, const char **argv_)
     if (mobinas_cfg->decode_mode == DECODE_CACHE || mobinas_cfg->decode_mode == DECODE_BILINEAR) {
         mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
     }
-    fprintf(stderr, "call before loading a cache profile\n");
+
     if (mobinas_cfg->decode_mode == DECODE_CACHE && mobinas_cfg->cache_policy == PROFILE_CACHE) {
         mobinas_cfg->cache_profile = init_mobinas_cache_profile(cache_profile_path); //TODO: start here
     }
-    fprintf(stderr, "call after loading a cache profile\n");
 
     /* Open a video file */
     sprintf(fn, "%s/video/%s", content_dir, mobinas_cfg->target_file);

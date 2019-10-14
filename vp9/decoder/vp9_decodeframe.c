@@ -479,14 +479,20 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
 
     /*******************Hyunho************************/
     // TODO (hyunho): implement neon-based lr_resiudal decode & copy
-    // TODO (hyunho): a) residual을 다른 dummy frame에 더하고 (debug frame set도 해야한다.), b) copy add를 만들어서 넣자. (TX size에 따라서 switch 만들어 줘야한다.)
     if (eob > 0) {
         if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
 #if !DEBUG_RESIDUAL
-            inverse_transform_block_inter_copy(
-                    xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
-                    pd->dst.stride, &pd->res.buf[4 * row * pd->res.stride + 4 * col], //hyunho: int16
-                    pd->res.stride, eob);
+            if (!cm->apply_dnn) {
+                inverse_transform_block_inter_copy(
+                                    xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
+                                    pd->dst.stride, &pd->res.buf[4 * row * pd->res.stride + 4 * col], //hyunho: int16
+                                    pd->res.stride, eob);
+            }
+            else {
+                inverse_transform_block_inter(
+                        xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
+                        pd->dst.stride, eob);
+            }
 #else
             inverse_transform_block_inter_copy(
                     xd, plane, tx_size, &pd->debug.buf[4 * row * pd->dst.stride + 4 * col],
@@ -3599,7 +3605,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-//    fprintf(stderr, "cm->apply_dnn: %d, cache policy: %d\n", cm->apply_dnn, cm->mobinas_cfg->cache_policy);
     if(cm->apply_dnn) {
         char frame_path[PATH_MAX];
 //        int width = //TODO
