@@ -401,21 +401,21 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     if (ctx->mobinas_cfg->save_quality_result) {
         switch(ctx->mobinas_cfg->decode_mode) {
         case DECODE:
-            sprintf(file_path, "%s/%s/log/quality.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+            sprintf(file_path, "%s/%s/log/quality", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
             break;
         case DECODE_SR:
-            sprintf(file_path, "%s/%s/log/quality_sr.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+            sprintf(file_path, "%s/%s/log/quality_sr", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
             break;
         case DECODE_BILINEAR:
-            sprintf(file_path, "%s/%s/log/quality_bilinear.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+            sprintf(file_path, "%s/%s/log/quality_bilinear", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
             break;
         case DECODE_CACHE:
             switch(ctx->mobinas_cfg->cache_policy) {
             case KEY_FRAME_CACHE:
-                sprintf(file_path, "%s/%s/log/quality_cache_key_frame.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+                sprintf(file_path, "%s/%s/log/quality_cache_key_frame", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
                 break;
             case PROFILE_CACHE:
-                sprintf(file_path, "%s/%s/log/quality_cache_%s.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix, ctx->mobinas_cfg->cache_profile->name);
+                sprintf(file_path, "%s/%s/log/quality_cache_%s", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix, ctx->mobinas_cfg->cache_profile->name);
                 break;
             }
             break;

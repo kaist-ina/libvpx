@@ -904,29 +904,30 @@ static int main_loop(int argc, const char **argv_)
     if (dnn_video_name) sprintf(mobinas_cfg->cache_file, "%s", dnn_video_name);
     if (compare_video_name) sprintf(mobinas_cfg->compare_file, "%s", compare_video_name);
     if (!prefix) {
-            switch (mobinas_cfg->decode_mode)
-            {
-            case DECODE:
-                sprintf(mobinas_cfg->prefix, "%s", mobinas_cfg->target_file);
-                break;
-            case DECODE_SR:
-                sprintf(mobinas_cfg->prefix, "sr_%s", mobinas_cfg->target_file);
-                break;
-            case DECODE_BILINEAR:
-                sprintf(mobinas_cfg->prefix, "bilinear_%s", mobinas_cfg->target_file);
-                break;
-            case DECODE_CACHE:
-                switch (mobinas_cfg->cache_policy)
-                {
-                case PROFILE_CACHE:
-                    sprintf(path, "%s", cache_profile_path);
-                    sprintf(mobinas_cfg->prefix, "cache_%s_%s", basename(path), mobinas_cfg->target_file);
-                    break;
-                case KEY_FRAME_CACHE:
-                    sprintf(mobinas_cfg->prefix, "cache_key_frame_%s", mobinas_cfg->target_file);
-                    break;
-                }
-            }
+        sprintf(mobinas_cfg->prefix, "%s", mobinas_cfg->target_file);
+//            switch (mobinas_cfg->decode_mode)
+//            {
+//            case DECODE:
+//                sprintf(mobinas_cfg->prefix, "%s", mobinas_cfg->target_file);
+//                break;
+//            case DECODE_SR:
+//                sprintf(mobinas_cfg->prefix, "sr_%s", mobinas_cfg->target_file);
+//                break;
+//            case DECODE_BILINEAR:
+//                sprintf(mobinas_cfg->prefix, "bilinear_%s", mobinas_cfg->target_file);
+//                break;
+//            case DECODE_CACHE:
+//                switch (mobinas_cfg->cache_policy)
+//                {
+//                case PROFILE_CACHE:
+//                    sprintf(path, "%s", cache_profile_path);
+//                    sprintf(mobinas_cfg->prefix, "cache_%s_%s", basename(path), mobinas_cfg->target_file);
+//                    break;
+//                case KEY_FRAME_CACHE:
+//                    sprintf(mobinas_cfg->prefix, "cache_key_frame_%s", mobinas_cfg->target_file);
+//                    break;
+//                }
+//            }
         }
     else {
         sprintf(mobinas_cfg->prefix, "%s", prefix);
