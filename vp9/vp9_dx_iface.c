@@ -37,6 +37,8 @@
 #include <vpx_dsp/ssim.h>
 #include <vpx_dsp_rtcd.h>
 
+#include "../../main.hpp"
+
 #define LOG_MAX 1000
 #define TAG "vp9_dx_iface.c JNI"
 #define _UNKNOWN   0
@@ -66,6 +68,7 @@
 #define FRACTION_BIT (5)
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 #define BILLION  1E9
+
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
@@ -274,11 +277,23 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
+static snpe_cfg_t * init_snpe(mobinas_cfg_t * mobinas_cfg){
+    snpe_cfg_t * snpe_object = malloc(sizeof(snpe_cfg_t));
+    snpe_object->runtime = check_runtime();
+    snpe_object->snpe_network = init_snpe_network(snpe_object->runtime, mobinas_cfg->model_quality);
+    return snpe_object;
+}
+
 static void init_mobinas(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
     assert (!(mobinas_cfg->profile_cache_reset && mobinas_cfg->apply_cache_reset));
 
+    ctx->snpe_object = init_snpe(mobinas_cfg);
     ctx->mobinas_cfg = mobinas_cfg;
+
+    //copy to VP9Common
+    ctx->pbi->common.snpe_object = ctx->snpe_object;
 }
+
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     ctx->last_show_frame = -1;
@@ -450,10 +465,12 @@ static void save_decoded_intermediate_frame(VP9_COMMON *cm, int current_video_fr
         else {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_%d_%s.y", cm->mobinas_cfg->frame_dir, current_video_frame, current_super_frame, cm->mobinas_cfg->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) //check: original frame
-            {
-                LOGE("save a decoded frame fail");
-            }
+//            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) //check: original frame
+//            {
+//                LOGE("save a decoded frame fail");
+//            }
+            FILE *yuv_file = fopen(file_path, "wb");
+            vpx_write_yuv_frame(yuv_file, get_frame_new_buffer(cm));
         }
     }
 }
@@ -480,10 +497,15 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
         else {
             memset(file_path, 0, sizeof(char) * PATH_MAX);
             sprintf(file_path, "%s/%d_%s.y", cm->mobinas_cfg->frame_dir, current_video_frame, cm->mobinas_cfg->prefix);
-            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) //check: original frame
-            {
-                LOGE("save a decoded frame fail");
-            }
+//            if (vpx_write_y_frame(file_path, get_frame_new_buffer(cm))) //check: original frame
+//            {
+//                LOGE("save a decoded frame fail");
+//            }
+
+            //
+            LOGE("%s",file_path);
+            FILE *yuv_file = fopen(file_path, "wb");
+            vpx_write_yuv_frame(yuv_file, get_frame_new_buffer(cm));
         }
     }
 }

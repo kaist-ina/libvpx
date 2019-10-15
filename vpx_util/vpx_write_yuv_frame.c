@@ -12,6 +12,10 @@
 #include "vpx_util/vpx_write_yuv_frame.h"
 
 #include <android/log.h>
+#include <vpx_mem/vpx_mem.h>
+#include <main.hpp>
+
+
 #define TAG "vpx_write_yuv_frame.c JNI"
 #define _UNKNOWN   0
 #define _DEFAULT   1
@@ -54,10 +58,60 @@ int vpx_write_y_frame(char *file_path, YV12_BUFFER_CONFIG *s){
     return 0;
 }
 
+//chanju
+unsigned char * vpx_write_yuv_frame_to_buffer(YV12_BUFFER_CONFIG *s){
+
+    unsigned int array_size = s->y_crop_height * s->y_width; //y
+    array_size += s->uv_crop_height * s->uv_width;  //u
+    array_size += s->uv_crop_height * s->uv_width;  //v
+    unsigned char * buffer = vpx_calloc(array_size,1);
+    unsigned char * buffer_copy = buffer;
+
+    unsigned char * src = s->y_buffer;
+    int h = s->y_crop_height;
+    do{
+        memcpy(buffer,src,s->y_width);
+        buffer += s->y_width;
+        src += s->y_stride;
+    }while(--h);
+
+
+    src = s->u_buffer;
+    h = s->uv_crop_height;
+    do {
+        memcpy(buffer, src, s->uv_width);
+        buffer += s->uv_width;
+        src += s->uv_stride;
+    } while (--h);
+
+
+    src = s->v_buffer;
+    h = s->uv_crop_height;
+    do {
+        memcpy(buffer, src, s->uv_width);
+        buffer += s->uv_width;
+        src += s->uv_stride;
+    } while (--h);
+
+
+    return buffer_copy;
+}
+
 
 void vpx_write_yuv_frame(FILE *yuv_file, YV12_BUFFER_CONFIG *s) {
-#if defined(OUTPUT_YUV_SRC) || defined(OUTPUT_YUV_DENOISED) || \
-    defined(OUTPUT_YUV_SKINMAP)
+//#if defined(OUTPUT_YUV_SRC) || defined(OUTPUT_YUV_DENOISED) || \
+//    defined(OUTPUT_YUV_SKINMAP)
+
+    unsigned char * buffer = vpx_write_yuv_frame_to_buffer(s);
+    unsigned int array_size = s->y_crop_height * s->y_width; //y
+    array_size += s->uv_crop_height * s->uv_width;  //u
+    array_size += s->uv_crop_height * s->uv_width;  //v
+    fwrite(buffer, array_size,1,yuv_file);
+    fclose(yuv_file);
+    free(buffer);
+
+    return;
+
 
   unsigned char *src = s->y_buffer;
   int h = s->y_crop_height;
@@ -83,8 +137,11 @@ void vpx_write_yuv_frame(FILE *yuv_file, YV12_BUFFER_CONFIG *s) {
     src += s->uv_stride;
   } while (--h);
 
-#else
-  (void)yuv_file;
-  (void)s;
-#endif
+  //
+  fclose(yuv_file);
+
+//#else
+//  (void)yuv_file;
+//  (void)s;
+//#endif
 }

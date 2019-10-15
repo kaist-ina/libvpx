@@ -9,6 +9,18 @@
 #include "./vpx_config.h"
 #include "vpx_scale/yv12config.h"
 
+typedef enum{
+    LQ,
+    HQ
+} snpe_model_quality;
+
+typedef struct snpe_cfg{
+    int runtime;
+    void * snpe_network;
+} snpe_cfg_t;
+
+
+
 typedef struct mobinas_latency_info {
     double decode_frame;
     double interp_intra_block;
@@ -26,6 +38,7 @@ typedef enum{
     DECODE_BILINEAR,
     PROFILE_ADAPTIVE_CACHE,
 } mobinas_decode_mode;
+
 
 typedef struct mobinas_cfg{
     //directory
@@ -56,6 +69,9 @@ typedef struct mobinas_cfg{
     //decoder
     mobinas_decode_mode mode;
     int target_resolution; //TODO: to set this dyanmically, make a new API.
+
+    //SNPE configs
+    snpe_model_quality model_quality;
 } mobinas_cfg_t;
 
 typedef struct mobinas_bilinear_config{

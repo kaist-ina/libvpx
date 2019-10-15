@@ -11,6 +11,7 @@
 #ifndef VP9_VP9_DX_IFACE_H_
 #define VP9_VP9_DX_IFACE_H_
 
+
 #include "vp9/decoder/vp9_decoder.h"
 
 typedef vpx_codec_stream_info_t vp9_stream_info_t;
@@ -46,6 +47,9 @@ struct vpx_codec_alg_priv {
   // Allow for decoding up to a given spatial layer for SVC stream.
   int svc_decoding;
   int svc_spatial_layer;
+
+  //chanju
+  snpe_cfg_t * snpe_object;
 };
 
 #endif  // VP9_VP9_DX_IFACE_H_

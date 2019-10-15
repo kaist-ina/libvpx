@@ -129,6 +129,12 @@ typedef struct VP9Common {
     YV12_BUFFER_CONFIG *hr_bilinear_frame;
     /*******************Hyunho************************/
 
+
+    /*****Chanju*****/
+    snpe_cfg_t * snpe_object;
+    /*****Chanju*****/
+
+
     YV12_BUFFER_CONFIG *frame_to_show;
     RefCntBuffer *prev_frame;
 
