@@ -699,6 +699,28 @@ static void save_cache_quality_result(VP9_COMMON *cm, int current_video_frame){
 #endif
 }
 
+static void save_sr_quality_result(VP9_COMMON *cm, int current_video_frame){
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
+    PSNR_STATS psnr_sr, psnr_lr;
+
+    //measure sr-cached frame quality
+    int width = get_sr_frame_new_buffer(cm)->y_crop_width; //check: sr frame
+    int height = get_sr_frame_new_buffer(cm)->y_crop_height; //check: sr frame
+
+    sprintf(file_path, "%s/%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->compare_file, current_video_frame, height);
+    if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width, height,
+                            cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+    {
+        vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                           "deserialize failed");
+    }
+    vpx_calc_psnr(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &psnr_sr); //check: sr frame
+    sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr_sr.psnr[0], psnr_sr.psnr[1], psnr_sr.psnr[2], psnr_sr.psnr[3]);
+    fputs(log, cm->quality_log);
+    fprintf(stderr, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr_sr.psnr[0]);
+}
+
 static void save_decoded_quality_result(VP9_COMMON *cm, int current_video_frame){
     char file_path[PATH_MAX] = {0};
     char log[LOG_MAX] = {0};
@@ -745,7 +767,7 @@ static void save_bilinear_quality_result(VP9_COMMON *cm, int current_video_frame
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr.psnr[0],
             psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
     fputs(log, cm->quality_log);
-    fprintf(stdout, "[PSNR] %d frame: %.2fdB", current_video_frame, psnr.psnr[0]);
+    fprintf(stdout, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr.psnr[0]);
 }
 
 static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
@@ -754,7 +776,7 @@ static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
         save_decoded_quality_result(cm, current_video_frame);
         break;
     case DECODE_SR:
-        fprintf(stderr, "%s: Not implemented", __func__);
+        save_sr_quality_result(cm, current_video_frame);
         break;
     case DECODE_BILINEAR:
         save_bilinear_quality_result(cm, current_video_frame);

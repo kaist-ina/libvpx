@@ -1947,7 +1947,7 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
              cm->mobinas_cfg->decode_mode = cm->mobinas_cfg->saved_decode_mode;
      }
 
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -2089,7 +2089,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -3563,8 +3563,13 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         pbi->mobinas_worker_data[i].inter_noskip_count = 0;
         pbi->mobinas_worker_data[i].adaptive_cache_count = 0;
     }
-
-    switch(cm->mobinas_cfg->cache_policy) {
+    switch(cm->mobinas_cfg->decode_mode) {
+    case DECODE_SR:
+        cm->apply_dnn = 1;
+        break;
+    case DECODE_CACHE:
+        switch (cm->mobinas_cfg->cache_policy)
+        {
         case PROFILE_CACHE:
             //TODO (hyunho): read a cache profile
             if ((cm->apply_dnn = read_cache_profile(cm->mobinas_cfg->cache_profile)) == -1)
@@ -3580,7 +3585,10 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         default:
             cm->apply_dnn = 0;
             break;
+        }
+        break;
     }
+
     /*******************Hyunho************************/
 
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
@@ -3617,7 +3625,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             case OFFLINE_DNN:
                 sprintf(frame_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
                         cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale);
-                fprintf(stderr, "frame_path: %s\n", frame_path);
 
                 if (vpx_deserialize_copy(get_sr_frame_new_buffer(cm), frame_path, cm->width * cm->scale, //check: sr frame
                                          cm->height * cm->scale, cm->subsampling_x,
