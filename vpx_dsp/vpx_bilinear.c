@@ -4,31 +4,10 @@
 
 #include <stdio.h>
 #include <math.h>
-#include <android/log.h>
 #include <assert.h>
 #include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_dsp_common.h"
 #include "../vp9/common/vp9_onyxc_int.h"
-
-#define TAG "vpx_bilinear.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
@@ -36,7 +15,7 @@
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 static const int16_t delta = (1 << (FRACTION_BIT - 1));
 
-static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height; ++y) {
@@ -65,7 +44,7 @@ static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_
     }
 }
 
-static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height; ++y) {
@@ -94,7 +73,7 @@ static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_
     }
 }
 
-static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height * scale; ++y) {
@@ -118,7 +97,7 @@ static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_s
     }
 }
 
-static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config){
     int x, y;
 
     for (y = 0; y < height * scale; ++y) {
@@ -142,7 +121,7 @@ static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_s
     }
 }
 
-void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const bilinear_config_t *config){
     int16_t temp[256 * 256];
 
     assert(width <= 64);
@@ -156,7 +135,7 @@ void vpx_bilinear_interp_uint8_c(const uint8_t *src, ptrdiff_t src_stride, uint8
     vpx_bilinear_interp_vert_uint8_c(temp, 256, dst, dst_stride, width, height, scale, config);
 }
 
-void vpx_bilinear_interp_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const mobinas_bilinear_config_t *config){
+void vpx_bilinear_interp_int16_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,  ptrdiff_t dst_stride, int x_offset, int y_offset, int width, int height, int scale, const bilinear_config_t *config){
     int16_t temp[256 * 256];
 
     assert(width <= 64);

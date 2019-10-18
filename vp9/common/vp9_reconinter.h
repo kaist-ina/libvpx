@@ -22,28 +22,6 @@ extern "C" {
 
 #define MAX_VP9_HEADER_SIZE 80
 
-#include <android/log.h>
-
-#define TAG "vp9_reconinter.h JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
-
 static INLINE void inter_predictor(const uint8_t *src, int src_stride,
                                    uint8_t *dst, int dst_stride,
                                    const int subpel_x, const int subpel_y,
@@ -133,7 +111,6 @@ static INLINE void setup_pred_plane(struct buf_2d *dst, uint8_t *src,
                                     int subsampling_x, int subsampling_y) {
   const int x = (MI_SIZE * mi_col) >> subsampling_x;
   const int y = (MI_SIZE * mi_row) >> subsampling_y;
-  //LOGD("debug: %d", scaled_buffer_offset(x, y, stride, scale));
   dst->buf = src + scaled_buffer_offset(x, y, stride, scale);
   dst->stride = stride;
 }

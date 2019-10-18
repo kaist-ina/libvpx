@@ -8,6 +8,7 @@
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
@@ -18,30 +19,6 @@
 #include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_dsp/vpx_filter.h"
 #include "vpx_ports/mem.h"
-
-#include <android/log.h>
-#include <arm_neon.h>
-#include <stdlib.h>
-
-#define TAG "vpx_convolve.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 //convolve_horiz(src - src_stride * (SUBPEL_TAPS / 2 - 1), src_stride, temp, 64, filter, x0_q4, x_step_q4, w, intermediate_height);
 static void convolve_horiz(const uint8_t *src, ptrdiff_t src_stride,

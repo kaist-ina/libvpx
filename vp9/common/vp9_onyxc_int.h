@@ -11,6 +11,8 @@
 #ifndef VP9_COMMON_VP9_ONYXC_INT_H_
 #define VP9_COMMON_VP9_ONYXC_INT_H_
 
+#include <vpx/vpx_mobinas.h>
+
 #include "./vpx_config.h"
 #include "vpx/internal/vpx_codec_internal.h"
 #include "vpx_util/vpx_thread.h"
@@ -23,8 +25,6 @@
 #include "vp9/common/vp9_frame_buffers.h"
 #include "vp9/common/vp9_quant_common.h"
 #include "vp9/common/vp9_tile_common.h"
-#include <decode_test.h>
-#include <vpx/vpx_mobinas.h>
 
 #if CONFIG_VP9_POSTPROC
 #include "vp9/common/vp9_postproc.h"
@@ -92,6 +92,7 @@ typedef struct BufferPool {
     InternalFrameBufferList int_frame_buffers;
 } BufferPool;
 
+//TODO (chanju): declare SNPE variable inside this structure
 typedef struct VP9Common {
     struct vpx_internal_error_info error;
     vpx_color_space_t color_space;
@@ -118,15 +119,19 @@ typedef struct VP9Common {
     /*******************Hyunho************************/
     //General
     struct scale_factors sf_upsample_inter;
-    int scale;
-    FILE *quality_log;
     mobinas_cfg_t *mobinas_cfg;
-    mobinas_latency_info_t latency; //logging decoding end-to-end latency
-    mobinas_bilinear_profile_t *bl_profile;
 
+    //TODO: refactor this by mobinas_latency_evaluator
+    mobinas_latency_info_t latency; //logging decoding end-to-end latency
+    //TODO: refactor these by mobinas_quality_evaluator
+
+    FILE *quality_log;
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;
     YV12_BUFFER_CONFIG *hr_bilinear_frame;
+
+    uint8_t scale;
+    uint8_t apply_dnn;
     /*******************Hyunho************************/
 
 

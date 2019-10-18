@@ -41,28 +41,7 @@
 #include "vp9/decoder/vp9_decoder.h"
 #include "vp9/decoder/vp9_detokenize.h"
 
-#include <android/log.h>
 #include <vpx_dsp/psnr.h>
-
-#define TAG "vp9_decoder.c JNI"
-#define _UNKNOWN   0
-#define _DEFAULT   1
-#define _VERBOSE   2
-#define _DEBUG    3
-#define _INFO        4
-#define _WARN        5
-#define _ERROR    6
-#define _FATAL    7
-#define _SILENT       8
-#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
-#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
-#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
-#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
-#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
-#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
-#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
-#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
-#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 static void initialize_dec(void) {
     static volatile int init_done = 0;
@@ -146,11 +125,8 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
     /*******************Hyunho************************/
     pbi->mobinas_worker_data = NULL;
-
     cm->quality_log = NULL;
     cm->mobinas_cfg = NULL;
-    cm->bl_profile = NULL;
-
     cm->lr_reference_frame = NULL;
     cm->hr_reference_frame = NULL;
     cm->hr_bilinear_frame = NULL;
@@ -192,7 +168,6 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
 
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
     remove_mobinas_worker(pbi->mobinas_worker_data, num_threads);
-    remove_bilinear_profile(pbi->common.bl_profile);
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);
@@ -307,7 +282,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
         cm->ref_frame_map[ref_index] = cm->next_ref_frame_map[ref_index];
     }
     pbi->hold_ref_buf = 0;
-    if (cm->mobinas_cfg->mode == DECODE_SR_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
         cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
     }
     else {
@@ -353,7 +328,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         !frame_bufs[cm->new_fb_idx].released) {
         pool->release_fb_cb(pool->cb_priv,
                             &frame_bufs[cm->new_fb_idx].raw_frame_buffer);
-        if (pool->mode == DECODE_SR_CACHE) {
+        if (pool->mode == DECODE_CACHE) {
             pool->release_fb_cb(pool->cb_priv,
                                 &frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer);
         }

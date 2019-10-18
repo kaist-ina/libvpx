@@ -40,11 +40,9 @@ int vpx_write_y_frame(char *file_path, YV12_BUFFER_CONFIG *s){
     FILE *y_file = fopen(file_path, "wb");
     if(y_file == NULL)
     {
-        LOGE("file open fail: %s", file_path);
+        fprintf(stderr, "%s: fail to open a file %s", __func__, file_path);
         return -1;
     }
-
-//    LOGD("y_crop_height: %d, y_crop_width: %d", s->y_crop_height, s->y_crop_width);
 
     unsigned char *src = s->y_buffer;
     int h = s->y_crop_height;

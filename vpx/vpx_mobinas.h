@@ -20,6 +20,9 @@ typedef struct snpe_cfg{
 } snpe_cfg_t;
 
 
+typedef int (*mobinas_get_scale_fn_t) (int);
+
+int default_scale_policy (int resolution);
 
 typedef struct mobinas_latency_info {
     double decode_frame;
@@ -33,46 +36,35 @@ typedef struct mobinas_latency_info {
 typedef enum{
     DECODE,
     DECODE_SR,
-    LOAD_SR,
-    DECODE_SR_CACHE,
+    DECODE_CACHE,
     DECODE_BILINEAR,
-    PROFILE_ADAPTIVE_CACHE,
 } mobinas_decode_mode;
 
+typedef enum{
+    NO_CACHE_RESET,
+    PROFILE_CACHE_RESET,
+    APPLY_CACHE_RESET,
+} mobinas_cache_mode;
 
-typedef struct mobinas_cfg{
-    //directory
-    char video_dir[PATH_MAX];
-    char log_dir[PATH_MAX];
-    char frame_dir[PATH_MAX];
-    char serialize_dir[PATH_MAX];
-    char profile_dir[PATH_MAX];
+typedef enum{
+    NO_CACHE,
+    PROFILE_CACHE,
+    KEY_FRAME_CACHE,
+} mobinas_cache_policy;
 
-    //name
-    char prefix[PATH_MAX];
-    char target_file[PATH_MAX];
-    char cache_file[PATH_MAX];
-    char compare_file[PATH_MAX];
+typedef enum{
+    NO_DNN,
+    ONLINE_DNN,
+    OFFLINE_DNN,
+} mobinas_dnn_mode;
 
-    //log
-    int save_serialized_frame;
-    int save_decoded_frame;
-    int save_intermediate;
-    int save_final;
-    int save_quality_result;
-    int save_decode_result;
 
-    //adaptive cache
-    int profile_cache_reset;
-    int apply_cache_reset;
 
-    //decoder
-    mobinas_decode_mode mode;
-    int target_resolution; //TODO: to set this dyanmically, make a new API.
-
-    //SNPE configs
-    snpe_model_quality model_quality;
-} mobinas_cfg_t;
+typedef enum{
+    DECODED_FRAME,
+    SERIALIZED_FRAME,
+    ALL_FRAME,
+} mobinas_frame_type;
 
 typedef struct mobinas_bilinear_config{
     float *x_lerp;
@@ -83,17 +75,17 @@ typedef struct mobinas_bilinear_config{
     int *bottom_y_index;
     int *left_x_index;
     int *right_x_index;
-} mobinas_bilinear_config_t;
+} bilinear_config_t;
 
 //TODO: block size types are 25 (4,8,16,32,64 x 4,8,16,32,64)
 typedef struct mobinas_bilinear_profile{
     //scale x4
-    mobinas_bilinear_config_t config_TX_64X64_s4;
+    bilinear_config_t config_TX_64X64_s4;
     //scale x3
-    mobinas_bilinear_config_t config_TX_64X64_s3;
+    bilinear_config_t config_TX_64X64_s3;
     //scale x2
-    mobinas_bilinear_config_t config_TX_64X64_s2;
-} mobinas_bilinear_profile_t;
+    bilinear_config_t config_TX_64X64_s2;
+} vp9_bilinear_profile_t;
 
 typedef struct mobinas_cache_reset_profile {
     FILE *file;
@@ -101,6 +93,13 @@ typedef struct mobinas_cache_reset_profile {
     int length;
     uint8_t *buffer;
 } mobinas_cache_reset_profile_t;
+
+typedef struct mobinas_cache_profile {
+    char name[PATH_MAX];
+    FILE *file;
+    uint64_t offset;
+    uint8_t byte_value;
+} mobinas_cache_profile_t;
 
 typedef struct mobinas_interp_block{
     int mi_row;
@@ -141,9 +140,75 @@ typedef struct mobinas_worker_data {
     FILE *metadata_log;
 } mobinas_worker_data_t;
 
+
+//typedef struct mobinas_cfg{
+//    //directory
+//    char video_dir[PATH_MAX];
+//    char log_dir[PATH_MAX];
+//    char frame_dir[PATH_MAX];
+//    char serialize_dir[PATH_MAX];
+//    char profile_dir[PATH_MAX];
+//
+//    //name
+//    char prefix[PATH_MAX];
+//    char target_file[PATH_MAX];
+//    char cache_file[PATH_MAX];
+//    char compare_file[PATH_MAX];
+//
+//    //decoder
+//    mobinas_decode_mode mode;
+//    int target_resolution; //TODO: to set this dyanmically, make a new API.
+//
+//    //SNPE configs
+//    snpe_model_quality model_quality;
+//} mobinas_cfg_t;
+
+typedef struct mobinas_cfg{
+    //directory
+    char save_dir[PATH_MAX];
+    char prefix[PATH_MAX];
+
+    //video
+    char target_file[PATH_MAX];
+    char cache_file[PATH_MAX];
+    char compare_file[PATH_MAX];
+
+    //log
+    mobinas_frame_type frame_type;
+    int save_intermediate_frame;
+    int save_final_frame;
+    int save_quality_result;
+    int save_latency_result;
+    int save_metadata_result;
+
+    //mode
+    mobinas_decode_mode decode_mode;
+    mobinas_decode_mode saved_decode_mode;
+    mobinas_cache_mode cache_mode;
+    mobinas_dnn_mode dnn_mode;
+    mobinas_cache_policy cache_policy;
+
+    //configuration
+    mobinas_get_scale_fn_t get_scale;
+    mobinas_cache_profile_t *cache_profile;
+    vp9_bilinear_profile_t *bilinear_profile;
+
+    //snpe model
+    snpe_model_quality model_quality;
+} mobinas_cfg_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+//mobinas_cfg
+mobinas_cfg_t *init_mobinas_cfg();
+void remove_mobinas_cfg(mobinas_cfg_t *config);
+
+//cache profile
+mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path);
+void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile);
+int read_cache_profile(mobinas_cache_profile_t *profile);
 
 //cache reset
 void remove_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);
@@ -157,15 +222,17 @@ void create_mobinas_interp_block(struct mobinas_interp_block_list *L, int mi_col
 void set_mobinas_interp_block(struct mobinas_interp_block_list *L, int plane, int n4_w, int n4_h);
 
 //worker
-void init_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads, mobinas_cfg_t *mobinas_cfg);
+mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobinas_cfg);
 void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads);
 
-//bilinear profile, config
-void init_mobinas_bilinear_profile(mobinas_bilinear_profile_t *profile);
-void remove_bilinear_profile(mobinas_bilinear_profile_t *profile);
-void init_mobinas_bilinear_config(mobinas_bilinear_config_t *config, int scale, int width, int height);
-void remove_bilinear_config(mobinas_bilinear_config_t *config);
-mobinas_bilinear_config_t *get_mobinas_bilinear_config(mobinas_bilinear_profile_t *bilinear_profile, int scale);
+//bilinear config
+vp9_bilinear_profile_t *init_vp9_bilinear_profile();
+bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale);
+void remove_vp9_bilinear_profile(vp9_bilinear_profile_t *profile);
+
+//bilinear config
+void init_bilinear_config(bilinear_config_t *config, int scale, int width, int height);
+void remove_bilinear_config(bilinear_config_t *config);
 
 #ifdef __cplusplus
 }  // extern "C"

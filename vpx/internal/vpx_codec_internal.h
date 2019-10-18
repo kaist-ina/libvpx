@@ -268,7 +268,7 @@ typedef vpx_codec_err_t (*vpx_codec_enc_mr_get_mem_loc_fn_t)(
     const vpx_codec_enc_cfg_t *cfg, void **mem_loc);
 
 /*******************Hyunho************************/
-typedef void (*vpx_mobinas_cfg_init_fn_t)(
+typedef vpx_codec_err_t (*mobinas_load_cfg_fn_t)(
         vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg);
 /*******************Hyunho************************/
 
@@ -324,8 +324,7 @@ struct vpx_codec_iface {
   } enc;
     /*******************Hyunho************************/
     struct mobinas_iface {
-        vpx_mobinas_cfg_init_fn_t
-            mobinas_cfg_init;
+        mobinas_load_cfg_fn_t load_cfg;
   } mobinas;
     /*******************Hyunho************************/
 };
