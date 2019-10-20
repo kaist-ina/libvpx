@@ -241,18 +241,14 @@ static vpx_codec_err_t update_error_state(
 }
 
 static void init_buffer_callbacks(vpx_codec_alg_priv_t *ctx) {
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init buffer callbacks");
 
     VP9_COMMON *const cm = &(ctx->pbi->common);
     BufferPool *const pool = cm->buffer_pool;
-
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "hi");
 
     cm->new_fb_idx = INVALID_IDX;
     cm->byte_alignment = ctx->byte_alignment;
     cm->skip_loop_filter = ctx->skip_loop_filter;
 
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "hi2");
 
     if (ctx->get_ext_fb_cb != NULL && ctx->release_ext_fb_cb != NULL) {
         pool->get_fb_cb = ctx->get_ext_fb_cb;
@@ -268,16 +264,6 @@ static void init_buffer_callbacks(vpx_codec_alg_priv_t *ctx) {
 
         pool->cb_priv = &pool->int_frame_buffers;
     }
-
-
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "hi3");
-
-//    pool->mode = ctx->mobinas_cfg->decode_mode;
-
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "hi4");
-
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init buffer callbacks end");
-
 }
 
 static void set_default_ppflags(vp8_postproc_cfg_t *cfg) {
@@ -596,7 +582,6 @@ static void save_serialized_final_frame(VP9_COMMON *cm, int current_video_frame)
 static void save_decoded_intermediate_frame(VP9_COMMON *cm, int current_video_frame,
                                             int current_super_frame)
 {
-
     char file_path[PATH_MAX] = {0};
 
     switch (cm->mobinas_cfg->decode_mode) {

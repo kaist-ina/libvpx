@@ -11,6 +11,7 @@
 #include <sys/param.h>
 #include <math.h>
 #include <libgen.h>
+#include <vpx_dsp/vpx_dsp_common.h>
 
 
 #include "vpx/vpx_mobinas.h"
@@ -539,4 +540,77 @@ int default_scale_policy (int resolution){
         default:
             return 1;
     }
+}
+
+void convertYUVtoRGB(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer){
+
+    //Temporary buffer to store all y u v data
+    int array_size = yv12->y_crop_height * yv12->y_width + 2 * (yv12->uv_crop_height * yv12->uv_width);
+    unsigned char * buffer = vpx_calloc(1, array_size);
+    unsigned char * buffer_copy = buffer;
+    unsigned char * y_buffer;
+    unsigned char * u_buffer;
+    unsigned char * v_buffer;
+
+    /* Write to single buffer first */
+    y_buffer = buffer;
+    unsigned char * src = yv12->y_buffer;
+    int h = yv12->y_crop_height;
+    do{
+        memcpy(buffer, src, yv12->y_width);
+        buffer += yv12->y_width;
+        src += yv12->y_stride;
+    }while(--h);
+
+    u_buffer = buffer;
+    src = yv12->u_buffer;
+    h = yv12->uv_crop_height;
+    do{
+        memcpy(buffer, src, yv12->uv_width);
+        buffer += yv12->uv_width;
+        src += yv12->uv_stride;
+    }while(--h);
+
+    v_buffer = buffer;
+    src = yv12->v_buffer;
+    h = yv12->uv_crop_height;
+    do{
+        memcpy(buffer, src, yv12->uv_width);
+        buffer += yv12->uv_width;
+        src += yv12->uv_stride;
+    }while(--h);
+
+
+    /* Convert to RGB */
+    uint8_t y,u,v,r,g,b;
+    int width = yv12->y_width;
+    int height = yv12->y_crop_height;
+
+    for(int i = 0; i < height; i++){
+        for(int j = 0; j < width; j++){
+            y = *(y_buffer + i * width + j);
+            u = *(u_buffer + j/2 + width/2 * i/2);
+            v = *(v_buffer + j/2 + width/2 * i/2);
+            r = 0;
+            g = 0;
+            b = 0;
+            YUV2RGB(&r, &g, &b, y, u, v);
+            *rgb_buffer = r;
+            *(rgb_buffer + 1) = g;
+            *(rgb_buffer + 2) = b;
+            rgb_buffer += 3;
+        }
+    }
+
+    free(buffer_copy);
+}
+
+void YUV2RGB(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t y, uint8_t u, uint8_t v){
+    double rTmp = 1.164383 * (y-16) + 1.596027 * (v-128);
+    double gTmp = 1.164383 * (y-16) - 0.391762 * (u - 128) - 0.812968 * (v - 128);
+    double bTmp = 1.164383 * (y-16) + 2.017232 * (u - 128);
+
+    *r = clamp(rTmp,0,255);
+    *g = clamp(gTmp,0,255);
+    *b = clamp(bTmp,0,255);
 }

@@ -50,6 +50,8 @@
 #include <vpx_dsp/vpx_constant.h>
 #include <vpx_dsp/vpx_copy.h>
 #include <vpx/vpx_mobinas.h>
+#include <main.hpp>
+#include <android/log.h>
 
 //Hyunho: for debuggin
 #define DEBUG_LATENCY 1
@@ -3484,6 +3486,8 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
 
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
+
+
     VP9_COMMON *const cm = &pbi->common;
     MACROBLOCKD *const xd = &pbi->mb;
     struct vpx_read_bit_buffer rb;
@@ -3605,16 +3609,44 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
+    cm->apply_dnn = 1;//chanju
     if(cm->apply_dnn) {
+
         char frame_path[PATH_MAX];
 //        int width = //TODO
 //        int height = //TODO
 
+        unsigned char * rgb_buffer;
+        unsigned char * sr_rgb_buffer;
+        YV12_BUFFER_CONFIG * frame;
+        YV12_BUFFER_CONFIG * sr_frame;
+
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
                 //TODO (chanju): apply model here
+
+                frame = get_frame_new_buffer(cm);
+                sr_frame = get_sr_frame_new_buffer(cm);
+
+                rgb_buffer = vpx_calloc(1, 3 * frame->y_crop_height * frame->y_width);
+                __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "%d",frame->y_crop_height * frame->y_width);
+
+                convertYUVtoRGB(frame, rgb_buffer);
+
+                sr_rgb_buffer = vpx_calloc(1, 3 * 4 * frame->y_crop_height * frame->y_width);
+                execute_snpe_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer, 3 * frame->y_crop_height * frame->y_width);
+
+                //Convert back to yuv420
+                //Save to sr_frame
+
+                //free
+                vpx_free(rgb_buffer);
+                vpx_free(sr_rgb_buffer);
+
                 break;
             case OFFLINE_DNN:
+                __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "offline dnn");
+
                 sprintf(frame_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
                         cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale);
                 fprintf(stderr, "frame_path: %s\n", frame_path);

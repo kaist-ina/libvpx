@@ -234,6 +234,10 @@ void remove_vp9_bilinear_profile(vp9_bilinear_profile_t *profile);
 void init_bilinear_config(bilinear_config_t *config, int scale, int width, int height);
 void remove_bilinear_config(bilinear_config_t *config);
 
+//Conversion + snpe
+void convertYUVtoRGB(YV12_BUFFER_CONFIG *, unsigned char *);
+void YUV2RGB(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t y, uint8_t u, uint8_t v);
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
