@@ -478,6 +478,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 
     /***Chanju***/
     ctx->pbi->common.snpe_object = ctx->snpe_object;
+    ctx->pbi->common.test = 1;
 
     return VPX_CODEC_OK;
 }

@@ -3610,38 +3610,37 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
     /*******************Hyunho************************/
     cm->apply_dnn = 1;//chanju
-    if(cm->apply_dnn) {
+    if(cm->apply_dnn && cm->test < 3) {
+        cm->test++;
 
         char frame_path[PATH_MAX];
 //        int width = //TODO
 //        int height = //TODO
 
         unsigned char * rgb_buffer;
-        unsigned char * sr_rgb_buffer;
+        float * sr_rgb_buffer;
         YV12_BUFFER_CONFIG * frame;
         YV12_BUFFER_CONFIG * sr_frame;
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
-                //TODO (chanju): apply model here
 
+                /*** Chanju ***/
                 frame = get_frame_new_buffer(cm);
                 sr_frame = get_sr_frame_new_buffer(cm);
 
                 rgb_buffer = vpx_calloc(1, 3 * frame->y_crop_height * frame->y_width);
-                __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "%d",frame->y_crop_height * frame->y_width);
+                convert_yuv420_to_rgb(frame, rgb_buffer);
 
-                convertYUVtoRGB(frame, rgb_buffer);
-
-                sr_rgb_buffer = vpx_calloc(1, 3 * 4 * frame->y_crop_height * frame->y_width);
+                sr_rgb_buffer = vpx_calloc(1, 3*4*1920*1080);//TODO:use sr_frame's width and height
                 execute_snpe_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer, 3 * frame->y_crop_height * frame->y_width);
-
-                //Convert back to yuv420
-                //Save to sr_frame
+                convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
 
                 //free
                 vpx_free(rgb_buffer);
                 vpx_free(sr_rgb_buffer);
+
+                /*** Chan ju ***/
 
                 break;
             case OFFLINE_DNN:

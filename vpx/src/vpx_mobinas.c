@@ -12,6 +12,7 @@
 #include <math.h>
 #include <libgen.h>
 #include <vpx_dsp/vpx_dsp_common.h>
+#include <android/log.h>
 
 
 #include "vpx/vpx_mobinas.h"
@@ -542,7 +543,7 @@ int default_scale_policy (int resolution){
     }
 }
 
-void convertYUVtoRGB(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer){
+void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer){
 
     //Temporary buffer to store all y u v data
     int array_size = yv12->y_crop_height * yv12->y_width + 2 * (yv12->uv_crop_height * yv12->uv_width);
@@ -605,6 +606,33 @@ void convertYUVtoRGB(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer){
     free(buffer_copy);
 }
 
+void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12){
+    uint8_t y,u,v,r,g,b;
+
+    int width = yv12->y_width;
+    int height = yv12->y_crop_height;
+
+    for(int i = 0; i < height; i++){
+        for(int j = 0; j<width;j++){
+            r = (uint8_t) clamp(round(*sr_rgb_buffer), 0, 255);
+            g = (uint8_t) clamp(round(*(sr_rgb_buffer+1)), 0, 255);
+            b = (uint8_t) clamp(round(*(sr_rgb_buffer+2)), 0, 255);
+            y = 0;
+            u = 0;
+            v = 0;
+            RGB2YUV(&y,&u,&v,r,g,b);
+
+            *(yv12->y_buffer++) = y;
+            if( (i % 2 == 0) && ( j % 2 == 0)){
+                *(yv12->u_buffer++) = u;
+                *(yv12->v_buffer++) = v;
+            }
+
+            sr_rgb_buffer += 3;
+        }
+    }
+}
+
 void YUV2RGB(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t y, uint8_t u, uint8_t v){
     double rTmp = 1.164383 * (y-16) + 1.596027 * (v-128);
     double gTmp = 1.164383 * (y-16) - 0.391762 * (u - 128) - 0.812968 * (v - 128);
@@ -613,4 +641,15 @@ void YUV2RGB(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t y, uint8_t u, uint8_t v
     *r = clamp(rTmp,0,255);
     *g = clamp(gTmp,0,255);
     *b = clamp(bTmp,0,255);
+}
+
+void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b){
+
+    double yTmp = round( (0.256788 * r + 0.504129 * g + 0.097906 * b) + 16);
+    double uTmp = round( (-0.148223 * r - 0.290993 * g + 0.439216 * b) + 128);
+    double vTmp = round( (0.439216 * r - 0.367788 * g - 0.071427 * b) + 128);
+
+    *y = clamp(yTmp,0,255);
+    *u = clamp(uTmp,0,255);
+    *v = clamp(vTmp,0,255);
 }

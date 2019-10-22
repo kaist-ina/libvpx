@@ -137,6 +137,7 @@ typedef struct VP9Common {
 
     /*****Chanju*****/
     snpe_cfg_t * snpe_object;
+    int test;
     /*****Chanju*****/
 
 
