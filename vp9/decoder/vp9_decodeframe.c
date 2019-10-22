@@ -3621,20 +3621,38 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         float * sr_rgb_buffer;
         YV12_BUFFER_CONFIG * frame;
         YV12_BUFFER_CONFIG * sr_frame;
+        struct timeval begin,now , subtract;
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
 
                 /*** Chanju ***/
+                gettimeofday(&begin,NULL);
+
+                printTime(0, &begin);
+
                 frame = get_frame_new_buffer(cm);
                 sr_frame = get_sr_frame_new_buffer(cm);
 
                 rgb_buffer = vpx_calloc(1, 3 * frame->y_crop_height * frame->y_width);
+
+                printTime(1, &begin);
+
                 convert_yuv420_to_rgb(frame, rgb_buffer);
 
+                printTime(2, &begin);
+
                 sr_rgb_buffer = vpx_calloc(1, 3*4*1920*1080);//TODO:use sr_frame's width and height
+
+                printTime(3, &begin);
+
                 execute_snpe_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer, 3 * frame->y_crop_height * frame->y_width);
+
+                printTime(4, &begin);
+
                 convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
+
+                printTime(5, &begin);
 
                 //free
                 vpx_free(rgb_buffer);

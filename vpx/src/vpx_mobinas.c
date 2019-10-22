@@ -13,6 +13,7 @@
 #include <libgen.h>
 #include <vpx_dsp/vpx_dsp_common.h>
 #include <android/log.h>
+#include <sys/time.h>
 
 
 #include "vpx/vpx_mobinas.h"
@@ -652,4 +653,12 @@ void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b
     *y = clamp(yTmp,0,255);
     *u = clamp(uTmp,0,255);
     *v = clamp(vTmp,0,255);
+}
+
+void printTime(int checkpoint, struct timeval * begin){
+    struct timeval subtract, now;
+
+    gettimeofday(&now,NULL);
+    timersub(&now,begin,&subtract);
+    __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
 }
