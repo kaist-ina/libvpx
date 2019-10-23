@@ -302,9 +302,6 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
         }
         switch (mobinas_cfg->cache_policy)
         {
-        case NO_CACHE:
-            fprintf(stderr, "%s: invalid cache policy\n", __func__);
-            return -1;
         case PROFILE_CACHE:
             if (!mobinas_cfg->cache_profile)
             {
@@ -315,9 +312,6 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
         }
         switch (mobinas_cfg->dnn_mode)
         {
-        case NO_DNN:
-            fprintf(stderr, "%s: invalid dnn mode\n", __func__);
-            return -1;
         case OFFLINE_DNN:
             //TODO: check a dnn file is valid
             break;
@@ -416,6 +410,11 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
                 break;
             case PROFILE_CACHE:
                 sprintf(file_path, "%s/%s/log/quality_cache_%s", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix, ctx->mobinas_cfg->cache_profile->name);
+                break;
+            }
+            switch(ctx->mobinas_cfg->dnn_mode){
+            case NO_DNN:
+                sprintf(file_path, "%s/%s/log/quality_cache_no_dnn", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
                 break;
             }
             break;
