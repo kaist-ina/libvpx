@@ -3646,11 +3646,14 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
                 printTime(3, &begin);
 
-                execute_snpe_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer, 3 * frame->y_crop_height * frame->y_width);
+                snpe_execute_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer,
+                                  3 * frame->y_crop_height * frame->y_width);
 
                 printTime(4, &begin);
 
                 convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
+
+                saveToFile(sr_frame, 1, cm->test);    //1 for save
 
                 printTime(5, &begin);
 

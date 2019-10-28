@@ -239,8 +239,8 @@ void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG *, unsigned char *);
 void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12);
 void YUV2RGB(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t y, uint8_t u, uint8_t v);
 void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b);
-
 void printTime(int checkpoint, struct timeval * begin);
+void saveToFile(float * sr_rgb_buffer, int print, int frame_number);
 
 #ifdef __cplusplus
 }  // extern "C"

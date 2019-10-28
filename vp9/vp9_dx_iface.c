@@ -97,7 +97,21 @@ static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
     return VPX_CODEC_OK;
 }
 
+void free_snpe(vpx_codec_alg_priv_t *ctx){
+    //snpe api
+    snpe_free(ctx);
+
+    //Free object inside vpx_codec
+    free(ctx->snpe_object);
+}
+
+
 static vpx_codec_err_t decoder_destroy(vpx_codec_alg_priv_t *ctx) {
+
+    /*** Chanju ***/
+    free_snpe(ctx);
+    /*** Chanju ***/
+
     if (ctx->pbi != NULL) {
         vp9_decoder_remove(ctx->pbi);
     }
@@ -282,12 +296,11 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
 /***Chanju***/
 static void init_snpe( vpx_codec_alg_priv_t *ctx, mobinas_cfg_t * mobinas_cfg){
     snpe_cfg_t * snpe_object = malloc(sizeof(snpe_cfg_t));
-    snpe_object->runtime = check_runtime();
-    snpe_object->snpe_network = init_snpe_network(snpe_object->runtime, mobinas_cfg->model_quality);
+    snpe_object->runtime = snpe_check_runtime();
+    snpe_object->snpe_network = snpe_init_network(snpe_object->runtime, mobinas_cfg->model_quality);
 
     ctx->snpe_object = snpe_object;
 }
-
 
 /* Validate MobiNAS configuration */
 static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
@@ -478,7 +491,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 
     /***Chanju***/
     ctx->pbi->common.snpe_object = ctx->snpe_object;
-    ctx->pbi->common.test = 1;
+    ctx->pbi->common.test = 0;
 
     return VPX_CODEC_OK;
 }

@@ -13,6 +13,7 @@
  *
  */
 #include <string.h>
+#include <vp9/vp9_dx_iface.h>
 #include "vpx/internal/vpx_codec_internal.h"
 
 #define SAVE_STATUS(ctx, var) (ctx ? (ctx->err = var) : var)

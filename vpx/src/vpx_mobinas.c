@@ -662,3 +662,14 @@ void printTime(int checkpoint, struct timeval * begin){
     timersub(&now,begin,&subtract);
     __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
 }
+
+void saveToFile(float * sr_rgb_buffer, int print, int frame_number){
+    if(print){
+        //save to file
+        char file_name[100];
+        sprintf(file_name, "/sdcard/SNPEData/frame/%d", frame_number);
+        FILE * file = fopen(file_name, "wb");
+        fwrite(sr_rgb_buffer, 3 * 1920 * 1080 * 4, 1, file);
+        fclose(file);
+    }
+}
