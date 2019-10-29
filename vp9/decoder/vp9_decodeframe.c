@@ -3568,23 +3568,31 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         pbi->mobinas_worker_data[i].adaptive_cache_count = 0;
     }
 
-    switch(cm->mobinas_cfg->cache_policy) {
-        case PROFILE_CACHE:
-            //TODO (hyunho): read a cache profile
-            if ((cm->apply_dnn = read_cache_profile(cm->mobinas_cfg->cache_profile)) == -1)
-            {
-                fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
-                cm->mobinas_cfg->cache_policy = NO_CACHE;
-                cm->apply_dnn = 0;
+    switch(cm->mobinas_cfg->decode_mode){
+        case DECODE_SR:
+            cm->apply_dnn = 1;
+            break;
+        case DECODE_CACHE:
+            switch(cm->mobinas_cfg->cache_policy) {
+                case PROFILE_CACHE:
+                    //TODO (hyunho): read a cache profile
+                    if ((cm->apply_dnn = read_cache_profile(cm->mobinas_cfg->cache_profile)) == -1)
+                    {
+                        fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                        cm->mobinas_cfg->cache_policy = NO_CACHE;
+                        cm->apply_dnn = 0;
+                    }
+                    break;
+                case KEY_FRAME_CACHE:
+                    cm->apply_dnn = (cm->frame_type == KEY_FRAME ? 1 : 0);
+                    break;
+                default:
+                    cm->apply_dnn = 0;
+                    break;
             }
             break;
-        case KEY_FRAME_CACHE:
-            cm->apply_dnn = (cm->frame_type == KEY_FRAME ? 1 : 0);
-            break;
-        default:
-            cm->apply_dnn = 0;
-            break;
     }
+
     /*******************Hyunho************************/
 
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
@@ -3609,7 +3617,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    cm->apply_dnn = 1;//chanju
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decodeframe: apply dnn %d", cm->apply_dnn);
+
     if(cm->apply_dnn && cm->test < 3) {
         cm->test++;
 
@@ -3625,6 +3634,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
+
+                __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decodeframe: apply sr");
 
                 /*** Chanju ***/
                 gettimeofday(&begin,NULL);

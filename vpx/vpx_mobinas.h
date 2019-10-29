@@ -22,7 +22,7 @@ typedef struct snpe_cfg{
 
 typedef int (*mobinas_get_scale_fn_t) (int);
 
-int default_scale_policy (int resolution);
+extern int default_scale_policy (int resolution);
 
 typedef struct mobinas_latency_info {
     double decode_frame;
