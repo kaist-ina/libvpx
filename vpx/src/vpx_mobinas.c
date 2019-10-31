@@ -673,3 +673,4 @@ void saveToFile(float * sr_rgb_buffer, int print, int frame_number){
         fclose(file);
     }
 }
+

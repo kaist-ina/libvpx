@@ -6,4 +6,8 @@ text vpx_codec_peek_stream_info
 text vpx_codec_register_put_frame_cb
 text vpx_codec_register_put_slice_cb
 text vpx_codec_set_frame_buffer_functions
-text vpx_mobinas_init
+text vpx_load_mobinas_cfg
+text exoplayer_mobinas_decode_cfg
+text exoplayer_mobinas_decode_sr_cfg
+text snpe_mobinas_decode_cfg
+text snpe_mobinas_decode_sr_cfg

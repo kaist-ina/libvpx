@@ -33,7 +33,7 @@ extern "C" {
 #include <math.h>
 #include "./vpx_codec.h"
 #include "./vpx_frame_buffer.h"
-#include "vpx_mobinas.h"
+#include "./vpx_mobinas.h"
 
 /*!\brief Current ABI version number
  *
@@ -363,7 +363,19 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
 /*!@} - end defgroup decoder*/
 
-vpx_codec_err_t vpx_load_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
+vpx_codec_err_t vpx_load_mobinas_cfg(
+        vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
+
+
+//API calls for initializing settings for
+//Exoplayer + snpe + libvpx
+//snpe + libvpx
+mobinas_cfg_t * exoplayer_mobinas_decode_cfg();
+mobinas_cfg_t * exoplayer_mobinas_decode_sr_cfg();
+mobinas_cfg_t * snpe_mobinas_decode_cfg(const char * save_dir, const char * prefix,
+                                        const char * target_video, const char * compare_video);
+mobinas_cfg_t * snpe_mobinas_decode_sr_cfg(const char * save_dir, const char * prefix,
+                                        const char * target_video, const char * compare_video);
 
 #ifdef __cplusplus
 }

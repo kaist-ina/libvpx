@@ -4,7 +4,9 @@
 
 #ifndef LIBVPX_WRAPPER_VPX_SR_CACHE_H
 #define LIBVPX_WRAPPER_VPX_SR_CACHE_H
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 #include <limits.h>
 #include "./vpx_config.h"
 #include "vpx_scale/yv12config.h"
@@ -197,9 +199,7 @@ typedef struct mobinas_cfg{
     snpe_model_quality model_quality;
 } mobinas_cfg_t;
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 //mobinas_cfg
 mobinas_cfg_t *init_mobinas_cfg();
@@ -242,8 +242,11 @@ void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b
 void printTime(int checkpoint, struct timeval * begin);
 void saveToFile(float * sr_rgb_buffer, int print, int frame_number);
 
+
+
 #ifdef __cplusplus
 }  // extern "C"
 #endif
+
 
 #endif //LIBVPX_WRAPPER_VPX_SR_CACHE_H

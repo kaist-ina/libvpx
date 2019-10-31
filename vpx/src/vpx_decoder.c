@@ -16,6 +16,9 @@
 #include <vp9/vp9_dx_iface.h>
 #include "vpx/internal/vpx_codec_internal.h"
 
+#include <vpx/vpx_mobinas.h>
+
+
 #define SAVE_STATUS(ctx, var) (ctx ? (ctx->err = var) : var)
 
 static vpx_codec_alg_priv_t *get_alg_priv(vpx_codec_ctx_t *ctx) {
@@ -188,10 +191,94 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
   return SAVE_STATUS(ctx, res);
 }
 
+
 vpx_codec_err_t vpx_load_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg){
     vpx_codec_err_t res;
 
     res = ctx->iface->mobinas.load_cfg(get_alg_priv(ctx), mobinas_cfg);
 
     return SAVE_STATUS(ctx, res);
+}
+
+
+//API function calls for snpe + libvpx, and exoplayer + snpe + libvpx
+
+mobinas_cfg_t * snpe_mobinas_decode_cfg(const char * save_dir, const char * prefix,
+                                        const char * target_video, const char * compare_video){
+    mobinas_cfg_t * mobinas = init_mobinas_cfg();
+    strcpy(mobinas->save_dir, save_dir);
+    strcpy(mobinas->prefix, prefix);
+    strcpy(mobinas->target_file, target_video);
+    strcpy(mobinas->compare_file, compare_video);
+
+    mobinas->save_intermediate_frame = 1;
+    mobinas->save_final_frame = 1;
+    mobinas->save_quality_result = 1;
+    mobinas->save_metadata_result = 1;
+    mobinas->save_latency_result = 1;
+    mobinas->decode_mode = DECODE_SR;//mode
+    mobinas->dnn_mode = ONLINE_DNN;
+    mobinas->cache_policy = NO_CACHE;
+    mobinas->cache_profile = NULL;
+    mobinas->get_scale = default_scale_policy;
+    mobinas->model_quality = HQ;
+
+}
+
+mobinas_cfg_t * snpe_mobinas_decode_sr_cfg(const char * save_dir, const char * prefix,
+        const char * target_video, const char * compare_video){
+    mobinas_cfg_t * mobinas = init_mobinas_cfg();
+    strcpy(mobinas->save_dir, save_dir);
+    strcpy(mobinas->prefix, prefix);
+    strcpy(mobinas->target_file, target_video);
+    strcpy(mobinas->compare_file, compare_video);
+
+    mobinas->save_intermediate_frame = 1;
+    mobinas->save_final_frame = 1;
+    mobinas->save_quality_result = 1;
+    mobinas->save_metadata_result = 1;
+    mobinas->save_latency_result = 1;
+    mobinas->decode_mode = DECODE_SR;//mode
+    mobinas->dnn_mode = ONLINE_DNN;
+    mobinas->cache_policy = NO_CACHE;
+    mobinas->cache_profile = NULL;
+    mobinas->get_scale = default_scale_policy;
+    mobinas->model_quality = HQ;
+
+}
+
+mobinas_cfg_t * exoplayer_mobinas_decode_cfg(){
+    mobinas_cfg_t * mobinas = init_mobinas_cfg();
+    //no need for video paths, since exoplayer streams online video and takes care of input
+    mobinas->save_intermediate_frame = 1;
+    mobinas->save_final_frame = 1;
+    mobinas->save_quality_result = 1;
+    mobinas->save_metadata_result = 1;
+    mobinas->save_latency_result = 1;
+    mobinas->decode_mode = DECODE;//mode
+    mobinas->dnn_mode = ONLINE_DNN;
+    mobinas->cache_policy = NO_CACHE;
+    mobinas->cache_profile = NULL;
+    mobinas->get_scale = default_scale_policy;
+    mobinas->model_quality = HQ;
+
+    return mobinas;
+}
+
+mobinas_cfg_t * exoplayer_mobinas_decode_sr_cfg(){
+    mobinas_cfg_t * mobinas = init_mobinas_cfg();
+    //no need for video paths, since exoplayer streams online video and takes care of input
+    mobinas->save_intermediate_frame = 1;
+    mobinas->save_final_frame = 1;
+    mobinas->save_quality_result = 1;
+    mobinas->save_metadata_result = 1;
+    mobinas->save_latency_result = 1;
+    mobinas->decode_mode = DECODE_SR;//mode
+    mobinas->dnn_mode = ONLINE_DNN;
+    mobinas->cache_policy = NO_CACHE;
+    mobinas->cache_profile = NULL;
+    mobinas->get_scale = default_scale_policy;
+    mobinas->model_quality = HQ;
+
+    return mobinas;
 }
