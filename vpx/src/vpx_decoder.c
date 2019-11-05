@@ -211,18 +211,19 @@ mobinas_cfg_t * snpe_mobinas_decode_cfg(const char * save_dir, const char * pref
     strcpy(mobinas->target_file, target_video);
     strcpy(mobinas->compare_file, compare_video);
 
-    mobinas->save_intermediate_frame = 1;
-    mobinas->save_final_frame = 1;
-    mobinas->save_quality_result = 1;
-    mobinas->save_metadata_result = 1;
-    mobinas->save_latency_result = 1;
-    mobinas->decode_mode = DECODE_SR;//mode
+    mobinas->save_intermediate_frame = 0;
+    mobinas->save_final_frame = 0;
+    mobinas->save_quality_result = 0;
+    mobinas->save_metadata_result = 0;
+    mobinas->save_latency_result = 0;
+    mobinas->decode_mode = DECODE;//mode
     mobinas->dnn_mode = ONLINE_DNN;
     mobinas->cache_policy = NO_CACHE;
     mobinas->cache_profile = NULL;
     mobinas->get_scale = default_scale_policy;
     mobinas->model_quality = HQ;
 
+    return mobinas;
 }
 
 mobinas_cfg_t * snpe_mobinas_decode_sr_cfg(const char * save_dir, const char * prefix,
@@ -245,6 +246,7 @@ mobinas_cfg_t * snpe_mobinas_decode_sr_cfg(const char * save_dir, const char * p
     mobinas->get_scale = default_scale_policy;
     mobinas->model_quality = HQ;
 
+    return mobinas;
 }
 
 mobinas_cfg_t * exoplayer_mobinas_decode_cfg(){

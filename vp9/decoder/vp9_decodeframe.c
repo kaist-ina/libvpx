@@ -1949,7 +1949,7 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
              cm->mobinas_cfg->decode_mode = cm->mobinas_cfg->saved_decode_mode;
      }
 
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -2091,7 +2091,7 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
         if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
                                      cm->height, cm->subsampling_x,
                                      cm->subsampling_y,
@@ -3487,7 +3487,6 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
 
-
     VP9_COMMON *const cm = &pbi->common;
     MACROBLOCKD *const xd = &pbi->mb;
     struct vpx_read_bit_buffer rb;
@@ -3552,6 +3551,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         }
         /*******************Hyunho************************/
     }
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decodeframe: apply dnn %d", cm->apply_dnn);
 
     /*******************Hyunho************************/
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
@@ -3617,9 +3617,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decodeframe: apply dnn %d", cm->apply_dnn);
 
-    if(cm->apply_dnn && cm->test < 3) {
+    if(cm->apply_dnn) {
         cm->test++;
 
         char frame_path[PATH_MAX];
@@ -3635,8 +3634,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
 
-                __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decodeframe: apply sr");
-
                 /*** Chanju ***/
                 gettimeofday(&begin,NULL);
 
@@ -3649,11 +3646,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
                 printTime(1, &begin);
 
-                convert_yuv420_to_rgb(frame, rgb_buffer);
+                convert_yuv420_to_rgb(frame, rgb_buffer, cm->test);
 
                 printTime(2, &begin);
 
-                sr_rgb_buffer = vpx_calloc(1, 3*4*1920*1080);//TODO:use sr_frame's width and height
+                sr_rgb_buffer = vpx_calloc(1, 3 * 4*sr_frame->y_crop_height * sr_frame->y_width);
 
                 printTime(3, &begin);
 
@@ -3662,15 +3659,16 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
                 printTime(4, &begin);
 
-                convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
+                saveToFile(sr_rgb_buffer, sr_frame->y_crop_height,sr_frame->y_width, 1, cm->test);    //1 for save
 
-                saveToFile(sr_frame, 1, cm->test);    //1 for save
+                convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
 
                 printTime(5, &begin);
 
                 //free
                 vpx_free(rgb_buffer);
                 vpx_free(sr_rgb_buffer);
+
 
                 /*** Chan ju ***/
 
@@ -3693,6 +3691,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
     /*******************Hyunho************************/
 
+
     if (!xd->corrupted) {
         if (!cm->error_resilient_mode && !cm->frame_parallel_decoding_mode) {
             vp9_adapt_coef_probs(cm);
@@ -3710,4 +3709,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     // Non frame parallel update frame context here.
     if (cm->refresh_frame_context && !context_updated)
         cm->frame_contexts[cm->frame_context_idx] = *cm->fc;
+
+
 }

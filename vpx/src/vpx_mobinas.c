@@ -544,7 +544,9 @@ int default_scale_policy (int resolution){
     }
 }
 
-void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer){
+void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer, int test){
+
+    unsigned char * temp = rgb_buffer;
 
     //Temporary buffer to store all y u v data
     int array_size = yv12->y_crop_height * yv12->y_width + 2 * (yv12->uv_crop_height * yv12->uv_width);
@@ -603,6 +605,16 @@ void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer
             rgb_buffer += 3;
         }
     }
+
+    //write to file
+    if(test == 20){
+        char file_name[100];
+        sprintf(file_name, "/sdcard/SNPEData/frame/testyo");
+        FILE * yuv_file = fopen(file_name, "wb");
+        fwrite(temp, 3 * height * width, 1, yuv_file);
+        fclose(yuv_file);
+    }
+
 
     free(buffer_copy);
 }
@@ -663,13 +675,23 @@ void printTime(int checkpoint, struct timeval * begin){
     __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
 }
 
-void saveToFile(float * sr_rgb_buffer, int print, int frame_number){
+void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int frame_number){
     if(print){
         //save to file
+
+        unsigned char * temp_buffer = vpx_calloc(1, height*width*3);
+        unsigned char * temp_buffer_copy = temp_buffer;
+        for(int i = 0; i < height*width*3; i++){
+            *temp_buffer = (uint8_t) clamp(round(*sr_rgb_buffer), 0, 255);
+            temp_buffer++;
+            sr_rgb_buffer++;
+        }
+
         char file_name[100];
-        sprintf(file_name, "/sdcard/SNPEData/frame/%d", frame_number);
+        sprintf(file_name, "/sdcard/SNPEData/frame/%dSR", frame_number);
         FILE * file = fopen(file_name, "wb");
-        fwrite(sr_rgb_buffer, 3 * 1920 * 1080 * 4, 1, file);
+        fwrite(temp_buffer_copy, height * width * 3, 1, file);
+        vpx_free(temp_buffer_copy);
         fclose(file);
     }
 }

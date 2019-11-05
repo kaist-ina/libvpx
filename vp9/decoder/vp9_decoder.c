@@ -42,6 +42,7 @@
 #include "vp9/decoder/vp9_detokenize.h"
 
 #include <vpx_dsp/psnr.h>
+#include <android/log.h>
 
 static void initialize_dec(void) {
     static volatile int init_done = 0;
@@ -282,7 +283,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
         cm->ref_frame_map[ref_index] = cm->next_ref_frame_map[ref_index];
     }
     pbi->hold_ref_buf = 0;
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
         cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
     }
     else {
@@ -408,6 +409,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
     // Update progress in frame parallel decode.
     cm->last_width = cm->width;
     cm->last_height = cm->height;
+
     if (cm->show_frame) {
         cm->current_video_frame++;
     }

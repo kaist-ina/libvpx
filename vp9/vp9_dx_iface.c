@@ -435,12 +435,18 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 //    LOGE("decoder allocated");
 
 
+
     // If postprocessing was enabled by the application and a
     // configuration has not been provided, default it.
     if (!ctx->postproc_cfg_set && (ctx->base.init_flags & VPX_CODEC_USE_POSTPROC))
         set_default_ppflags(&ctx->postproc_cfg);
 
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init asdf");
+
     init_buffer_callbacks(ctx);
+
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init asdf2");
+
 
     /*******************Hyunho************************/
     if (ctx->mobinas_cfg == NULL) {
