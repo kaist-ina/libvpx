@@ -842,7 +842,6 @@ static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
 static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                       const uint8_t *data, unsigned int data_sz,
                                       void *user_priv, long deadline) {
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_dx_iface: decoder_decode");
 
     const uint8_t *data_start = data;
     const uint8_t *const data_end = data + data_sz;

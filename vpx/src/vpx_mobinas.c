@@ -625,6 +625,15 @@ void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12){
     int width = yv12->y_width;
     int height = yv12->y_crop_height;
 
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "check: %d, %d, %d, %d",
+            width, yv12->uv_width, yv12->y_stride, yv12->uv_stride);
+
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "check:  %d", yv12->uv_crop_height);
+
+    unsigned char * y_pointer = yv12->y_buffer;
+    unsigned char * u_pointer = yv12->u_buffer;
+    unsigned char * v_pointer = yv12->v_buffer;
+
     for(int i = 0; i < height; i++){
         for(int j = 0; j<width;j++){
             r = (uint8_t) clamp(round(*sr_rgb_buffer), 0, 255);
@@ -635,10 +644,10 @@ void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12){
             v = 0;
             RGB2YUV(&y,&u,&v,r,g,b);
 
-            *(yv12->y_buffer++) = y;
+            *(y_pointer++) = y;
             if( (i % 2 == 0) && ( j % 2 == 0)){
-                *(yv12->u_buffer++) = u;
-                *(yv12->v_buffer++) = v;
+                *(u_pointer++) = u;
+                *(v_pointer++) = v;
             }
 
             sr_rgb_buffer += 3;
@@ -672,7 +681,7 @@ void printTime(int checkpoint, struct timeval * begin){
 
     gettimeofday(&now,NULL);
     timersub(&now,begin,&subtract);
-    __android_log_print(ANDROID_LOG_ERROR, "JNITAG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
 }
 
 void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int frame_number){
@@ -695,4 +704,109 @@ void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int fra
         fclose(file);
     }
 }
+
+
+
+//unsigned char * yv12_to_single_buffer(YV12_BUFFER_CONFIG * s){
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "%d %d %d %d %d %d",s->y_crop_height, s->y_width,s->y_stride,s->uv_crop_height, s->uv_width, s->uv_stride);
+//
+//    unsigned int array_size = s->y_crop_height * s->y_width; //y
+//    array_size += s->uv_crop_height * s->uv_width;  //u
+//    array_size += s->uv_crop_height * s->uv_width;  //v
+//    unsigned char * buffer = (unsigned char *) vpx_calloc(array_size,1);
+//    unsigned char * buffer_copy = buffer;
+//
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "%d %d %d %d %d %d",s->y_crop_height, s->y_width,s->y_stride,s->uv_crop_height, s->uv_width, s->uv_stride);
+//
+//
+//    unsigned char * src = s->y_buffer;
+//    int h = s->y_crop_height;
+//    do{
+//        memcpy(buffer,src,s->y_width);
+//        buffer += s->y_width;
+//        src += s->y_stride;
+//    }while(--h);
+//
+//
+//    src = s->u_buffer;
+//    h = s->uv_crop_height;
+//    do {
+//        memcpy(buffer, src, s->uv_width);
+//        buffer += s->uv_width;
+//        src += s->uv_stride;
+//    } while (--h);
+//
+//
+//    src = s->v_buffer;
+//    h = s->uv_crop_height;
+//    do {
+//        memcpy(buffer, src, s->uv_width);
+//        buffer += s->uv_width;
+//        src += s->uv_stride;
+//    } while (--h);
+//
+//
+//    return buffer_copy;
+//}
+//
+//unsigned char * single_buffer_yuv_to_rgb(unsigned char * yuv, int width, int height,
+//                                         unsigned char * y_pointer, unsigned char * u_pointer, unsigned char * v_pointer){
+//
+//    unsigned char * rgb_buffer = (unsigned  char*) vpx_calloc(width*height*3,1);
+//    unsigned char * rgb_buffer_copy = rgb_buffer;
+//
+//    uint8_t y,u,v,r,g,b;
+//
+//    for(int i =0; i < height; i++){
+//        for(int j = 0; j < width; j++){
+//            y = *(y_pointer + i * width + j);
+//            u = *(u_pointer + j/2 + width/2 * i/2);
+//            v = *(v_pointer + j/2 + width/2 * i/2);
+//            r = 0;
+//            g = 0;
+//            b = 0;
+//            YUV2RGB(&r, &g, &b, y, u, v);
+//            *rgb_buffer = r;
+//            *(rgb_buffer + 1) = g;
+//            *(rgb_buffer + 2) = b;
+//            rgb_buffer += 3;
+//        }
+//    }
+//
+//    return rgb_buffer_copy;
+//}
+//
+//void printToFile(char * name, int buffer_size, unsigned char * buffer){
+//    FILE * file = fopen(name, "wb");
+//    fwrite(buffer, buffer_size, 1, file);
+//    fclose(file);
+//}
+//
+//void sr_yv12_to_rgb_and_print(YV12_BUFFER_CONFIG * yv12, int frame_number){
+//    unsigned char * yuv_buffer = yv12_to_single_buffer(yv12);
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "verify 1");
+//
+//
+//    int width = yv12->y_width;
+//    int height = yv12->y_crop_height;
+//    unsigned char * y_pointer = yuv_buffer;
+//    unsigned char * u_pointer = y_pointer + width * height;
+//    unsigned char * v_pointer = u_pointer + yv12->uv_crop_height * yv12->uv_width;
+//    unsigned char * rgb_buffer = single_buffer_yuv_to_rgb(yuv_buffer, width, height, y_pointer,u_pointer,v_pointer);
+//
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "verify 2");
+//
+//    //print to file
+//    char file_name[100];
+//    sprintf(file_name, "/sdcard/SNPEData/frame/verify%d", frame_number);
+//    printToFile(file_name, 3 * height*width,rgb_buffer);
+//
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "verify 3");
+//
+//    //free
+//    vpx_free(yuv_buffer);
+//    vpx_free(rgb_buffer);
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "verify 4");
+//
+//}
 

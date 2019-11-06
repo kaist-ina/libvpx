@@ -3551,7 +3551,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         }
         /*******************Hyunho************************/
     }
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decodeframe: apply dnn %d", cm->apply_dnn);
 
     /*******************Hyunho************************/
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
@@ -3635,6 +3634,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             case ONLINE_DNN:
 
                 /*** Chanju ***/
+                __android_log_print(ANDROID_LOG_ERROR, "TAGG", "ONLINE DNN");
+
                 gettimeofday(&begin,NULL);
 
                 printTime(0, &begin);
@@ -3661,7 +3662,13 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
                 saveToFile(sr_rgb_buffer, sr_frame->y_crop_height,sr_frame->y_width, 1, cm->test);    //1 for save
 
+                //Verified up to this point
+
                 convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
+                sr_frame->y_stride = 1920;
+                sr_frame->uv_stride = 960;
+//                sr_yv12_to_rgb_and_print(sr_frame, cm->test);//verify output
+
 
                 printTime(5, &begin);
 

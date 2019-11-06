@@ -242,6 +242,8 @@ void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b
 void printTime(int checkpoint, struct timeval * begin);
 void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int frame_number);
 
+//void sr_yv12_to_rgb_and_print(YV12_BUFFER_CONFIG * yv12, int frame_number);
+
 
 
 #ifdef __cplusplus
