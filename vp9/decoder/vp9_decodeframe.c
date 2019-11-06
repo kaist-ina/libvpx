@@ -3685,7 +3685,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
                 sprintf(frame_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
                         cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale);
-                fprintf(stderr, "frame_path: %s\n", frame_path);
 
                 if (vpx_deserialize_copy(get_sr_frame_new_buffer(cm), frame_path, cm->width * cm->scale, //check: sr frame
                                          cm->height * cm->scale, cm->subsampling_x,

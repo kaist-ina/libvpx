@@ -329,7 +329,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         !frame_bufs[cm->new_fb_idx].released) {
         pool->release_fb_cb(pool->cb_priv,
                             &frame_bufs[cm->new_fb_idx].raw_frame_buffer);
-        if (pool->mode == DECODE_CACHE) {
+        if (pool->mode == DECODE_CACHE || pool->mode == DECODE_SR) {
             pool->release_fb_cb(pool->cb_priv,
                                 &frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer);
         }

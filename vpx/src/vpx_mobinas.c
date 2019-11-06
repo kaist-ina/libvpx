@@ -625,10 +625,10 @@ void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12){
     int width = yv12->y_width;
     int height = yv12->y_crop_height;
 
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "check: %d, %d, %d, %d",
-            width, yv12->uv_width, yv12->y_stride, yv12->uv_stride);
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "check: %d, %d, %d, %d",
+//            width, yv12->uv_width, yv12->y_stride, yv12->uv_stride);
 
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "check:  %d", yv12->uv_crop_height);
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "check:  %d", yv12->uv_crop_height);
 
     unsigned char * y_pointer = yv12->y_buffer;
     unsigned char * u_pointer = yv12->u_buffer;
@@ -681,7 +681,7 @@ void printTime(int checkpoint, struct timeval * begin){
 
     gettimeofday(&now,NULL);
     timersub(&now,begin,&subtract);
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
+//    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "%d: %ld.%06ld", checkpoint, subtract.tv_sec,subtract.tv_usec);
 }
 
 void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int frame_number){

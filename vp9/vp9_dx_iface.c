@@ -326,9 +326,6 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
     case DECODE_SR:
         switch (mobinas_cfg->dnn_mode)
         {
-        case NO_DNN:
-            fprintf(stderr, "%s: invalid dnn mode\n", __func__);
-            return -1;
         case OFFLINE_DNN:
             //TODO: check a dnn file is valid
             break;
@@ -355,9 +352,6 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
         }
         switch (mobinas_cfg->cache_policy)
         {
-        case NO_CACHE:
-            fprintf(stderr, "%s: invalid cache policy\n", __func__);
-            return -1;
         case PROFILE_CACHE:
             if (!mobinas_cfg->cache_profile)
             {
@@ -413,8 +407,6 @@ static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx,  mobinas_cfg_
 
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init decoder");
-
     char file_path[PATH_MAX] = {0};
 
     ctx->last_show_frame = -1;
@@ -441,11 +433,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     if (!ctx->postproc_cfg_set && (ctx->base.init_flags & VPX_CODEC_USE_POSTPROC))
         set_default_ppflags(&ctx->postproc_cfg);
 
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init asdf");
-
     init_buffer_callbacks(ctx);
-
-    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "init asdf2");
 
 
     /*******************Hyunho************************/
@@ -486,6 +474,13 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
                 sprintf(file_path, "%s/%s/log/quality_cache_%s.log", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix, ctx->mobinas_cfg->cache_profile->name);
                 break;
             }
+
+            switch(ctx->mobinas_cfg->dnn_mode){
+                case NO_DNN:
+                    sprintf(file_path, "%s/%s/log/quality_cache_no_dnn", ctx->mobinas_cfg->save_dir, ctx->mobinas_cfg->prefix);
+                    break;
+            }
+
             break;
         }
 
@@ -772,6 +767,29 @@ static void save_cache_quality_result(VP9_COMMON *cm, int current_video_frame){
 #endif
 }
 
+static void save_sr_quality_result(VP9_COMMON *cm, int current_video_frame){
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
+    PSNR_STATS psnr_sr, psnr_lr;
+
+    //measure sr-cached frame quality
+    int width = get_sr_frame_new_buffer(cm)->y_crop_width; //check: sr frame
+    int height = get_sr_frame_new_buffer(cm)->y_crop_height; //check: sr frame
+
+    sprintf(file_path, "%s/%s/serialize/%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->compare_file, current_video_frame, height);
+    if(vpx_deserialize_load(cm->hr_reference_frame, file_path, width, height,
+                            cm->subsampling_x, cm->subsampling_y, cm->byte_alignment))
+    {
+        vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
+                           "deserialize failed");
+    }
+    vpx_calc_psnr(get_sr_frame_new_buffer(cm), cm->hr_reference_frame, &psnr_sr); //check: sr frame
+    sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr_sr.psnr[0], psnr_sr.psnr[1], psnr_sr.psnr[2], psnr_sr.psnr[3]);
+    fputs(log, cm->quality_log);
+    fprintf(stderr, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr_sr.psnr[0]);
+}
+
+
 static void save_decoded_quality_result(VP9_COMMON *cm, int current_video_frame){
     char file_path[PATH_MAX] = {0};
     char log[LOG_MAX] = {0};
@@ -818,7 +836,7 @@ static void save_bilinear_quality_result(VP9_COMMON *cm, int current_video_frame
     sprintf(log, "%d\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, psnr.psnr[0],
             psnr.psnr[1], psnr.psnr[2], psnr.psnr[3]);
     fputs(log, cm->quality_log);
-    fprintf(stdout, "[PSNR] %d frame: %.2fdB", current_video_frame, psnr.psnr[0]);
+    fprintf(stdout, "[PSNR] %d frame: %.2fdB\n", current_video_frame, psnr.psnr[0]);
 }
 
 static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
@@ -828,6 +846,7 @@ static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
         break;
     case DECODE_SR:
         fprintf(stderr, "%s: Not implemented", __func__);
+        save_sr_quality_result(cm, current_video_frame);
         break;
     case DECODE_BILINEAR:
         save_bilinear_quality_result(cm, current_video_frame);
