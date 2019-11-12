@@ -101,6 +101,8 @@ void free_snpe(vpx_codec_alg_priv_t *ctx){
     //snpe api
     snpe_free(ctx);
 
+    fclose(ctx->latency_log);
+
     //Free object inside vpx_codec
     free(ctx->snpe_object);
 }
@@ -296,10 +298,18 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
 /***Chanju***/
 static void init_snpe( vpx_codec_alg_priv_t *ctx, mobinas_cfg_t * mobinas_cfg){
     snpe_cfg_t * snpe_object = malloc(sizeof(snpe_cfg_t));
+
     snpe_object->runtime = snpe_check_runtime();
     snpe_object->snpe_network = snpe_init_network(snpe_object->runtime, mobinas_cfg->model_quality);
 
     ctx->snpe_object = snpe_object;
+
+    //For Latency
+    if(mobinas_cfg->save_sr_latency_breakdown == 1){
+        char file_name[100];
+        sprintf(file_name, "/sdcard/SNPEData/sr_latency_breakdown");
+        ctx->latency_log = fopen(file_name, "w");
+    }
 }
 
 /* Validate MobiNAS configuration */
@@ -498,6 +508,8 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     /***Chanju***/
     ctx->pbi->common.snpe_object = ctx->snpe_object;
     ctx->pbi->common.test = 0;
+    ctx->pbi->common.latency_log = ctx->latency_log;
+
 
     return VPX_CODEC_OK;
 }
@@ -845,7 +857,6 @@ static void save_quality_result(VP9_COMMON *cm, int current_video_frame) {
         save_decoded_quality_result(cm, current_video_frame);
         break;
     case DECODE_SR:
-        fprintf(stderr, "%s: Not implemented", __func__);
         save_sr_quality_result(cm, current_video_frame);
         break;
     case DECODE_BILINEAR:
@@ -964,6 +975,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             /*******************Hyunho************************/
         }
     }
+
     /*******************Hyunho************************/
     if (cm->mobinas_cfg->save_final_frame) save_final_frame(cm, cm->current_video_frame - 1);
     if (cm->mobinas_cfg->save_quality_result) save_quality_result(cm, cm->current_video_frame - 1);

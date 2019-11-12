@@ -51,6 +51,7 @@ struct vpx_codec_alg_priv {
 
   //chanju
   snpe_cfg_t * snpe_object;
+  FILE * latency_log;
 };
 
 #endif  // VP9_VP9_DX_IFACE_H_

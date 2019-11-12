@@ -183,6 +183,8 @@ typedef struct mobinas_cfg{
     int save_latency_result;
     int save_metadata_result;
 
+    int save_sr_latency_breakdown;
+
     //mode
     mobinas_decode_mode decode_mode;
     mobinas_decode_mode saved_decode_mode;
@@ -239,7 +241,7 @@ void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG *, unsigned char *, int test);
 void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12);
 void YUV2RGB(uint8_t *r, uint8_t *g, uint8_t *b, uint8_t y, uint8_t u, uint8_t v);
 void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b);
-void printTime(int checkpoint, struct timeval * begin);
+void printLatency(int print, FILE * file, char * name, struct timeval * begin);
 void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int frame_number);
 
 //void sr_yv12_to_rgb_and_print(YV12_BUFFER_CONFIG * yv12, int frame_number);

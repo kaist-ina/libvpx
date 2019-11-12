@@ -3486,6 +3486,7 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
 
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
+    __android_log_print(ANDROID_LOG_ERROR, "TAGG", "vp9_decode_frame");
 
     VP9_COMMON *const cm = &pbi->common;
     MACROBLOCKD *const xd = &pbi->mb;
@@ -3621,14 +3622,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         cm->test++;
 
         char frame_path[PATH_MAX];
-//        int width = //TODO
-//        int height = //TODO
 
         unsigned char * rgb_buffer;
         float * sr_rgb_buffer;
         YV12_BUFFER_CONFIG * frame;
         YV12_BUFFER_CONFIG * sr_frame;
-        struct timeval begin,now , subtract;
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
@@ -3636,46 +3634,40 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                 /*** Chanju ***/
                 __android_log_print(ANDROID_LOG_ERROR, "TAGG", "ONLINE DNN");
 
-                gettimeofday(&begin,NULL);
-
-                printTime(0, &begin);
+                struct timeval apply_sr;    //sr overall latency
+                gettimeofday(&apply_sr, NULL);
 
                 frame = get_frame_new_buffer(cm);
                 sr_frame = get_sr_frame_new_buffer(cm);
-
                 rgb_buffer = vpx_calloc(1, 3 * frame->y_crop_height * frame->y_width);
-
-                printTime(1, &begin);
-
                 convert_yuv420_to_rgb(frame, rgb_buffer, cm->test);
 
-                printTime(2, &begin);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "pre-conversion", &apply_sr);
+
+                struct timeval snpe_exec;
+                gettimeofday(&snpe_exec, NULL);
 
                 sr_rgb_buffer = vpx_calloc(1, 3 * 4*sr_frame->y_crop_height * sr_frame->y_width);
+                snpe_execute_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer, 3 * frame->y_crop_height * frame->y_width);
+                saveToFile(sr_rgb_buffer, sr_frame->y_crop_height,sr_frame->y_width, 0, cm->test);
 
-                printTime(3, &begin);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "execute snpe", &snpe_exec);
 
-                snpe_execute_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer,
-                                  3 * frame->y_crop_height * frame->y_width);
-
-                printTime(4, &begin);
-
-                saveToFile(sr_rgb_buffer, sr_frame->y_crop_height,sr_frame->y_width, 1, cm->test);    //1 for save
-
-                //Verified up to this point
+                struct timeval post_conv;
+                gettimeofday(&post_conv, NULL);
 
                 convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
                 sr_frame->y_stride = 1920;
                 sr_frame->uv_stride = 960;
 //                sr_yv12_to_rgb_and_print(sr_frame, cm->test);//verify output
 
-
-                printTime(5, &begin);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "post-conversion", &post_conv);
 
                 //free
                 vpx_free(rgb_buffer);
                 vpx_free(sr_rgb_buffer);
 
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "sr latency", &apply_sr);
 
                 /*** Chan ju ***/
 
