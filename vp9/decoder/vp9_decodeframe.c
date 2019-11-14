@@ -3639,10 +3639,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
                 frame = get_frame_new_buffer(cm);
                 sr_frame = get_sr_frame_new_buffer(cm);
+
                 rgb_buffer = vpx_calloc(1, 3 * frame->y_crop_height * frame->y_width);
                 convert_yuv420_to_rgb(frame, rgb_buffer, cm->test);
 
-                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "pre-conversion", &apply_sr);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "pre-conversion", &apply_sr, ",");
 
                 struct timeval snpe_exec;
                 gettimeofday(&snpe_exec, NULL);
@@ -3651,23 +3652,23 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                 snpe_execute_byte(cm->snpe_object->snpe_network, rgb_buffer, sr_rgb_buffer, 3 * frame->y_crop_height * frame->y_width);
                 saveToFile(sr_rgb_buffer, sr_frame->y_crop_height,sr_frame->y_width, 0, cm->test);
 
-                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "execute snpe", &snpe_exec);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "execute snpe", &snpe_exec,",");
 
                 struct timeval post_conv;
                 gettimeofday(&post_conv, NULL);
 
                 convert_sr_rgb_to_yuv420(sr_rgb_buffer, sr_frame);
-                sr_frame->y_stride = 1920;
+                sr_frame->y_stride = 1920;//hardcode for exoplayer for now
                 sr_frame->uv_stride = 960;
 //                sr_yv12_to_rgb_and_print(sr_frame, cm->test);//verify output
 
-                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "post-conversion", &post_conv);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "post-conversion", &post_conv,",");
 
                 //free
                 vpx_free(rgb_buffer);
                 vpx_free(sr_rgb_buffer);
 
-                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "sr latency", &apply_sr);
+                printLatency(cm->mobinas_cfg->save_sr_latency_breakdown, cm->latency_log, "sr overall", &apply_sr,"\n");
 
                 /*** Chan ju ***/
 

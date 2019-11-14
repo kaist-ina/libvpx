@@ -605,17 +605,6 @@ void convert_yuv420_to_rgb(YV12_BUFFER_CONFIG * yv12, unsigned char * rgb_buffer
             rgb_buffer += 3;
         }
     }
-
-    //write to file
-    if(test == 20){
-        char file_name[100];
-        sprintf(file_name, "/sdcard/SNPEData/frame/testyo");
-        FILE * yuv_file = fopen(file_name, "wb");
-        fwrite(temp, 3 * height * width, 1, yuv_file);
-        fclose(yuv_file);
-    }
-
-
     free(buffer_copy);
 }
 
@@ -631,9 +620,9 @@ void convert_sr_rgb_to_yuv420(float * sr_rgb_buffer, YV12_BUFFER_CONFIG * yv12){
 
     for(int i = 0; i < height; i++){
         for(int j = 0; j<width;j++){
-            r = (uint8_t) clamp(round(*sr_rgb_buffer), 0, 255);
-            g = (uint8_t) clamp(round(*(sr_rgb_buffer+1)), 0, 255);
-            b = (uint8_t) clamp(round(*(sr_rgb_buffer+2)), 0, 255);
+            r = (uint8_t) clamp(round( (*sr_rgb_buffer) * 255 ), 0, 255);
+            g = (uint8_t) clamp(round( (*(sr_rgb_buffer+1)) * 255), 0, 255);
+            b = (uint8_t) clamp(round( (*(sr_rgb_buffer+2)) * 255), 0, 255);
             y = 0;
             u = 0;
             v = 0;
@@ -671,15 +660,14 @@ void RGB2YUV(uint8_t *y, uint8_t *u, uint8_t *v, uint8_t r, uint8_t g, uint8_t b
     *v = clamp(vTmp,0,255);
 }
 
-void printLatency(int print, FILE * file, char * name, struct timeval * begin){
+void printLatency(int print, FILE * file, char * name, struct timeval * begin, char * comma_or_newline){
     if(print){
         struct timeval subtract, now;
         gettimeofday(&now, NULL);
         timersub(&now, begin, &subtract);
 
-
         char line[50];
-        sprintf(line, "%s latency: %ld.%06ld\n", name, subtract.tv_sec, subtract.tv_usec);
+        sprintf(line, "%s latency: %ld.%06ld%s", name, subtract.tv_sec, subtract.tv_usec,comma_or_newline);
         fputs(line, file);
 
         __android_log_print(ANDROID_LOG_ERROR, "sr_latency_breakdown", "%s",line);
@@ -709,3 +697,13 @@ void saveToFile(float * sr_rgb_buffer, int height, int width, int print, int fra
     }
 }
 
+float * byteToFloat(unsigned char * buffer, int buffer_size){
+
+    float * float_buffer = (float *) calloc(1,buffer_size * 4);
+
+    for(int i = 0; i < buffer_size;i++){
+        *(float_buffer+i) = (float) (*(buffer+i));
+    }
+
+    return float_buffer;
+}
