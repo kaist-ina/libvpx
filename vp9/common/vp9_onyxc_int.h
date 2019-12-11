@@ -123,12 +123,13 @@ typedef struct VP9Common {
 
     //TODO: refactor this by mobinas_latency_evaluator
     mobinas_latency_info_t latency; //logging decoding end-to-end latency
-    //TODO: refactor these by mobinas_quality_evaluator
 
     FILE *quality_log;
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;
     YV12_BUFFER_CONFIG *hr_bilinear_frame;
+
+    RGB24_BUFFER_CONFIG *lr_frame;
 
     uint8_t scale;
     uint8_t apply_dnn;

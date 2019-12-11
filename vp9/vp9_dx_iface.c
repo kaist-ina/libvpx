@@ -427,6 +427,8 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 
         ctx->pbi->common.hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //adaptive cache o
         ctx->pbi->common.lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //vp9_dx_iface x
+
+        ctx->pbi->common.lr_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
     }
     /*******************Hyunho************************/
 
@@ -575,8 +577,19 @@ static void save_decoded_final_frame(VP9_COMMON *cm, int current_video_frame)
         fprintf(stderr, "%s: Not implemented", __func__);
         break;
     case DECODE_CACHE:
-        sprintf(file_path, "%s/%s/frame/d_%dp.y", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->prefix, current_video_frame, cm->height);
+        sprintf(file_path, "%s/%s/frame/%d_%dp.y", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->prefix, current_video_frame, cm->height);
         vpx_write_y_frame(file_path, get_sr_frame_new_buffer(cm));
+        printf("1\n");
+        RGB24_realloc_frame_buffer(cm->lr_frame, cm->width, cm->height);
+        printf("2\n");
+        YV12_to_RGB24(get_frame_new_buffer(cm), cm->lr_frame);
+//        RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->lr_frame);
+        printf("3\n");
+        sprintf(file_path, "%s/%s/frame/%d_%dp.raw", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->prefix, current_video_frame, cm->height);
+        printf("%s %d %d\n", file_path, cm->width, cm->height);
+        RGB24_save_frame_buffer(cm->lr_frame, file_path);
+        printf("4\n");
+
 #if DEBUG_LR
             sprintf(file_path, "%s/%s/frame/%d_%dp.y", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->prefix, current_video_frame, cm->height);
             vpx_write_y_frame(file_path, get_frame_new_buffer(cm));

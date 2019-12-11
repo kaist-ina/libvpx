@@ -2226,6 +2226,9 @@ static void vpx_copy_buffer_uint8(const uint8_t *src, ptrdiff_t src_stride, uint
                       NULL, 0, 0, 0, 0, width * scale, height * scale);
 }
 
+//TODO: decode_tiles, decode_tiles_mt - use libyuv scaling function
+//TODO: decode_bilinear - use libyuv scaling function
+
 static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
                                    const uint8_t *data_end) {
     VP9_COMMON *const cm = &pbi->common;

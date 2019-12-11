@@ -42,7 +42,7 @@ static const int16_t delta = (1 << (FRACTION_BIT - 1));
 //TODO: here, neon optimization slows down the performance for scale x4, but maybe faster in x3, x4 which requires a manual test
 //TODO: replace MIN operations
 #if 0
-static void vpx_bilinear_interp_horiz_neon_h8_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config)
+static void vpx_bilinear_interp_horiz_neon_h8_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config)
 {
     LOGF("Not implemented");
     assert(1);
@@ -59,7 +59,7 @@ static void load_u16_8x1(const int16_t *src, int16x8_t *dst, int *index){
     *dst = vld1q_lane_s16(src[index[7]], *dst, 7);
 };
 
-static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const bilinear_config_t *config)
+static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const mobinas_bilinear_config_t *config)
 {
     int x, y;
 
@@ -105,7 +105,7 @@ static void vpx_bilinear_interp_horiz_neon_h16_int16(const int16_t *src, ptrdiff
 static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_stride,
                                               int16_t *dst, ptrdiff_t dst_stride, int width,
                                               int height, int scale,
-                                              const bilinear_config_t *config) {
+                                              const mobinas_bilinear_config_t *config) {
     int x, y;
 
     if (scale == 2 || scale == 3) {
@@ -142,7 +142,7 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
 static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_stride,
                                               int16_t *dst, ptrdiff_t dst_stride, int width,
                                               int height, int scale,
-                                              const bilinear_config_t *config) {
+                                              const mobinas_bilinear_config_t *config) {
     int x, y;
 
     if (scale == 2 || scale == 3) {
@@ -181,7 +181,7 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
 static void
 vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                        ptrdiff_t dst_stride, int width, int height, int scale,
-                                       const bilinear_config_t *config) {
+                                       const mobinas_bilinear_config_t *config) {
     int x, y;
 
     int16x8_t qS0_01234567_0, qS1_01234567_0;
@@ -262,7 +262,7 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
 static void
 vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                         ptrdiff_t dst_stride, int width, int height, int scale,
-                                        const bilinear_config_t *config) {
+                                        const mobinas_bilinear_config_t *config) {
     int x, y;
 
     int16x8_t qS0_01234567_0, qS0_01234567_1, qS1_01234567_0, qS1_01234567_1;
@@ -322,7 +322,7 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
 static void
 vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                        ptrdiff_t dst_stride, int width, int height, int scale,
-                                       const bilinear_config_t *config) {
+                                       const mobinas_bilinear_config_t *config) {
     LOGF("%s: Not tested yet", __func__);
     assert(1);
 
@@ -393,7 +393,7 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
 static void
 vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                         ptrdiff_t dst_stride, int width, int height, int scale,
-                                        const bilinear_config_t *config) {
+                                        const mobinas_bilinear_config_t *config) {
     int x, y;
 
     int16x8_t qS0_01234567_0, qS0_01234567_1, qS1_01234567_0, qS1_01234567_1;
@@ -470,7 +470,7 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
 
 void vpx_bilinear_interp_int16_neon(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                    int height, int scale, const bilinear_config_t *config) {
+                                    int height, int scale, const mobinas_bilinear_config_t *config) {
     int16_t temp[256 * 256];
     int h = height * scale;
 
@@ -493,7 +493,7 @@ void vpx_bilinear_interp_int16_neon(const int16_t *src, ptrdiff_t src_stride, ui
 
 void vpx_bilinear_interp_uint8_neon(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                     ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                    int height, int scale, const bilinear_config_t *config) {
+                                    int height, int scale, const mobinas_bilinear_config_t *config) {
     int16_t temp[128 * 128];
     int h = height * scale;
 

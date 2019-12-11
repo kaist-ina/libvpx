@@ -97,6 +97,18 @@ int vpx_alloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 #endif
                            int border, int byte_alignment);
 
+int vpx_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
+                             int ss_x, int ss_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+                             int use_highbitdepth,
+#endif
+                             int border, int byte_alignment,
+                             vpx_codec_frame_buffer_t *fb,
+                             vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv);
+
+int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf);
+
+/*******************Hyunho************************/
 int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s);
 
 int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
@@ -114,14 +126,6 @@ void vpx_reset_frames(YV12_BUFFER_CONFIG *s);
 // to decode the current frame. If cb is NULL, libvpx will allocate memory
 // internally to decode the current frame. Returns 0 on success. Returns < 0
 // on failure.
-int vpx_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
-                             int ss_x, int ss_y,
-#if CONFIG_VP9_HIGHBITDEPTH
-                             int use_highbitdepth,
-#endif
-                             int border, int byte_alignment,
-                             vpx_codec_frame_buffer_t *fb,
-                             vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv);
 
 int vpx_realloc_scaled_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int crop_width, int height, int crop_height, int scale,
                                     int ss_x, int ss_y,
@@ -131,8 +135,7 @@ int vpx_realloc_scaled_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int crop
                                     int border, int byte_alignment,
                                     vpx_codec_frame_buffer_t *fb,
                                     vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv);
-
-int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf);
+/*******************Hyunho************************/
 
 #ifdef __cplusplus
 }

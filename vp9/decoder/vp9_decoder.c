@@ -164,6 +164,9 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     vpx_free(pbi->common.lr_reference_frame);
     vpx_free(pbi->common.hr_bilinear_frame);
 
+    RGB24_free_frame_buffer(pbi->common.lr_frame);
+    vpx_free(pbi->common.lr_frame);
+
     if (pbi->common.quality_log != NULL) fclose(pbi->common.quality_log);
 
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
