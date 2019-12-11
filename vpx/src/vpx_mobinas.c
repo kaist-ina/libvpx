@@ -12,6 +12,9 @@
 #include <math.h>
 #include <libgen.h>
 
+//#include "third_party/libyuv/include/libyuv/convert.h"
+//#include "third_party/libyuv/include/libyuv/convert_from.h"
+//#include "third_party/libyuv/include/libyuv/scale.h"
 
 #include "vpx/vpx_mobinas.h"
 
@@ -410,7 +413,7 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
     return mwd;
 }
 
-bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale) {
+mobinas_bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale) {
     assert(scale == 4 || scale ==3 || scale ==2);
 
     switch (scale) {
@@ -426,7 +429,7 @@ bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_prof
         }
 }
 
-void init_bilinear_config(bilinear_config_t *config, int width, int height, int scale) {
+void init_bilinear_config(mobinas_bilinear_config_t *config, int width, int height, int scale) {
     int x, y;
 
     assert (config != NULL);
@@ -473,7 +476,7 @@ vp9_bilinear_profile_t *init_vp9_bilinear_profile(){
     return profile;
 }
 
-void remove_bilinear_config(bilinear_config_t *config) {
+void remove_bilinear_config(mobinas_bilinear_config_t *config) {
     if (config != NULL) {
         vpx_free(config->x_lerp);
         vpx_free(config->x_lerp_fixed);
@@ -538,3 +541,160 @@ int default_scale_policy (int resolution){
             return 1;
     }
 }
+
+/*  Previous approach: libyuv
+ *  Note: libyuv rounds output values and it occurs quality degradation around 0.1dB
+ *
+    int result = RGB24ToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
+                                 ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
+                                 ybf->y_crop_width, ybf->y_crop_height);
+*/
+
+int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    if(ybf == NULL || rbf == NULL) {
+        return -1;
+    }
+
+    uint8_t r, g, b;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2);
+
+            *(ybf->y_buffer + i * ybf->y_stride + j) = round((0.256788 * r + 0.504129 * g + 0.097906 * b) + 16);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = round((-0.148223 * r - 0.290993 * g + 0.439216 * b) + 128);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = round((0.439216 * r - 0.367788 * g - 0.071427 * b) + 128);
+        }
+    }
+}
+
+/*  Previous approach: libyuv
+ *  Note: libyuv rounds output values and it occurs quality degradation around 0.1dB
+ *
+    int result = I420ToRGB24(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
+                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
+                             ybf->y_crop_width, ybf->y_crop_height);
+*/
+
+int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    if(ybf == NULL || rbf == NULL) {
+        return -1;
+    }
+
+    uint8_t y, u, v, r, g, b;
+    int i, j;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+
+    printf("%d", ybf->y_buffer[200]);
+
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < width; j++) {
+            y = *(ybf->y_buffer + i * ybf->y_stride + j);
+            u = *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x));
+            v = *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x));
+
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3) =  1.164383 * (y-16) + 1.596027 * (v-128); // R value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1) =  1.164383 * (y-16) - 0.391762 * (u - 128) - 0.812968 * (v - 128); // G value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2) =  1.164383 * (y-16) + 2.017232 * (u - 128); // B value
+        }
+    }
+
+    return 0;
+}
+
+int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {
+    FILE *serialize_file = fopen(file_path, "wb");
+    if(serialize_file == NULL)
+    {
+        fprintf(stderr, "%s: fail to save a file to %s", __func__, file_path);
+        return -1;
+    }
+
+    float *src = rbf->buffer_alloc;
+    int h = rbf->height;
+    do {
+        fwrite(src, sizeof(float), rbf->width, serialize_file);
+        src += rbf->stride;
+    } while (--h);
+
+    return 0;
+}
+
+int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {
+    //load file into rgb_buffer
+    //convert RGB24 to I420
+    FILE *serialize_file = fopen(file_path, "rb");
+    if(serialize_file == NULL)
+    {
+        fprintf(stderr, "%s: fail to open a file from %s", __func__, file_path);
+        return -1;
+    }
+
+    float *src = rbf->buffer_alloc;
+    int h = rbf->height;
+    do
+    {
+        fread(src, sizeof(float), rbf->width, serialize_file);
+        src += rbf->stride;
+    }
+    while (--h);
+
+    return 0;
+}
+
+int RGB24_alloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) {
+    if(rbf) {
+        RGB24_free_frame_buffer(rbf);
+        return RGB24_realloc_frame_buffer(rbf, width, height);
+    }
+    return -1;
+}
+
+int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) {
+    if(rbf) {
+        const int stride = (width * 3 + 31) & ~31; //Note: Multiply by 3 each for R,G,B channels
+        const int frame_size = height * stride;
+
+        if (frame_size > rbf->buffer_alloc_sz) {
+            vpx_free(rbf->buffer_alloc);
+            rbf->buffer_alloc = NULL;
+
+            rbf->buffer_alloc = (float *) vpx_memalign(32, (size_t) frame_size * sizeof(float));
+            if (!rbf->buffer_alloc) return -1;
+
+            rbf->buffer_alloc_sz = (int) frame_size;
+
+            memset(rbf->buffer_alloc, 0, rbf->buffer_alloc_sz);
+        }
+
+        rbf->height = height;
+        rbf->width = width * 3;
+        rbf->stride = stride;
+
+        return 0;
+    }
+    return -1;
+}
+
+int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf) {
+    if (rbf) {
+        if (rbf->buffer_alloc_sz > 0) {
+            vpx_free(rbf->buffer_alloc);
+        }
+        memset(rbf, 0, sizeof(RGB24_BUFFER_CONFIG));
+    }
+    else {
+        return -1;
+    }
+    return 0;
+}
+
+////TODO
+//PSNR_STATS measure_psnr(uint8 *rgb_buffer_0, uint8 *rgb_buffer_1){
+//
+//}

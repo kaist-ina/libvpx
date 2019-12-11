@@ -62,16 +62,16 @@ typedef struct mobinas_bilinear_config{
     int *bottom_y_index;
     int *left_x_index;
     int *right_x_index;
-} bilinear_config_t;
+} mobinas_bilinear_config_t;
 
 //TODO: block size types are 25 (4,8,16,32,64 x 4,8,16,32,64)
 typedef struct mobinas_bilinear_profile{
     //scale x4
-    bilinear_config_t config_TX_64X64_s4;
+    mobinas_bilinear_config_t config_TX_64X64_s4;
     //scale x3
-    bilinear_config_t config_TX_64X64_s3;
+    mobinas_bilinear_config_t config_TX_64X64_s3;
     //scale x2
-    bilinear_config_t config_TX_64X64_s2;
+    mobinas_bilinear_config_t config_TX_64X64_s2;
 } vp9_bilinear_profile_t;
 
 typedef struct mobinas_cache_reset_profile {
@@ -127,6 +127,7 @@ typedef struct mobinas_worker_data {
     FILE *metadata_log;
 } mobinas_worker_data_t;
 
+//TODO: replace save_* into save_frame
 typedef struct mobinas_cfg{
     //directory
     char save_dir[PATH_MAX];
@@ -158,6 +159,14 @@ typedef struct mobinas_cfg{
     vp9_bilinear_profile_t *bilinear_profile;
 } mobinas_cfg_t;
 
+typedef struct rgb24_buffer_config{
+    int width;
+    int height;
+    int stride;
+    int buffer_alloc_sz;
+    float *buffer_alloc;
+} RGB24_BUFFER_CONFIG;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -188,12 +197,21 @@ void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads);
 
 //bilinear config
 vp9_bilinear_profile_t *init_vp9_bilinear_profile();
-bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale);
+mobinas_bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale);
 void remove_vp9_bilinear_profile(vp9_bilinear_profile_t *profile);
 
 //bilinear config
-void init_bilinear_config(bilinear_config_t *config, int scale, int width, int height);
-void remove_bilinear_config(bilinear_config_t *config);
+void init_bilinear_config(mobinas_bilinear_config_t *config, int scale, int width, int height);
+void remove_bilinear_config(mobinas_bilinear_config_t *config);
+
+//color space conversion
+int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
+int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
+int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
+int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
+int RGB24_alloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);
+int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);
+int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf);
 
 #ifdef __cplusplus
 }  // extern "C"
