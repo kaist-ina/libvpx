@@ -149,10 +149,10 @@ ifeq ($(CONFIG_DECODERS),yes)
 endif
 
 # Include libyuv for color space converstion & scaling
-#CODEC_SRCS-$(CONFIG_LIBYUV) += $(LIBYUV_SRCS)
-#INC_PATH-$(CONFIG_LIBYUV) += $(SRC_PATH_BARE)/third_party/libyuv/include
-#INC_PATH := $(call enabled,INC_PATH)
-#INTERNAL_CFLAGS = $(addprefix -I,$(INC_PATH))
+CODEC_SRCS-$(CONFIG_LIBYUV) += $(LIBYUV_SRCS)
+INC_PATH-$(CONFIG_LIBYUV) += $(SRC_PATH_BARE)/third_party/libyuv/include
+INC_PATH := $(call enabled,INC_PATH)
+INTERNAL_CFLAGS = $(addprefix -I,$(INC_PATH))
 
 # Suppress -Wextra warnings in third party code.
 $(BUILD_PFX)third_party/googletest/%.cc.o: CXXFLAGS += -Wno-missing-field-initializers

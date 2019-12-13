@@ -120,19 +120,20 @@ typedef struct VP9Common {
     //General
     struct scale_factors sf_upsample_inter;
     mobinas_cfg_t *mobinas_cfg;
+    uint8_t scale;
+    uint8_t apply_dnn;
 
-    //TODO: refactor this by mobinas_latency_evaluator
     mobinas_latency_info_t latency; //logging decoding end-to-end latency
 
-    FILE *quality_log;
+    FILE *quality_log; // quality log
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;
     YV12_BUFFER_CONFIG *hr_bilinear_frame;
 
-    RGB24_BUFFER_CONFIG *lr_frame;
-
-    uint8_t scale;
-    uint8_t apply_dnn;
+    RGB24_BUFFER_CONFIG *frame;
+    RGB24_BUFFER_CONFIG *compare_frame; //measure LR quality
+    RGB24_BUFFER_CONFIG *sr_frame;
+    RGB24_BUFFER_CONFIG *sr_compare_frame; // measure SR quality
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;

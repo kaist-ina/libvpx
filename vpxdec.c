@@ -116,17 +116,15 @@ static const arg_def_t comparevideoarg =
         "HR Video file used for quality evaluation");
 static const arg_def_t decodemodearg =
         ARG_DEF(NULL, "decode-mode", 1,
-        "decode mode for a MobiNAS decoder (0: DECODE, 1: DECODE_SR, 2: DECODE_CACHE, 3: DECODE_BILINEAR)");
+        "decode mode for a MobiNAS decoder (0: DECODE, 1: DECODE_SR, 2: DECODE_CACHE)");
 static const arg_def_t dnnmodearg =
         ARG_DEF(NULL, "dnn-mode", 1,
         "DNN mode for A MobiNAS decoder (0: NO_DNN, 1: ONLINE_DNN, 2: OFFLINE_DNN) ");
 static const arg_def_t cachepolicyarg =
         ARG_DEF(NULL, "cache-policy", 1,
         "cache policy for A MobiNAS decoder (0: NO_CACHE_PLICY, 1: PROFILE_CACHE, 2: KEY_FRMAE_CACHE)");
-static const arg_def_t saveintermediatedarg =
-        ARG_DEF(NULL, "save-intermediate", 0, "Save intermediate frames");
-static const arg_def_t savefinaldarg =
-        ARG_DEF(NULL, "save-final", 0, "Save final frame");
+static const arg_def_t saveframedarg =
+        ARG_DEF(NULL, "save-frame", 0, "Save final frame");
 static const arg_def_t savequalityarg =
         ARG_DEF(NULL, "save-quality", 0, "Save quality results");
 static const arg_def_t savelatencyarg =
@@ -137,6 +135,8 @@ static const arg_def_t prefixarg =
         ARG_DEF(NULL, "prefix", 1, "Prefix for a directory name");
 static const arg_def_t cacheprofilearg =
         ARG_DEF(NULL, "cache-profile", 1, "Cache profile to apply");
+static const arg_def_t dnnnamearg =
+        ARG_DEF(NULL, "dnn-name", 1, "DNN to apply");
 
 static const arg_def_t *all_args[] =
 {   &help, &codecarg, &use_yv12, &use_i420, &flipuvarg, &rawvideo, &noblitarg, &progressarg, &limitarg, &skiparg,
@@ -146,8 +146,8 @@ static const arg_def_t *all_args[] =
     &outbitdeptharg,
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
-    &dnnmodearg, &cachepolicyarg, &saveintermediatedarg, &savefinaldarg, &savequalityarg, &savelatencyarg,
-    &prefixarg, &cacheprofilearg, NULL};
+    &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
+    &prefixarg, &cacheprofilearg, &dnnnamearg, NULL};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -594,6 +594,24 @@ static int img_shifted_realloc_required(const vpx_image_t *img,
 }
 #endif
 
+static void _mkdir(const char *dir) {
+        char tmp[PATH_MAX];
+        char *p = NULL;
+        size_t len;
+
+        snprintf(tmp, sizeof(tmp),"%s",dir);
+        len = strlen(tmp);
+        if(tmp[len - 1] == '/')
+                tmp[len - 1] = 0;
+        for(p = tmp + 1; *p; p++)
+                if(*p == '/') {
+                        *p = 0;
+                        mkdir(tmp, S_IRWXU);
+                        *p = '/';
+                }
+        mkdir(tmp, S_IRWXU);
+}
+
 static int main_loop(int argc, const char **argv_)
 {
     vpx_codec_ctx_t decoder;
@@ -665,12 +683,12 @@ static int main_loop(int argc, const char **argv_)
     mobinas_cfg_t *mobinas_cfg = init_mobinas_cfg();
     char path[PATH_MAX] = {"\0"};
     char *cache_profile_path = NULL;
+    const char *dnn_name = NULL;
     const char *content_dir = NULL;
     const char *input_video_name = NULL;
     const char *dnn_video_name = NULL;
     const char *compare_video_name = NULL;
     const char *prefix = NULL;
-
     char *tmp;
 
     /* Parse command line */
@@ -784,6 +802,7 @@ static int main_loop(int argc, const char **argv_)
       ec_enabled = 1;
     }
 #endif  // CONFIG_VP8_DECODER
+        /*******************Hyunho************************/
         else if (arg_match(&arg, &contentdirarg, argi))
             content_dir = arg.val;
         else if (arg_match(&arg, &inputvideoarg, argi))
@@ -804,9 +823,6 @@ static int main_loop(int argc, const char **argv_)
                 break;
             case DECODE_CACHE:
                 mobinas_cfg->decode_mode = DECODE_CACHE;
-                break;
-            case DECODE_BILINEAR:
-                mobinas_cfg->decode_mode = DECODE_BILINEAR;
                 break;
             default:
                 die("Invalid decode mode: %d.\n", arg.val);
@@ -847,26 +863,21 @@ static int main_loop(int argc, const char **argv_)
                 break;
             }
         }
-        else if (arg_match(&arg, &saveintermediatedarg, argi))
-        {
-            mobinas_cfg->save_intermediate_frame = 1;
-            mobinas_cfg->frame_type = ALL_FRAME;
-        }
-        else if (arg_match(&arg, &savefinaldarg, argi))
-        {
-            mobinas_cfg->save_final_frame = 1;
-            mobinas_cfg->frame_type = ALL_FRAME;
-        }
+        else if (arg_match(&arg, &saveframedarg, argi))
+            mobinas_cfg->save_frame = 1;
         else if (arg_match(&arg, &savequalityarg, argi))
-            mobinas_cfg->save_quality_result = 1;
+            mobinas_cfg->save_quality = 1;
         else if (arg_match(&arg, &savelatencyarg, argi))
-            mobinas_cfg->save_latency_result = 1;
+            mobinas_cfg->save_latency = 1;
         else if (arg_match(&arg, &savemetadataarg, argi))
-            mobinas_cfg->save_metadata_result = 1;
+            mobinas_cfg->save_metadata = 1;
         else if (arg_match(&arg, &prefixarg, argi))
             prefix = arg.val;
         else if (arg_match(&arg, &cacheprofilearg, argi))
             cache_profile_path = arg.val;
+        else if (arg_match(&arg, &dnnnamearg, argi))
+            dnn_name = arg.val;
+        /*******************Hyunho************************/
         else
             argj++;
     }
@@ -876,86 +887,73 @@ static int main_loop(int argc, const char **argv_)
         if (argi[0][0] == '-' && strlen(argi[0]) > 1)
             die("Error: Unrecognized option %s\n", *argi);
 
-    /* Check for mobinas_cfg values */
-    if (!content_dir)
-    {
-        fatal("Error: content-dir is not provided");
-    }
-    if (!input_video_name)
-    {
-        fatal("Error: input-video is not provided");
-    }
-    if (mobinas_cfg->dnn_mode == OFFLINE_DNN && !dnn_video_name)
-    {
-        fatal("Error: dnn-video is not provided");
-    }
-    if (mobinas_cfg->save_quality_result && !compare_video_name)
-    {
-        fatal("Error: compare-video is not provided");
-    }
-    if (mobinas_cfg->cache_policy == PROFILE_CACHE && !cache_profile_path)
-    {
-        fatal("Error: cache profile is not provided");
-    }
-
+    /*******************Hyunho************************/
     /* Setup MobiNAS configuration */
-    if (content_dir) sprintf(mobinas_cfg->save_dir, "%s/result", content_dir);
-    if (input_video_name) sprintf(mobinas_cfg->target_file, "%s", input_video_name);
-    if (dnn_video_name) sprintf(mobinas_cfg->cache_file, "%s", dnn_video_name);
-    if (compare_video_name) sprintf(mobinas_cfg->compare_file, "%s", compare_video_name);
-    if (!prefix) {
-        sprintf(mobinas_cfg->prefix, "%s", mobinas_cfg->target_file);
-//            switch (mobinas_cfg->decode_mode)
-//            {
-//            case DECODE:
-//                sprintf(mobinas_cfg->prefix, "%s", mobinas_cfg->target_file);
-//                break;
-//            case DECODE_SR:
-//                sprintf(mobinas_cfg->prefix, "sr_%s", mobinas_cfg->target_file);
-//                break;
-//            case DECODE_BILINEAR:
-//                sprintf(mobinas_cfg->prefix, "bilinear_%s", mobinas_cfg->target_file);
-//                break;
-//            case DECODE_CACHE:
-//                switch (mobinas_cfg->cache_policy)
-//                {
-//                case PROFILE_CACHE:
-//                    sprintf(path, "%s", cache_profile_path);
-//                    sprintf(mobinas_cfg->prefix, "cache_%s_%s", basename(path), mobinas_cfg->target_file);
-//                    break;
-//                case KEY_FRAME_CACHE:
-//                    sprintf(mobinas_cfg->prefix, "cache_key_frame_%s", mobinas_cfg->target_file);
-//                    break;
-//                }
-//            }
+    switch (mobinas_cfg->decode_mode)
+    {
+    case DECODE:
+        sprintf(mobinas_cfg->log_dir, "%s/log/%s/snpe", content_dir, input_video_name);
+        sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
+        _mkdir(mobinas_cfg->log_dir);
+        _mkdir(mobinas_cfg->input_frame_dir);
+        if (mobinas_cfg->save_quality)
+			sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+        break;
+    case DECODE_SR:
+    	sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/sr", content_dir, input_video_name, dnn_name);
+    	sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
+    	sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/sr", content_dir, input_video_name, dnn_name);
+        _mkdir(mobinas_cfg->log_dir);
+		_mkdir(mobinas_cfg->input_frame_dir);
+		_mkdir(mobinas_cfg->sr_frame_dir);
+		if (mobinas_cfg->dnn_mode == OFFLINE_DNN)
+			sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s", content_dir, dnn_video_name);
+		if (mobinas_cfg->save_quality) {
+			sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, input_video_name);
+			sprintf(mobinas_cfg->sr_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+		}
+        break;
+    case DECODE_CACHE:
+    	sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
+        switch (mobinas_cfg->cache_policy)
+        {
+        case PROFILE_CACHE:
+            sprintf(path, "%s", cache_profile_path);
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
+            break;
+        case KEY_FRAME_CACHE:
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/cache_key_frame", content_dir, input_video_name, dnn_name);
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/cache_key_frame", content_dir, input_video_name, dnn_name);
+            break;
+        case NO_CACHE:
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/cache_no_frame", content_dir, input_video_name, dnn_name);
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/cache_no_frame", content_dir, input_video_name, dnn_name);
+        	break;
         }
-    else {
-        sprintf(mobinas_cfg->prefix, "%s", prefix);
+        _mkdir(mobinas_cfg->log_dir);
+		_mkdir(mobinas_cfg->input_frame_dir);
+		_mkdir(mobinas_cfg->sr_frame_dir);
+		if (mobinas_cfg->dnn_mode == OFFLINE_DNN)
+			sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s", content_dir, dnn_video_name);
+        if (mobinas_cfg->save_quality)
+        {
+            sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, input_video_name);
+            sprintf(mobinas_cfg->sr_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+        }
+        break;
     }
-
-    mkdir(mobinas_cfg->save_dir, 0777);
-    sprintf(path, "%s/%s", mobinas_cfg->save_dir, mobinas_cfg->prefix);
-    mkdir(path, 0777);
-    sprintf(path, "%s/%s/frame", mobinas_cfg->save_dir, mobinas_cfg->prefix);
-    mkdir(path, 0777);
-    sprintf(path, "%s/%s/serialize", mobinas_cfg->save_dir, mobinas_cfg->prefix);
-    mkdir(path, 0777);
-    sprintf(path, "%s/%s/log", mobinas_cfg->save_dir, mobinas_cfg->prefix);
-    mkdir(path, 0777);
-    sprintf(path, "%s/%s/profile", mobinas_cfg->save_dir, mobinas_cfg->prefix);
-    mkdir(path, 0777);
 
     mobinas_cfg->get_scale = default_scale_policy;
-    if (mobinas_cfg->decode_mode == DECODE_CACHE || mobinas_cfg->decode_mode == DECODE_BILINEAR) {
-        mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
+    if (mobinas_cfg->decode_mode == DECODE_CACHE) {
+		mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
+		if (mobinas_cfg->cache_policy == PROFILE_CACHE)
+			mobinas_cfg->cache_profile = init_mobinas_cache_profile(cache_profile_path);
     }
-
-    if (mobinas_cfg->decode_mode == DECODE_CACHE && mobinas_cfg->cache_policy == PROFILE_CACHE) {
-        mobinas_cfg->cache_profile = init_mobinas_cache_profile(cache_profile_path); //TODO: start here
-    }
+    /*******************Hyunho************************/
 
     /* Open a video file */
-    sprintf(fn, "%s/video/%s", content_dir, mobinas_cfg->target_file);
+    sprintf(fn, "%s/video/%s", content_dir, input_video_name);
     infile = fopen(fn, "rb");
     if (!infile)
     {
@@ -1086,11 +1084,13 @@ static int main_loop(int argc, const char **argv_)
     if (framestats_file)
         fprintf(framestats_file, "bytes,qp\n");
 
+    /*******************Hyunho************************/
     //init mobinas_cfg inside a decoder
     if (vpx_load_mobinas_cfg(&decoder, mobinas_cfg)){
          warn("Failed to initialize mobinas cfg: %s\n", vpx_codec_error(&decoder));
          goto fail;
      };
+    /*******************Hyunho************************/
 
     /* Decode file */
     while (frame_avail || got_data)

@@ -22,18 +22,18 @@ typedef struct mobinas_latency_info {
     double decode_inter_residual;
 } mobinas_latency_info_t;
 
+typedef struct mobinas_metadata_info {
+    int count;
+    int intra_count;
+    int inter_count;
+    int inter_noskip_count;
+} mobinas_metadata_info_t;
+
 typedef enum{
     DECODE,
     DECODE_SR,
     DECODE_CACHE,
-    DECODE_BILINEAR,
 } mobinas_decode_mode;
-
-typedef enum{
-    NO_CACHE_RESET,
-    PROFILE_CACHE_RESET,
-    APPLY_CACHE_RESET,
-} mobinas_cache_mode;
 
 typedef enum{
     NO_CACHE,
@@ -46,12 +46,6 @@ typedef enum{
     ONLINE_DNN,
     OFFLINE_DNN,
 } mobinas_dnn_mode;
-
-typedef enum{
-    DECODED_FRAME,
-    SERIALIZED_FRAME,
-    ALL_FRAME,
-} mobinas_frame_type;
 
 typedef struct mobinas_bilinear_config{
     float *x_lerp;
@@ -103,31 +97,19 @@ typedef struct mobinas_interp_block_list{
 } mobinas_interp_block_list_t;
 
 typedef struct mobinas_worker_data {
-    YV12_BUFFER_CONFIG *lr_reference_frame;
-    YV12_BUFFER_CONFIG *hr_reference_frame;
-    YV12_BUFFER_CONFIG *lr_resiudal;
-    YV12_BUFFER_CONFIG *hr_compare_frame;
-
+    //interpolation
+	YV12_BUFFER_CONFIG *lr_resiudal;
     mobinas_interp_block_list_t *intra_block_list;
     mobinas_interp_block_list_t *inter_block_list;
 
-    int count;
-    int intra_count;
-    int inter_count;
-    int inter_noskip_count;
-    int adaptive_cache_count;
-
+    //log
     int index;
-    int reset_cache;
-    mobinas_cache_reset_profile_t *cache_reset_profile;
-
-    mobinas_latency_info_t latency;
-
     FILE *latency_log;
     FILE *metadata_log;
+    mobinas_latency_info_t latency;
+    mobinas_metadata_info_t metadata;
 } mobinas_worker_data_t;
 
-//TODO: replace save_* into save_frame
 typedef struct mobinas_cfg{
     //directory
     char save_dir[PATH_MAX];
@@ -138,18 +120,25 @@ typedef struct mobinas_cfg{
     char cache_file[PATH_MAX];
     char compare_file[PATH_MAX];
 
+    //directory
+    char log_dir[PATH_MAX];
+    char input_frame_dir[PATH_MAX];
+    char sr_frame_dir[PATH_MAX];
+    char input_compare_frame_dir[PATH_MAX];
+    char sr_compare_frame_dir[PATH_MAX];
+
+    //directory (OFFLINE_DNN)
+    char sr_offline_frame_dir[PATH_MAX];
+
     //log
-    mobinas_frame_type frame_type;
-    int save_intermediate_frame;
-    int save_final_frame;
-    int save_quality_result;
-    int save_latency_result;
-    int save_metadata_result;
+    int save_frame;
+    int save_quality;
+    int save_latency;
+    int save_metadata;
 
     //mode
     mobinas_decode_mode decode_mode;
     mobinas_decode_mode saved_decode_mode;
-    mobinas_cache_mode cache_mode;
     mobinas_dnn_mode dnn_mode;
     mobinas_cache_policy cache_policy;
 
@@ -164,7 +153,7 @@ typedef struct rgb24_buffer_config{
     int height;
     int stride;
     int buffer_alloc_sz;
-    float *buffer_alloc;
+    uint8_t *buffer_alloc;
 } RGB24_BUFFER_CONFIG;
 
 #ifdef __cplusplus
@@ -180,7 +169,7 @@ mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path);
 void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile);
 int read_cache_profile(mobinas_cache_profile_t *profile);
 
-//cache reset
+//cache reset (deprecated)
 void remove_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);
 int read_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);
 int write_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);
@@ -207,11 +196,15 @@ void remove_bilinear_config(mobinas_bilinear_config_t *config);
 //color space conversion
 int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
+int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
+int YV12_to_RGB24_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
 int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
 int RGB24_alloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);
 int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);
 int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf);
+double RGB24_calc_psnr(const RGB24_BUFFER_CONFIG *a, const RGB24_BUFFER_CONFIG *b);
+
 
 #ifdef __cplusplus
 }  // extern "C"

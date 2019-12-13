@@ -1,19 +1,22 @@
 //
 // Created by hyunho on 9/2/19.
 //
-
+#include <time.h>
 #include <memory.h>
 #include <stdio.h>
 #include <malloc.h>
 #include <assert.h>
+#include "./vpx_dsp_rtcd.h"
+#include <vpx_dsp/psnr.h>
+#include <vpx_dsp/vpx_dsp_common.h>
 #include <vpx_scale/yv12config.h>
 #include <vpx_mem/vpx_mem.h>
 #include <sys/param.h>
 #include <math.h>
 #include <libgen.h>
 
-//#include "third_party/libyuv/include/libyuv/convert.h"
-//#include "third_party/libyuv/include/libyuv/convert_from.h"
+#include "third_party/libyuv/include/libyuv/convert.h"
+#include "third_party/libyuv/include/libyuv/convert_from.h"
 //#include "third_party/libyuv/include/libyuv/scale.h"
 
 #include "vpx/vpx_mobinas.h"
@@ -28,7 +31,6 @@ mobinas_cfg_t *init_mobinas_cfg() {
     config->decode_mode = DECODE;
     config->dnn_mode = NO_DNN;
     config->cache_policy = NO_CACHE;
-    config->cache_mode = NO_CACHE_RESET;
 
     return config;
 }
@@ -234,13 +236,7 @@ void write_mobinas_cache_reset_bit(mobinas_cache_reset_profile_t *profile, uint8
 void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads){
     if (mwd != NULL) {
         for (int i = 0; i < num_threads; ++i) {
-            vpx_free_frame_buffer(mwd[i].hr_compare_frame);
-            vpx_free_frame_buffer(mwd[i].hr_reference_frame);
-            vpx_free_frame_buffer(mwd[i].lr_reference_frame);
             vpx_free_frame_buffer(mwd[i].lr_resiudal);
-            vpx_free(mwd[i].hr_compare_frame);
-            vpx_free(mwd[i].hr_reference_frame);
-            vpx_free(mwd[i].lr_reference_frame);
             vpx_free(mwd[i].lr_resiudal);
 
             //free decode block lists
@@ -263,10 +259,7 @@ void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads){
 
             if (mwd[i].latency_log != NULL) fclose(mwd[i].latency_log);
             if (mwd[i].metadata_log != NULL) fclose(mwd[i].metadata_log);
-
-            remove_mobinas_cache_reset_profile(mwd[i].cache_reset_profile);
         }
-
         vpx_free(mwd);
     }
 }
@@ -274,9 +267,6 @@ void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads){
 static void init_mobinas_worker_data(mobinas_worker_data_t *mwd, int index){
     assert (mwd != NULL);
 
-    mwd->hr_compare_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    mwd->hr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
-    mwd->lr_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG)); //debug
     mwd->lr_resiudal = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
 
     mwd->intra_block_list = (mobinas_interp_block_list_t *) vpx_calloc(1, sizeof(mobinas_interp_block_list_t));
@@ -290,8 +280,6 @@ static void init_mobinas_worker_data(mobinas_worker_data_t *mwd, int index){
     mwd->inter_block_list->tail = NULL;
 
     mwd->index = index;
-    mwd->reset_cache = 0;
-    mwd->cache_reset_profile = NULL;
 
     mwd->latency_log = NULL;
     mwd->metadata_log = NULL;
@@ -317,95 +305,22 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
     for (int i = 0; i < num_threads; ++i) {
         init_mobinas_worker_data(&mwd[i], i);
 
-        if (mobinas_cfg->save_latency_result == 1) {
-            switch (mobinas_cfg->decode_mode)
-            {
-            case DECODE:
-                sprintf(latency_log_path, "%s/%s/log/latency_thread%d%d", mobinas_cfg->save_dir, mobinas_cfg->prefix,
-                        mwd[i].index, num_threads);
-                break;
-            case DECODE_SR:
-                sprintf(latency_log_path, "%s/%s/log/latency_sr_thread%d%d", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
-                break;
-            case DECODE_BILINEAR:
-                sprintf(latency_log_path, "%s/%s/log/latency_bilinear_thread%d%d", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
-                break;
-            case DECODE_CACHE:
-                switch (mobinas_cfg->cache_policy)
-                {
-                case KEY_FRAME_CACHE:
-                    sprintf(latency_log_path, "%s/%s/log/latency_cache_key_frame_thread%d%d", mobinas_cfg->save_dir,
-                            mobinas_cfg->prefix, mwd[i].index, num_threads);
-                    break;
-                case PROFILE_CACHE:
-                    sprintf(latency_log_path, "%s/%s/log/latency_cache_%s_thread%d%d", mobinas_cfg->save_dir,
-                            mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
-                    break;
-                }
-                break;
-            }
-
+        if (mobinas_cfg->save_latency == 1) {
+            sprintf(latency_log_path, "%s/latency_thread%d%d.txt", mobinas_cfg->log_dir, mobinas_cfg->prefix,
+                     mwd[i].index, num_threads);
             if ((mwd[i].latency_log = fopen(latency_log_path, "w")) == NULL) {
                 fprintf(stderr, "%s: cannot open a file %s", __func__, latency_log_path);
-                mobinas_cfg->save_latency_result = 0;
+                mobinas_cfg->save_latency = 0;
             }
         }
 
-        if (mobinas_cfg->save_metadata_result == 1){
-            switch (mobinas_cfg->decode_mode)
-            {
-            case DECODE:
-                sprintf(metadata_log_path, "%s/%s/log/metadata_thread%d%d", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
-                break;
-            case DECODE_SR:
-                sprintf(metadata_log_path, "%s/%s/log/metadata_sr_thread%d%d", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
-                break;
-            case DECODE_BILINEAR:
-                sprintf(metadata_log_path, "%s/%s/log/metadata_bilinear_thread%d%d", mobinas_cfg->save_dir,
-                        mobinas_cfg->prefix, mwd[i].index, num_threads);
-                break;
-            case DECODE_CACHE:
-                switch (mobinas_cfg->cache_policy)
-                {
-                case KEY_FRAME_CACHE:
-                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_key_frame_thread%d%d",
-                            mobinas_cfg->save_dir, mobinas_cfg->prefix, mwd[i].index, num_threads);
-                    break;
-                case PROFILE_CACHE:
-                    sprintf(metadata_log_path, "%s/%s/log/metadata_cache_%s_thread%d%d", mobinas_cfg->save_dir,
-                            mobinas_cfg->prefix, mobinas_cfg->cache_profile->name, mwd[i].index, num_threads);
-                    break;
-                }
-                break;
-            }
-
+        if (mobinas_cfg->save_metadata == 1){
+            sprintf(metadata_log_path, "%s/metadata_thread%d%d.txt", mobinas_cfg->log_dir,
+                    mobinas_cfg->prefix, mwd[i].index, num_threads);
             if ((mwd[i].metadata_log = fopen(metadata_log_path, "w")) == NULL)
             {
                 fprintf(stderr, "%s: cannot open a file %s", __func__, metadata_log_path);
-                mobinas_cfg->save_metadata_result = 0;
-            }
-        }
-
-        if (mobinas_cfg->decode_mode == DECODE_CACHE) {
-            sprintf(cache_reset_profile_path, "%s/profile/cache_reset_thread%d%d", mobinas_cfg->save_dir, mwd[i].index, num_threads);
-
-            switch (mobinas_cfg->cache_mode) {
-                case PROFILE_CACHE_RESET:
-                    if ((mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(cache_reset_profile_path, 0)) == NULL) {
-                        fprintf(stdout, "%s: turn-off cache reset", __func__);
-                        mobinas_cfg->cache_mode = NO_CACHE_RESET;
-                    }
-                    break;
-                case APPLY_CACHE_RESET:
-                    if ((mwd[i].cache_reset_profile = init_mobinas_cache_reset_profile(cache_reset_profile_path, 1)) == NULL) {
-                        fprintf(stdout, "%s: turn-off cache reset", __func__);
-                        mobinas_cfg->cache_mode = NO_CACHE_RESET;
-                    }
-                    break;
+                mobinas_cfg->save_metadata = 0;
             }
         }
     }
@@ -542,15 +457,21 @@ int default_scale_policy (int resolution){
     }
 }
 
-/*  Previous approach: libyuv
- *  Note: libyuv rounds output values and it occurs quality degradation around 0.1dB
- *
+
+int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    if(ybf == NULL || rbf == NULL) {
+        return -1;
+    }
+
     int result = RGB24ToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
                                  ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
                                  ybf->y_crop_width, ybf->y_crop_height);
-*/
 
-int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    return result;
+}
+
+//TODO: select between bt601, bt709
+int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
     }
@@ -565,32 +486,34 @@ int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
             g = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1);
             b = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2);
 
-            *(ybf->y_buffer + i * ybf->y_stride + j) = round((0.256788 * r + 0.504129 * g + 0.097906 * b) + 16);
-            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = round((-0.148223 * r - 0.290993 * g + 0.439216 * b) + 128);
-            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = round((0.439216 * r - 0.367788 * g - 0.071427 * b) + 128);
+            *(ybf->y_buffer + i * ybf->y_stride + j) = (uint8_t) clamp(round((0.256788 * r + 0.504129 * g + 0.097906 * b) + 16), 0, 255);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = (uint8_t) clamp(round((-0.148223 * r - 0.290993 * g + 0.439216 * b) + 128), 0, 255);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = (uint8_t) clamp(round((0.439216 * r - 0.367788 * g - 0.071427 * b) + 128), 0, 255);
         }
     }
 }
 
-/*  Previous approach: libyuv
- *  Note: libyuv rounds output values and it occurs quality degradation around 0.1dB
- *
-    int result = I420ToRGB24(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
-                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
-                             ybf->y_crop_width, ybf->y_crop_height);
-*/
-
+//TODO: select between bt601, bt709
 int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
     }
 
+    int result = I420ToRGB24(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
+                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
+                             ybf->y_crop_width, ybf->y_crop_height);
+
+    return 0;
+}
+
+int YV12_to_RGB24_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    if(ybf == NULL || rbf == NULL) {
+        return -1;
+    }
     uint8_t y, u, v, r, g, b;
     int i, j;
     const int height = ybf->y_crop_height;
     const int width = ybf->y_crop_width;
-
-    printf("%d", ybf->y_buffer[200]);
 
     for (i = 0; i < height; i++) {
         for (j = 0; j < width; j++) {
@@ -598,9 +521,9 @@ int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
             u = *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x));
             v = *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x));
 
-            *(rbf->buffer_alloc + i * rbf->stride + j * 3) =  1.164383 * (y-16) + 1.596027 * (v-128); // R value
-            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1) =  1.164383 * (y-16) - 0.391762 * (u - 128) - 0.812968 * (v - 128); // G value
-            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2) =  1.164383 * (y-16) + 2.017232 * (u - 128); // B value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3) =  (uint8_t) clamp(round(1.164383 * (y-16) + 1.596027 * (v-128)), 0, 255); // R value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1) =  (uint8_t) clamp(round(1.164383 * (y-16) - 0.391762 * (u - 128) - 0.812968 * (v - 128)), 0, 255); // G value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2) =  (uint8_t) clamp(round(1.164383 * (y-16) + 2.017232 * (u - 128)), 0, 255); // B value
         }
     }
 
@@ -611,14 +534,14 @@ int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {
     FILE *serialize_file = fopen(file_path, "wb");
     if(serialize_file == NULL)
     {
-        fprintf(stderr, "%s: fail to save a file to %s", __func__, file_path);
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
         return -1;
     }
 
-    float *src = rbf->buffer_alloc;
+    uint8_t *src = rbf->buffer_alloc;
     int h = rbf->height;
     do {
-        fwrite(src, sizeof(float), rbf->width, serialize_file);
+        fwrite(src, sizeof(uint8_t), rbf->width, serialize_file);
         src += rbf->stride;
     } while (--h);
 
@@ -631,15 +554,15 @@ int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {
     FILE *serialize_file = fopen(file_path, "rb");
     if(serialize_file == NULL)
     {
-        fprintf(stderr, "%s: fail to open a file from %s", __func__, file_path);
+        fprintf(stderr, "%s: fail to open a file from %s\n", __func__, file_path);
         return -1;
     }
 
-    float *src = rbf->buffer_alloc;
+    uint8_t *src = rbf->buffer_alloc;
     int h = rbf->height;
     do
     {
-        fread(src, sizeof(float), rbf->width, serialize_file);
+        fread(src, sizeof(uint8_t), rbf->width, serialize_file);
         src += rbf->stride;
     }
     while (--h);
@@ -664,7 +587,7 @@ int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) 
             vpx_free(rbf->buffer_alloc);
             rbf->buffer_alloc = NULL;
 
-            rbf->buffer_alloc = (float *) vpx_memalign(32, (size_t) frame_size * sizeof(float));
+            rbf->buffer_alloc = (uint8_t *) vpx_memalign(32, (size_t) frame_size * sizeof(uint8_t));
             if (!rbf->buffer_alloc) return -1;
 
             rbf->buffer_alloc_sz = (int) frame_size;
@@ -694,7 +617,83 @@ int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf) {
     return 0;
 }
 
-////TODO
-//PSNR_STATS measure_psnr(uint8 *rgb_buffer_0, uint8 *rgb_buffer_1){
-//
-//}
+//from <vpx_dsp/src/psnr.c>
+static void encoder_variance(const uint8_t *a, int a_stride, const uint8_t *b,
+                             int b_stride, int w, int h, unsigned int *sse,
+                             int *sum) {
+    int i, j;
+
+    *sum = 0;
+    *sse = 0;
+
+    for (i = 0; i < h; i++) {
+        for (j = 0; j < w; j++) {
+            const int diff = a[j] - b[j];
+            *sum += diff;
+            *sse += diff * diff;
+        }
+
+        a += a_stride;
+        b += b_stride;
+    }
+}
+
+//from <vpx_dsp/src/psnr.c>
+static int64_t get_sse(const uint8_t *a, int a_stride, const uint8_t *b,
+                       int b_stride, int width, int height) {
+    const int dw = width % 16;
+    const int dh = height % 16;
+    int64_t total_sse = 0;
+    unsigned int sse = 0;
+    int sum = 0;
+    int x, y;
+
+    if (dw > 0) {
+        encoder_variance(&a[width - dw], a_stride, &b[width - dw], b_stride, dw,
+                         height, &sse, &sum);
+        total_sse += sse;
+    }
+
+    if (dh > 0) {
+        encoder_variance(&a[(height - dh) * a_stride], a_stride,
+                         &b[(height - dh) * b_stride], b_stride, width - dw, dh,
+                         &sse, &sum);
+        total_sse += sse;
+    }
+
+    for (y = 0; y < height / 16; ++y) {
+        const uint8_t *pa = a;
+        const uint8_t *pb = b;
+        for (x = 0; x < width / 16; ++x) {
+            vpx_mse16x16(pa, a_stride, pb, b_stride, &sse);
+            total_sse += sse;
+
+            pa += 16;
+            pb += 16;
+        }
+
+        a += 16 * a_stride;
+        b += 16 * b_stride;
+    }
+
+    return total_sse;
+}
+
+//TODO: due to float value
+double RGB24_calc_psnr(const RGB24_BUFFER_CONFIG *a, const RGB24_BUFFER_CONFIG *b) {
+    static const double peak = 255.0;
+    double psnr;
+    int i;
+    uint64_t total_sse = 0;
+    uint32_t total_samples = 0;
+
+    const int w = a->width;
+    const int h = a->height;
+    const uint32_t samples = w * h;
+
+    const uint64_t sse = get_sse(a->buffer_alloc, a->stride, b->buffer_alloc, b->stride, w, h);
+
+    psnr = vpx_sse_to_psnr(samples, peak, (double) sse);
+
+    return psnr;
+}
