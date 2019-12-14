@@ -3355,25 +3355,19 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
     /*******************Hyunho************************/
     if(cm->apply_dnn) {
-        char frame_path[PATH_MAX];
-//        int width = //TODO
-//        int height = //TODO
+        char file_path[PATH_MAX];
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
                 //TODO (hyunho): implement ONLINE_DNN
                 break;
             case OFFLINE_DNN:
-            	//TODO (hyunho): implement OFFLINE_DNN
-//                sprintf(frame_path, "%s/%s/serialize/%d_%d_%dp.serialize", cm->mobinas_cfg->save_dir, cm->mobinas_cfg->cache_file,
-//                        cm->current_video_frame, cm->current_super_frame, cm->height * cm->scale);
-//
-//                if (vpx_deserialize_copy(get_sr_frame_new_buffer(cm), frame_path, cm->width * cm->scale, //check: sr frame
-//                                         cm->height * cm->scale, cm->subsampling_x,
-//                                         cm->subsampling_y, cm->byte_alignment)) {
-//                    vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR,
-//                                       "Deseriazlie key frames failed.");
-//                }
+                //load a super-resolutioned frame
+                printf("cm->current_video_frame: %d\n", cm->current_video_frame);
+                sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
+                RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
+                RGB24_load_frame_buffer(cm->sr_frame, file_path);
+                RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);
                 break;
         }
     }
