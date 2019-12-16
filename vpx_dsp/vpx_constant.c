@@ -12,9 +12,10 @@ void vpx_constant_c(uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offs
     int y_end = y_offset * scale + height * scale;
     int x_start = x_offset * scale;
     int x_end = x_offset * scale + width * scale;
-
-    for (int y = y_start; y < y_end; ++y) {
-        for (int x = x_start; x < x_end; ++x) {
+    
+    int x, y;
+    for (y = y_start; y < y_end; ++y) {
+        for (x = x_start; x < x_end; ++x) {
             dst[y * dst_stride + x] = value;
         }
     }
@@ -27,8 +28,9 @@ void vpx_flip_c(int16_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, 
     int x_start = x_offset * scale;
     int x_end = x_offset * scale + width * scale;
 
-    for (int y = y_start; y < y_end; ++y) {
-        for (int x = x_start; x < x_end; ++x) {
+    int x, y;
+    for (y = y_start; y < y_end; ++y) {
+        for (x = x_start; x < x_end; ++x) {
             dst[y * dst_stride + x] = -dst[y * dst_stride + x] ;
         }
     }

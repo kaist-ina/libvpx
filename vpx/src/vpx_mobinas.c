@@ -234,8 +234,9 @@ void write_mobinas_cache_reset_bit(mobinas_cache_reset_profile_t *profile, uint8
 }
 
 void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads){
+    int i;
     if (mwd != NULL) {
-        for (int i = 0; i < num_threads; ++i) {
+        for (i = 0; i < num_threads; ++i) {
             vpx_free_frame_buffer(mwd[i].lr_resiudal);
             vpx_free(mwd[i].lr_resiudal);
 
@@ -302,7 +303,8 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
 
     mobinas_worker_data_t *mwd = (mobinas_worker_data_t *) vpx_malloc(sizeof(mobinas_worker_data_t) * num_threads);
 
-    for (int i = 0; i < num_threads; ++i) {
+    int i;
+    for (i = 0; i < num_threads; ++i) {
         init_mobinas_worker_data(&mwd[i], i);
 
         if (mobinas_cfg->save_latency == 1) {
@@ -478,8 +480,9 @@ int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     const int height = ybf->y_crop_height;
     const int width = ybf->y_crop_width;
 
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
+    int i, j;
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < width; j++) {
             r = *(rbf->buffer_alloc + i * rbf->stride + j * 3);
             g = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1);
             b = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2);
