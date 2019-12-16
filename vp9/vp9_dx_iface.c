@@ -545,10 +545,11 @@ static void save_quality(VP9_COMMON *cm) {
 
 static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
 {
+    int i;
     char log[LOG_MAX];
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
-    for (int i = 0; i < num_threads; ++i) {
+    for (i = 0; i < num_threads; ++i) {
         mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
 
         //latency log
@@ -564,10 +565,11 @@ static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_s
 
 static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
 {
+    int i;
     char log[LOG_MAX];
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
-    for (int i = 0; i < num_threads; ++i) {
+    for (i = 0; i < num_threads; ++i) {
         mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
 
         //metadata log

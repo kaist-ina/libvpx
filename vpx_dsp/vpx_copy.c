@@ -13,8 +13,9 @@ void vpx_copy_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_
     int x_start = x_offset * scale;
     int x_end = x_offset * scale + width * scale;
 
-    for (int y = y_start; y < y_end; ++y) {
-        for (int x = x_start; x < x_end; ++x) {
+    int x, y;
+    for (y = y_start; y < y_end; ++y) {
+        for (x = x_start; x < x_end; ++x) {
             dst[y * dst_stride + x] = src[y * src_stride + x];
         }
     }
@@ -23,8 +24,9 @@ void vpx_copy_c(const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_
 void vpx_copy_and_add_c(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int width, int height)
 {
 //    LOGD("x_offset: %d, y_offset: %d, width: %d, height: %d, max_width: %d, max_height: %d, scale: %d", x_offset, y_offset, width, height,max_width, max_height, scale);
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
+    int x, y;
+    for (y = 0; y < height; ++y) {
+        for (x = 0; x < width; ++x) {
             dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + src[y * src_stride + x]);
         }
     }

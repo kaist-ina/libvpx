@@ -687,6 +687,7 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
     DECLARE_ALIGNED(16, uint8_t, mc_buf[160 * 2 * 160 *
                                         2]); //TODO (hyunho): check whether extending this array size can occur abnormal behavior
     const uint8_t *buf_ptr;
+    int w_offset, h_offset;
 
     build_mc_border(buf_ptr1, pre_buf_stride, mc_buf, b_w, x0, y0, b_w, b_h,
                     frame_width, frame_height);
@@ -696,8 +697,8 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
     /*******************Hyunho************************/
     int proc_size = 64, height, width;
     if (w > 64 && h > 64) {
-        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
-            for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+        for (w_offset = 0; w_offset < w; w_offset += proc_size) {
+            for (h_offset = 0; h_offset < h; h_offset += proc_size) {
                 //calculate height, width
                 height = (h_offset + proc_size <= h ? proc_size :
                           (h - h_offset));
@@ -711,7 +712,7 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
             }
         }
     } else if (w > proc_size) {
-        for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+        for (w_offset = 0; w_offset < w; w_offset += proc_size) {
             //calculate height, width
             height = h;
             width = (w_offset + proc_size <= w ? proc_size :
@@ -722,7 +723,7 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
                             sf, width, height, ref, kernel, xs, ys);
         }
     } else if (h > proc_size) {
-        for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+        for (h_offset = 0; h_offset < h; h_offset += proc_size) {
             //calculate height, width
             height = (h_offset + proc_size <= h ? proc_size :
                       (h - h_offset));
@@ -907,6 +908,7 @@ static void dec_build_sr_inter_predictors(
     int xs, ys, x0, y0, x0_16, y0_16, frame_width, frame_height, buf_stride,
             subpel_x, subpel_y;
     uint8_t *ref_frame, *buf_ptr;
+    int w_offset, h_offset;
 
     // Get reference frame pointer, width and height.
     /*******************Hyunho************************/
@@ -1076,8 +1078,8 @@ static void dec_build_sr_inter_predictors(
     if (is_sr) {
         int proc_size = 64, height, width;
         if (w > proc_size && h > proc_size) {
-            for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
-                for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+            for (w_offset = 0; w_offset < w; w_offset += proc_size) {
+                for (h_offset = 0; h_offset < h; h_offset += proc_size) {
                     //calculate height, width
                     height = (h_offset + proc_size <= h ? proc_size :
                               (h - h_offset));
@@ -1092,7 +1094,7 @@ static void dec_build_sr_inter_predictors(
 
             }
         } else if (w > proc_size) {
-            for (int w_offset = 0; w_offset < w; w_offset += proc_size) {
+            for (w_offset = 0; w_offset < w; w_offset += proc_size) {
                 //calculate height, width
                 height = h;
                 width = (w_offset + proc_size <= w ? proc_size :
@@ -1104,7 +1106,7 @@ static void dec_build_sr_inter_predictors(
             }
 
         } else if (h > proc_size) {
-            for (int h_offset = 0; h_offset < h; h_offset += proc_size) {
+            for (h_offset = 0; h_offset < h; h_offset += proc_size) {
                 //calculate height, width
                 height = (h_offset + proc_size <= h ? proc_size :
                           (h - h_offset));
@@ -2177,6 +2179,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 	YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
 	YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);  //check: sr frame
 	YV12_BUFFER_CONFIG *lr_residual = mwd->lr_resiudal;
+    int plane;
 
 	//low-resolution decoded data
 	uint8_t *const lr_frame_buffers[MAX_MB_PLANE] = { lr_frame->y_buffer, lr_frame->u_buffer, lr_frame->v_buffer };
@@ -2213,7 +2216,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 				>> lr_frame->subsampling_y };
 
 		//for intra-block case, optimizing bilinear degrades performance notably
-		for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+		for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
 			vpx_bilinear_interp_uint8(lr_frame_buffers[plane],
 					lr_frame_strides[plane], sr_frame_buffers[plane],
 					sr_frame_strides[plane], x_offsets[plane], y_offsets[plane],
@@ -2256,7 +2259,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 				* MI_BLOCK_SIZE >> lr_residual->subsampling_y };
 
 		//TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
-		for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+		for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
 			vpx_bilinear_interp_int16(lr_residual_buffers[plane],
 					lr_residual_strides[plane], sr_frame_buffers[plane],
 					sr_frame_strides[plane], x_offsets[plane], y_offsets[plane],
@@ -2521,6 +2524,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     VP9Decoder *const pbi = (VP9Decoder *) arg2;
     VP9_COMMON *cm = &pbi->common;
     mobinas_worker_data_t *mwd = tile_data->mobinas_worker_data;
+    int plane;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
@@ -2572,7 +2576,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                                                      >> lr_frame->subsampling_y};
 
         //for intra-block case, optimizing bilinear degrades performance notably
-        for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+        for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
             vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                       sr_frame_buffers[plane], sr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
@@ -2612,7 +2616,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                                                      >> lr_residual->subsampling_y};
 
         //TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
-        for (int plane = 0; plane < MAX_MB_PLANE; ++plane) {
+        for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
             vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                       sr_frame_buffers[plane], sr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
@@ -3127,7 +3131,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             vp9_setup_scale_factors_for_sr_frame( //hyunho: scale factor for sr-cached frames
                     &cm->sf_upsample_inter, cm->scale,
                     cm->scale, 1, 1, true, true, cm->scale);
-            for (int i = 0; i < num_threads; ++i) {
+            for (i = 0; i < num_threads; ++i) {
                 setup_residual_size(cm, pbi->mobinas_worker_data[i].lr_resiudal);
             }
             break;
@@ -3230,6 +3234,7 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
 //TODO (hyunho): replace bilinear interpolation by libyuv
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
+    int i;
     VP9_COMMON *const cm = &pbi->common;
     MACROBLOCKD *const xd = &pbi->mb;
     struct vpx_read_bit_buffer rb;
@@ -3289,7 +3294,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         pbi->total_tiles = tile_rows * tile_cols;
 
         /*******************Hyunho************************/ //init as 0
-        for (int i = 0; i < num_tile_workers; i++) {
+        for (i = 0; i < num_tile_workers; i++) {
             pbi->tile_worker_data[i].mobinas_worker_data = &pbi->mobinas_worker_data[0];
         }
         /*******************Hyunho************************/
@@ -3297,7 +3302,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
     /*******************Hyunho************************/
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
-    for (int i = 0; i < num_threads; i++) {
+    for (i = 0; i < num_threads; i++) {
         if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
             memset(pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc_sz);
         }
