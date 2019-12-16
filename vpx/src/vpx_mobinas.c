@@ -462,11 +462,9 @@ int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
     }
-
     int result = RGB24ToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
                                  ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
                                  ybf->y_crop_width, ybf->y_crop_height);
-
     return result;
 }
 
@@ -498,12 +496,10 @@ int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
     }
-
     int result = I420ToRGB24(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
                              ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
                              ybf->y_crop_width, ybf->y_crop_height);
-
-    return 0;
+    return result;
 }
 
 int YV12_to_RGB24_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {

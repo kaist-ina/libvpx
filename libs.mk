@@ -15,6 +15,8 @@ LIBYUV_SRCS +=  third_party/libyuv/include/libyuv/basic_types.h  \
                 third_party/libyuv/include/libyuv/cpu_id.h  \
                 third_party/libyuv/include/libyuv/planar_functions.h  \
                 third_party/libyuv/include/libyuv/rotate.h  \
+                third_party/libyuv/include/libyuv/rotate_argb.h  \
+                third_party/libyuv/include/libyuv/rotate_row.h  \
                 third_party/libyuv/include/libyuv/row.h  \
                 third_party/libyuv/include/libyuv/scale.h  \
                 third_party/libyuv/include/libyuv/scale_row.h  \
@@ -34,6 +36,15 @@ LIBYUV_SRCS +=  third_party/libyuv/include/libyuv/basic_types.h  \
                 third_party/libyuv/source/row_neon.cc \
                 third_party/libyuv/source/row_neon64.cc \
                 third_party/libyuv/source/row_win.cc \
+				third_party/libyuv/source/rotate.cc \
+				third_party/libyuv/source/rotate_any.cc \
+				third_party/libyuv/source/rotate_argb.cc \
+				third_party/libyuv/source/rotate_common.cc \
+				third_party/libyuv/source/rotate_mips.cc \
+				third_party/libyuv/source/rotate_gcc.cc \
+				third_party/libyuv/source/rotate_neon.cc \
+				third_party/libyuv/source/rotate_neon64.cc \
+				third_party/libyuv/source/rotate_win.cc \
                 third_party/libyuv/source/scale.cc \
                 third_party/libyuv/source/scale_any.cc \
                 third_party/libyuv/source/scale_common.cc \
