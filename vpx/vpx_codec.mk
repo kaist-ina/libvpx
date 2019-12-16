@@ -65,6 +65,8 @@ API_SRCS-$(CONFIG_SNPE) += snpe/SetBuilderOptions.cpp
 API_SRCS-$(CONFIG_SNPE) += snpe/SetBuilderOptions.hpp
 API_SRCS-$(CONFIG_SNPE) += snpe/Util.cpp
 API_SRCS-$(CONFIG_SNPE) += snpe/Util.hpp
+API_SRCS-$(CONFIG_SNPE) += snpe/udlExample.cpp
+API_SRCS-$(CONFIG_SNPE) += snpe/udlExample.hpp
 API_SRCS-$(CONFIG_SNPE) += snpe/main.cpp
 API_SRCS-$(CONFIG_SNPE) += snpe/main.hpp
 
