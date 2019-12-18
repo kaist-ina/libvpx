@@ -2004,8 +2004,6 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
                            "Failed to allocate frame buffer");
     }
 
-    /*******************Hyunho************************/
-
     pool->frame_bufs[cm->new_fb_idx].released = 0;
     pool->frame_bufs[cm->new_fb_idx].buf.subsampling_x = cm->subsampling_x;
     pool->frame_bufs[cm->new_fb_idx].buf.subsampling_y = cm->subsampling_y;
@@ -2974,6 +2972,9 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                 memset(&cm->ref_frame_map, -1, sizeof(cm->ref_frame_map));
                 pbi->need_resync = 0;
             }
+            /*******************Hyunho************************/
+            setup_sr_frame_size(cm);
+            /*******************Hyunho************************/
         } else if (pbi->need_resync != 1) { /* Skip if need resync */
             pbi->refresh_frame_flags = vpx_rb_read_literal(rb, REF_FRAMES);
             for (i = 0; i < REFS_PER_FRAME; ++i) {

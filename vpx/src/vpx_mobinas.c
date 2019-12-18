@@ -448,6 +448,8 @@ int default_scale_policy (int resolution){
     switch(resolution){
         case 270:
             return 4;
+        case 240:
+            return 4;
         case 360:
             return 3;
         case 480:

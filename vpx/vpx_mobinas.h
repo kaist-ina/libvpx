@@ -132,7 +132,7 @@ typedef struct mobinas_worker_data {
  */
 
 typedef struct mobinas_cfg{
-    //directory
+    //directory, name
     char log_dir[PATH_MAX];
     char input_frame_dir[PATH_MAX];
     char sr_frame_dir[PATH_MAX];

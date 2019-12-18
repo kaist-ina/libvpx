@@ -46,36 +46,53 @@
 #include <GLES2/gl2.h>
 #include "CreateGLBuffer.hpp"
 #include <android/log.h>
-#define  LOG_TAG    "vpx/snpe/main.cpp"
-#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
-#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define TAG "main.cpp JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
 SNPE::SNPE(mobinas_dnn_runtime runtime_mode)
 {
     {
-        switch (runtime_mode)
-        {
-        case CPU_FLOAT32:
-            runtime = zdl::DlSystem::Runtime_t::CPU_FLOAT32;
-            break;
-        case GPU_FLOAT32_16_HYBRID:
-            runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT32_16_HYBRID;
-            break;
-        case DSP_FIXED8:
-            runtime = zdl::DlSystem::Runtime_t::DSP_FIXED8_TF;
-            break;
-        case GPU_FLOAT16:
-            runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT16;
-            break;
-        case AIP_FIXED8:
-            runtime = zdl::DlSystem::Runtime_t::AIP_FIXED8_TF;
-            break;
-        default:
-            std::cerr << "Selected runtime not present. Falling back to UNSET." << std::endl;
-            runtime = zdl::DlSystem::Runtime_t::UNSET;
-            break;
+        switch (runtime_mode) {
+            case CPU_FLOAT32:
+                runtime = zdl::DlSystem::Runtime_t::CPU_FLOAT32;
+                break;
+            case GPU_FLOAT32_16_HYBRID:
+                runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT32_16_HYBRID;
+                break;
+            case DSP_FIXED8:
+                runtime = zdl::DlSystem::Runtime_t::DSP_FIXED8_TF;
+                break;
+            case GPU_FLOAT16:
+                runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT16;
+                break;
+            case AIP_FIXED8:
+                runtime = zdl::DlSystem::Runtime_t::AIP_FIXED8_TF;
+                break;
+            default:
+                LOGE("Selected runtime not present. Falling back to UNSET.");
+                runtime = zdl::DlSystem::Runtime_t::UNSET;
+                break;
         }
     }
+
+    LOGI("SNPE: Allocate class");
 }
 
 void *snpe_alloc(mobinas_dnn_runtime runtime_mode) {
@@ -89,27 +106,26 @@ SNPE::~SNPE(void){
     }
 }
 
-void snpe_alloc(void *snpe) {
+void snpe_free(void *snpe) {
     delete static_cast<SNPE *>(snpe);
-    std::cout << "SNPE: Pass allocating" << std::endl;
 }
 
 int SNPE::check_runtime(void){
     int result;
     static zdl::DlSystem::Version_t Version = zdl::SNPE::SNPEFactory::getLibraryVersion();
-    std::cout << "SNPE Version: " << Version.asString().c_str() << std::endl; //Print Version number
+    LOGI("SNPE: Version %s", Version.asString().c_str()); //Print Version number
 
     if (!zdl::SNPE::SNPEFactory::isRuntimeAvailable(runtime)) {
-        std::cerr << "Selected runtime not present. Falling back to CPU." << std::endl;
+        LOGE("Selected runtime not present. Falling back to CPU.");
         return -1;
     }
-    
+
+    LOGI("SNPE: Check runtime");
     return 0;
 }
 
 int snpe_check_runtime(void *snpe){
     return static_cast<SNPE *>(snpe)->check_runtime();
-    std::cerr << "SNPE: Pass checking runtime" << std::endl;
 }
 
 int SNPE::init_network(const char *path){
@@ -124,7 +140,7 @@ int SNPE::init_network(const char *path){
     //check if dlc is valid file
     std::ifstream dlcFile(path);
     if(!dlcFile){
-        std::cerr << "DLC does not exist" << std::endl;
+        LOGE("DLC does not exist");
         return -1;
     }
 
@@ -132,17 +148,18 @@ int SNPE::init_network(const char *path){
     std::unique_ptr<zdl::DlContainer::IDlContainer> container = loadContainerFromFile(path);
     if (container == nullptr)
     {
-        std::cerr << "Failed to open a dlc file" << std::endl;
+        LOGE("Failed to open a dlc file");
         return -1;
     }
 
 
     snpe = setBuilderOptions(container, runtime, runtimeList, udlBundle, useUserSuppliedBuffers, platformConfig, usingInitCaching);
     if(snpe == nullptr){
-        std::cerr << "Failed build a snpe object" << std::endl;
+        LOGE("Failed build a snpe object");
         return -1;
     }
-    
+
+    LOGI("SNPE: Init network");
     return 0;
 }
 
@@ -160,11 +177,13 @@ int SNPE::execute_byte(uint8_t *input_buffer, float *output_buffer, int number_o
 
     // Save the execution results if execution successful
     if (!execStatus){
-        std::cerr << "Failed to run a model" << std::endl;
+        LOGE("Failed to run a model");
         return -1;
     }
 
     saveOutputToBuffer(outputTensorMap, output_buffer);
+
+    LOGI("SNPE: Execue a DNN");
     return 0;
 }
 
@@ -181,11 +200,12 @@ int SNPE::execute_float(float *input_buffer, float *output_buffer, int number_of
 
     // Save the execution results if execution successful
     if (!execStatus){
-        std::cerr << "Failed to run a model" << std::endl;
+        LOGE("Failed to run a model");
         return -1;
     }
 
     saveOutputToBuffer(outputTensorMap, output_buffer);
+    LOGI("SNPE: Execue a DNN");
     return 0;
 }
 

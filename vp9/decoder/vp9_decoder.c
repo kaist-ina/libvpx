@@ -42,6 +42,7 @@
 #include "vp9/decoder/vp9_detokenize.h"
 
 #include <vpx_dsp/psnr.h>
+#include <vpx/snpe/main.hpp>
 
 static void initialize_dec(void) {
     static volatile int init_done = 0;
@@ -177,6 +178,12 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
 
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
     remove_mobinas_worker(pbi->mobinas_worker_data, num_threads);
+
+    if (pbi->common.mobinas_cfg->dnn_mode == ONLINE_DNN) {
+#if CONFIG_SNPE
+        snpe_free(pbi->common.mobinas_cfg->dnn_class);
+#endif
+    }
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);
@@ -337,7 +344,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         !frame_bufs[cm->new_fb_idx].released) {
         pool->release_fb_cb(pool->cb_priv,
                             &frame_bufs[cm->new_fb_idx].raw_frame_buffer);
-        if (pool->mode == DECODE_CACHE) {
+        if (pool->mode == DECODE_CACHE || pool->mode == DECODE_SR) {
             pool->release_fb_cb(pool->cb_priv,
                                 &frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer);
         }

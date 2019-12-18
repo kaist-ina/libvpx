@@ -41,6 +41,29 @@
 #include "vpx/snpe/main.hpp"
 #endif
 
+#ifdef __ANDROID_API__
+#include <android/log.h>
+#define TAG "vp9_dx_iface.c JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+#endif
+
 #define VP9_CAP_POSTPROC (CONFIG_VP9_POSTPROC ? VPX_CODEC_CAP_POSTPROC : 0)
 
 //hyunho
@@ -259,7 +282,7 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
 }
 
 /* Validate MobiNAS configuration */
-static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
+static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
     if (mobinas_cfg == NULL)
     {
         fprintf(stderr, "%s: mobinas_cfg is NULL\n", __func__);
@@ -269,6 +292,9 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
     switch (mobinas_cfg->decode_mode)
     {
     case DECODE_SR:
+        if (mobinas_cfg->get_scale == NULL)
+            mobinas_cfg->get_scale = default_scale_policy;
+
         switch (mobinas_cfg->dnn_mode)
         {
         case NO_DNN:
@@ -283,16 +309,11 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
         }
         break;
     case DECODE_CACHE:
-        if (!mobinas_cfg->get_scale)
-        {
-            fprintf(stderr, "%s: get_scale is NULL\n", __func__);
-            return -1;
-        }
-        if (!mobinas_cfg->bilinear_profile)
-        {
-            fprintf(stderr, "%s: bilinear_profile is NULL\n", __func__);
-            return -1;
-        }
+        if (mobinas_cfg->get_scale == NULL)
+            mobinas_cfg->get_scale = default_scale_policy;
+        if (mobinas_cfg->bilinear_profile == NULL)
+            mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
+
         switch (mobinas_cfg->cache_policy)
         {
         case PROFILE_CACHE:
@@ -604,8 +625,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     uint32_t frame_sizes[8];
     int frame_count;
     VP9_COMMON *cm;
-
-    LOGE("test");
 
     if (data == NULL && data_sz == 0) {
         ctx->flushed = 1;

@@ -1,6 +1,3 @@
-#include <unistd.h>
-
-
 //TODO (snpe): snpe_cfg_t
 //TODO (snpe): snpe_runtime_mode (CPU, GPU, GPU16, DSP)
 
