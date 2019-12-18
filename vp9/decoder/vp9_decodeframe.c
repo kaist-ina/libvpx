@@ -1877,66 +1877,19 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
 
-    /*******************Hyunho************************/
-     //handle adaptive streaming
-     cm->scale = (cm->mobinas_cfg->get_scale ? cm->mobinas_cfg->get_scale(cm->height) : 1);
-     if (cm->scale == 1) {
-         cm->mobinas_cfg->saved_decode_mode = cm->mobinas_cfg->decode_mode;
-         cm->mobinas_cfg->decode_mode = DECODE;
-     }
-     else {
-         if (cm->mobinas_cfg->decode_mode == DECODE)
-             cm->mobinas_cfg->decode_mode = cm->mobinas_cfg->saved_decode_mode;
-     }
-
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
-                                     cm->height, cm->subsampling_x,
-                                     cm->subsampling_y,
+    if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height, //check: original frame
+                                 cm->subsampling_x,
+                                 cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
+            cm->use_highbitdepth,
 #endif
-                                     VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
-                                     pool->get_fb_cb,
-                                     pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
-
-        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
-        if (vpx_realloc_scaled_frame_buffer(get_sr_frame_new_buffer(cm), frame->y_width, //check: sr frame
-                                            frame->y_crop_width, frame->y_height,
-                                            frame->y_crop_height, cm->scale,
-                                            cm->subsampling_x,
-                                            cm->subsampling_y,
-#if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
-#endif
-                                            VP9_DEC_BORDER_IN_PIXELS * cm->scale,
-                                            cm->byte_alignment,
-                                            &pool->frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer,
-                                            pool->get_fb_cb,
-                                            pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
-    } else {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width, cm->height, //check: original frame
-                                     cm->subsampling_x,
-                                     cm->subsampling_y,
-#if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
-#endif
-                                     VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
-                                     pool->get_fb_cb,
-                                     pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
+                                 VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+                                 &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                 pool->get_fb_cb,
+                                 pool->cb_priv)) {
+        vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
+                           "Failed to allocate frame buffer");
     }
-    /*******************Hyunho************************/
 
     pool->frame_bufs[cm->new_fb_idx].released = 0;
     pool->frame_bufs[cm->new_fb_idx].buf.subsampling_x = cm->subsampling_x;
@@ -1947,6 +1900,31 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
     pool->frame_bufs[cm->new_fb_idx].buf.render_width = cm->render_width;
     pool->frame_bufs[cm->new_fb_idx].buf.render_height = cm->render_height;
 }
+
+static void setup_sr_frame_size(VP9_COMMON *cm) {
+    BufferPool *const pool = cm->buffer_pool;
+
+    YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+    if (vpx_realloc_scaled_frame_buffer(get_sr_frame_new_buffer(cm), frame->y_width,  //check: sr frame
+                                        frame->y_crop_width, frame->y_height, frame->y_crop_height, cm->scale, cm->subsampling_x, cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+                                        cm->use_highbitdepth,
+#endif
+                                        VP9_DEC_BORDER_IN_PIXELS * cm->scale,
+                                        cm->byte_alignment, &pool->frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer, pool->get_fb_cb, pool->cb_priv))
+    {
+        vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR, "Failed to allocate frame buffer");
+    }
+
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.subsampling_x = cm->subsampling_x;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.subsampling_y = cm->subsampling_y;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.bit_depth = (unsigned int) cm->bit_depth;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.color_space = cm->color_space;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.color_range = cm->color_range;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.render_width = cm->render_width * cm->scale;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.render_height = cm->render_height * cm->scale;
+}
+
 
 static INLINE int valid_ref_frame_img_fmt(vpx_bit_depth_t ref_bit_depth,
                                           int ref_xss, int ref_yss,
@@ -1967,17 +1945,8 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
             if (cm->frame_refs[i].idx != INVALID_IDX) {
                 YV12_BUFFER_CONFIG *const buf = cm->frame_refs[i].buf;
 
-                /*******************Hyunho************************/
                 width = buf->y_crop_width;
                 height = buf->y_crop_height;
-//                if (cm->mobinas_cfg->mode == DECODE_CACHE) {
-//                    width = buf->y_crop_width / cm->scale;
-//                    height = buf->y_crop_height / cm->scale;
-//                } else {
-//                    width = buf->y_crop_width;
-//                    height = buf->y_crop_height;
-//                }
-                /*******************Hyunho************************/
 
                 found = 1;
                 break;
@@ -1998,20 +1967,10 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     // has valid dimensions.
     for (i = 0; i < REFS_PER_FRAME; ++i) {
         RefBuffer *const ref_frame = &cm->frame_refs[i];
-        /*******************Hyunho************************/
         has_valid_ref_frame |=
                 (ref_frame->idx != INVALID_IDX &&
                  valid_ref_frame_size(ref_frame->buf->y_crop_width,
                                       ref_frame->buf->y_crop_height, width, height));
-//        if (cm->mobinas_cfg->mode == DECODE_CACHE) {
-//            has_valid_ref_frame = 1; //TODO (hyunho): Hyunho: how to check valid frame size in DECODE_CACHE mode?
-//        } else {
-//            has_valid_ref_frame |=
-//                    (ref_frame->idx != INVALID_IDX &&
-//                     valid_ref_frame_size(ref_frame->buf->y_crop_width,
-//                                          ref_frame->buf->y_crop_height, width, height));
-//        }
-        /*******************Hyunho************************/
     }
 
     if (!has_valid_ref_frame)
@@ -2030,53 +1989,21 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
 
     resize_context_buffers(cm, width, height);
     setup_render_size(cm, rb);
-    /*******************Hyunho************************/
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
-        if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
-                                     cm->height, cm->subsampling_x,
-                                     cm->subsampling_y,
-#if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
-#endif
-                                     VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                                     &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
-                                     pool->get_fb_cb,
-                                     pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
 
-        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
-        if (vpx_realloc_scaled_frame_buffer(get_sr_frame_new_buffer(cm), frame->y_width, //check: sr frame
-                                            frame->y_crop_width, frame->y_height,
-                                            frame->y_crop_height, cm->scale,
-                                            cm->subsampling_x,
-                                            cm->subsampling_y,
+    if (vpx_realloc_frame_buffer(get_frame_new_buffer(cm), cm->width,
+                                 cm->height, cm->subsampling_x,
+                                 cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
+            cm->use_highbitdepth,
 #endif
-                                            VP9_DEC_BORDER_IN_PIXELS * cm->scale,
-                                            cm->byte_alignment,
-                                            &pool->frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer,
-                                            pool->get_fb_cb,
-                                            pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
-    } else {
-        if (vpx_realloc_frame_buffer(
-                get_frame_new_buffer(cm), cm->width, cm->height, cm->subsampling_x, //check: original frame
-                cm->subsampling_y,
-#if CONFIG_VP9_HIGHBITDEPTH
-                cm->use_highbitdepth,
-#endif
-                VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
-                &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer, pool->get_fb_cb,
-                pool->cb_priv)) {
-            vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
-                               "Failed to allocate frame buffer");
-        }
+                                 VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+                                 &pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer,
+                                 pool->get_fb_cb,
+                                 pool->cb_priv)) {
+        vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR,
+                           "Failed to allocate frame buffer");
     }
+
     /*******************Hyunho************************/
 
     pool->frame_bufs[cm->new_fb_idx].released = 0;
@@ -2087,6 +2014,29 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     pool->frame_bufs[cm->new_fb_idx].buf.color_range = cm->color_range;
     pool->frame_bufs[cm->new_fb_idx].buf.render_width = cm->render_width;
     pool->frame_bufs[cm->new_fb_idx].buf.render_height = cm->render_height;
+}
+
+static void setup_sr_frame_size_with_refs(VP9_COMMON *cm) {
+    BufferPool *const pool = cm->buffer_pool;
+    YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+    if (vpx_realloc_scaled_frame_buffer(get_sr_frame_new_buffer(cm), frame->y_width,  //check: sr frame
+                                        frame->y_crop_width, frame->y_height, frame->y_crop_height, cm->scale, cm->subsampling_x, cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+                                        cm->use_highbitdepth,
+#endif
+                                        VP9_DEC_BORDER_IN_PIXELS * cm->scale,
+                                        cm->byte_alignment, &pool->frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer, pool->get_fb_cb, pool->cb_priv))
+    {
+        vpx_internal_error(&cm->error, VPX_CODEC_MEM_ERROR, "Failed to allocate frame buffer");
+    }
+
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.subsampling_x = cm->subsampling_x;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.subsampling_y = cm->subsampling_y;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.bit_depth = (unsigned int) cm->bit_depth;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.color_space = cm->color_space;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.color_range = cm->color_range;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.render_width = cm->render_width * cm->scale;
+    pool->frame_bufs[cm->new_fb_idx].sr_buf.render_height = cm->render_height * cm->scale;
 }
 
 static void setup_tile_info(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
@@ -2983,6 +2933,15 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             memset(&cm->ref_frame_map, -1, sizeof(cm->ref_frame_map));
             pbi->need_resync = 0;
         }
+        /*******************Hyunho************************/
+        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
+            cm->scale = cm->mobinas_cfg->get_scale(cm->height);
+            if (cm->scale == -1) {
+                vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR, "Failed to set cm->scale");
+            }
+            setup_sr_frame_size(cm);
+        }
+        /*******************Hyunho************************/
     } else {
         cm->intra_only = cm->show_frame ? 0 : vpx_rb_read_bit(rb);
 
@@ -3028,8 +2987,11 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             }
 
             setup_frame_size_with_refs(cm, rb);
-
-            //TODO: understand frame scaling...
+            /*******************Hyunho************************/
+            if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
+                setup_sr_frame_size_with_refs(cm);
+            }
+            /*******************Hyunho************************/
 
             cm->allow_high_precision_mv = vpx_rb_read_bit(rb);
             cm->interp_filter = read_interp_filter(rb);
@@ -3042,18 +3004,14 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                     ref_buf->buf->y_crop_height, cm->width, cm->height,
                     cm->use_highbitdepth);
 #else
+                vp9_setup_scale_factors_for_frame(
+                                           &ref_buf->sf, ref_buf->buf->y_crop_width,
+                                           ref_buf->buf->y_crop_height, cm->width, cm->height);
                 /*******************Hyunho************************/
                 if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf_sr, ref_buf->buf_sr->y_crop_width,
                             ref_buf->buf_sr->y_crop_height, cm->width, cm->height, false, false, 1);
-                    vp9_setup_scale_factors_for_frame(
-                            &ref_buf->sf, ref_buf->buf->y_crop_width,
-                            ref_buf->buf->y_crop_height, cm->width, cm->height);
-                } else {
-                    vp9_setup_scale_factors_for_frame(
-                            &ref_buf->sf, ref_buf->buf->y_crop_width,
-                            ref_buf->buf->y_crop_height, cm->width, cm->height);
                 }
                 /*******************Hyunho************************/
 #endif
@@ -3125,16 +3083,15 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                            "Invalid header size");
 
     /*******************Hyunho************************/
-    const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
-    switch(cm->mobinas_cfg->decode_mode) {
-        case DECODE_CACHE:
-            vp9_setup_scale_factors_for_sr_frame( //hyunho: scale factor for sr-cached frames
-                    &cm->sf_upsample_inter, cm->scale,
-                    cm->scale, 1, 1, true, true, cm->scale);
-            for (i = 0; i < num_threads; ++i) {
-                setup_residual_size(cm, pbi->mobinas_worker_data[i].lr_resiudal);
-            }
-            break;
+    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE)
+    {
+        const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
+        vp9_setup_scale_factors_for_sr_frame(  //hyunho: scale factor for sr-cached frames
+                &cm->sf_upsample_inter, cm->scale, cm->scale, 1, 1, true, true, cm->scale);
+        for (i = 0; i < num_threads; ++i)
+        {
+            setup_residual_size(cm, pbi->mobinas_worker_data[i].lr_resiudal);
+        }
     }
     /*******************Hyunho************************/
 
@@ -3328,10 +3285,12 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         case KEY_FRAME_CACHE:
             cm->apply_dnn = (cm->frame_type == KEY_FRAME ? 1 : 0);
             break;
-        default:
+        case NO_CACHE:
             cm->apply_dnn = 0;
             break;
         }
+        break;
+   case DECODE:
         break;
     }
 
@@ -3373,6 +3332,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                 RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
                 RGB24_load_frame_buffer(cm->sr_frame, file_path);
                 RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);
+                break;
+            case NO_DNN:
                 break;
         }
     }

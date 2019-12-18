@@ -292,12 +292,12 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
     char cache_reset_profile_path[PATH_MAX];
 
     if (!mobinas_cfg) {
-        fprintf(stderr, "%s: mobinas_cfg is NULL");
+        fprintf(stderr, "%s: mobinas_cfg is NULL", __func__);
         return NULL;
     }
 
     if (num_threads <= 0) {
-        fprintf(stderr, "%s: num_threads is equal or less than 0");
+        fprintf(stderr, "%s: num_threads is equal or less than 0", __func__);
         return NULL;
     }
 
@@ -308,8 +308,7 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
         init_mobinas_worker_data(&mwd[i], i);
 
         if (mobinas_cfg->save_latency == 1) {
-            sprintf(latency_log_path, "%s/latency_thread%d%d.txt", mobinas_cfg->log_dir, mobinas_cfg->prefix,
-                     mwd[i].index, num_threads);
+            sprintf(latency_log_path, "%s/latency_thread%d%d.txt", mobinas_cfg->log_dir, mwd[i].index, num_threads);
             if ((mwd[i].latency_log = fopen(latency_log_path, "w")) == NULL) {
                 fprintf(stderr, "%s: cannot open a file %s", __func__, latency_log_path);
                 mobinas_cfg->save_latency = 0;
@@ -317,8 +316,7 @@ mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobin
         }
 
         if (mobinas_cfg->save_metadata == 1){
-            sprintf(metadata_log_path, "%s/metadata_thread%d%d.txt", mobinas_cfg->log_dir,
-                    mobinas_cfg->prefix, mwd[i].index, num_threads);
+            sprintf(metadata_log_path, "%s/metadata_thread%d%d.txt", mobinas_cfg->log_dir, mwd[i].index, num_threads);
             if ((mwd[i].metadata_log = fopen(metadata_log_path, "w")) == NULL)
             {
                 fprintf(stderr, "%s: cannot open a file %s", __func__, metadata_log_path);
@@ -454,8 +452,13 @@ int default_scale_policy (int resolution){
             return 3;
         case 480:
             return 2;
-        default:
+        case 720:
             return 1;
+        case 1080:
+            return 1;
+        default:
+            fprintf(stderr, "Unsupported resolution: %d\n", resolution);
+            return -1;
     }
 }
 
@@ -492,6 +495,8 @@ int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
             *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = (uint8_t) clamp(round((0.439216 * r - 0.367788 * g - 0.071427 * b) + 128), 0, 255);
         }
     }
+
+    return 0;
 }
 
 //TODO: select between bt601, bt709

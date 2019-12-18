@@ -23,6 +23,7 @@
 #include <algorithm>
 
 #include <vpx_mem/vpx_mem.h>
+#include <vpx/vpx_mobinas.h>
 #include "CheckRuntime.hpp"
 #include "LoadContainer.hpp"
 #include "SetBuilderOptions.hpp"
@@ -34,11 +35,6 @@
 #include "Util.hpp"
 #include "DlSystem/DlError.hpp"
 #include "DlSystem/RuntimeList.hpp"
-#ifdef ANDROID
-#include <GLES2/gl2.h>
-#include "CreateGLBuffer.hpp"
-#endif
-
 #include "DlSystem/UserBufferMap.hpp"
 #include "DlSystem/UDLFunc.hpp"
 #include "DlSystem/IUserBuffer.hpp"
@@ -47,7 +43,15 @@
 #include "DiagLog/IDiagLog.hpp"
 #include "main.hpp"
 
-SNPE::SNPE(snpe_runtime_mode runtime_mode){
+#include <GLES2/gl2.h>
+#include "CreateGLBuffer.hpp"
+#include <android/log.h>
+#define  LOG_TAG    "vpx/snpe/main.cpp"
+#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+
+SNPE::SNPE(mobinas_dnn_runtime runtime_mode)
+{
     {
         switch (runtime_mode)
         {
@@ -57,23 +61,24 @@ SNPE::SNPE(snpe_runtime_mode runtime_mode){
         case GPU_FLOAT32_16_HYBRID:
             runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT32_16_HYBRID;
             break;
-        case DSP_FIXED8_TF:
+        case DSP_FIXED8:
             runtime = zdl::DlSystem::Runtime_t::DSP_FIXED8_TF;
             break;
         case GPU_FLOAT16:
             runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT16;
             break;
-        case AIP_FIXED8_TF:
+        case AIP_FIXED8:
             runtime = zdl::DlSystem::Runtime_t::AIP_FIXED8_TF;
             break;
         default:
+            std::cerr << "Selected runtime not present. Falling back to UNSET." << std::endl;
             runtime = zdl::DlSystem::Runtime_t::UNSET;
             break;
         }
     }
 }
 
-void *snpe_alloc(snpe_runtime_mode runtime_mode) {
+void *snpe_alloc(mobinas_dnn_runtime runtime_mode) {
     return static_cast<void *>(new SNPE(runtime_mode));
 }
 
@@ -86,6 +91,7 @@ SNPE::~SNPE(void){
 
 void snpe_alloc(void *snpe) {
     delete static_cast<SNPE *>(snpe);
+    std::cout << "SNPE: Pass allocating" << std::endl;
 }
 
 int SNPE::check_runtime(void){
@@ -103,6 +109,7 @@ int SNPE::check_runtime(void){
 
 int snpe_check_runtime(void *snpe){
     return static_cast<SNPE *>(snpe)->check_runtime();
+    std::cerr << "SNPE: Pass checking runtime" << std::endl;
 }
 
 int SNPE::init_network(const char *path){

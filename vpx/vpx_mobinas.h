@@ -47,6 +47,14 @@ typedef enum{
     OFFLINE_DNN,
 } mobinas_dnn_mode;
 
+typedef enum{
+    CPU_FLOAT32,
+    GPU_FLOAT32_16_HYBRID,
+    DSP_FIXED8,
+    GPU_FLOAT16,
+    AIP_FIXED8
+} mobinas_dnn_runtime;
+
 typedef struct mobinas_bilinear_config{
     float *x_lerp;
     int16_t *x_lerp_fixed;
@@ -110,42 +118,50 @@ typedef struct mobinas_worker_data {
     mobinas_metadata_info_t metadata;
 } mobinas_worker_data_t;
 
+
+/* TODO (streaming): Support for streaming
+ * 1. offline DNN
+ * - {log_dir}/frame.txt (which includes {chunk_index}/{resolution})
+ * - 240p/{}/quality.txt, ...: log all super-resolutioned video quality
+ * 2. online DNN
+ * - save_frame: input_frame_dir, sr_frame_dir includes trace_name
+ * - save_quality: (x) - not supported
+ * - save_latency: log_dir includes trace_name
+ * - sr_metadata: log_dir includes trace_name
+ * - get_scale should be set properly
+ */
+
 typedef struct mobinas_cfg{
-    //directory
-    char save_dir[PATH_MAX];
-    char prefix[PATH_MAX];
-
-    //video
-    char target_file[PATH_MAX];
-    char cache_file[PATH_MAX];
-    char compare_file[PATH_MAX];
-
     //directory
     char log_dir[PATH_MAX];
     char input_frame_dir[PATH_MAX];
     char sr_frame_dir[PATH_MAX];
     char input_compare_frame_dir[PATH_MAX];
     char sr_compare_frame_dir[PATH_MAX];
+    char sr_offline_frame_dir[PATH_MAX]; //OFFLINE_DNN (load images)
 
-    //directory (OFFLINE_DNN)
-    char sr_offline_frame_dir[PATH_MAX];
-
-    //log
+    //log options
     int save_frame;
     int save_quality;
     int save_latency;
     int save_metadata;
 
-    //mode
+    //decode
     mobinas_decode_mode decode_mode;
-    mobinas_decode_mode saved_decode_mode;
-    mobinas_dnn_mode dnn_mode;
-    mobinas_cache_policy cache_policy;
 
-    //configuration
+    //scale, upsampling
     mobinas_get_scale_fn_t get_scale;
-    mobinas_cache_profile_t *cache_profile;
     vp9_bilinear_profile_t *bilinear_profile;
+
+    //cache
+    mobinas_cache_policy cache_policy;
+    mobinas_cache_profile_t *cache_profile;
+
+    //DNN
+    mobinas_dnn_mode dnn_mode;
+    char dnn_path[PATH_MAX]; //ONLINE_DNN
+    mobinas_dnn_runtime dnn_runtime;
+    void *dnn_class;
 } mobinas_cfg_t;
 
 typedef struct rgb24_buffer_config{

@@ -136,7 +136,11 @@ static const arg_def_t prefixarg =
 static const arg_def_t cacheprofilearg =
         ARG_DEF(NULL, "cache-profile", 1, "Cache profile to apply");
 static const arg_def_t dnnnamearg =
-        ARG_DEF(NULL, "dnn-name", 1, "DNN to apply");
+        ARG_DEF(NULL, "dnn-name", 1, "DNN name to apply (e.g., EDSR_S_B8_F64)");
+static const arg_def_t dnnfilearg =
+        ARG_DEF(NULL, "dnn-file", 1, "DNN file to apply (e.g., ckpt-300.dlc");
+static const arg_def_t dnnruntimearg =
+        ARG_DEF(NULL, "dnn-runtime", 1, "DNN to apply");
 
 static const arg_def_t *all_args[] =
 {   &help, &codecarg, &use_yv12, &use_i420, &flipuvarg, &rawvideo, &noblitarg, &progressarg, &limitarg, &skiparg,
@@ -147,7 +151,7 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
     &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
-    &prefixarg, &cacheprofilearg, &dnnnamearg, NULL};
+    &prefixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, NULL};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -684,6 +688,7 @@ static int main_loop(int argc, const char **argv_)
     char path[PATH_MAX] = {"\0"};
     char *cache_profile_path = NULL;
     const char *dnn_name = NULL;
+    const char *dnn_file = NULL;
     const char *content_dir = NULL;
     const char *input_video_name = NULL;
     const char *dnn_video_name = NULL;
@@ -877,6 +882,32 @@ static int main_loop(int argc, const char **argv_)
             cache_profile_path = arg.val;
         else if (arg_match(&arg, &dnnnamearg, argi))
             dnn_name = arg.val;
+        else if (arg_match(&arg, &dnnfilearg, argi))
+            dnn_file = arg.val;
+        else if (arg_match(&arg, &dnnruntimearg, argi))
+        {
+            switch (arg_parse_uint(&arg))
+            {
+            case CPU_FLOAT32:
+                mobinas_cfg->dnn_runtime = CPU_FLOAT32;
+                break;
+            case GPU_FLOAT32_16_HYBRID:
+                mobinas_cfg->dnn_runtime = GPU_FLOAT32_16_HYBRID;
+                break;
+            case DSP_FIXED8:
+                mobinas_cfg->dnn_runtime = DSP_FIXED8;
+                break;
+            case GPU_FLOAT16:
+                mobinas_cfg->dnn_runtime = GPU_FLOAT16;
+                break;
+            case AIP_FIXED8:
+                mobinas_cfg->dnn_runtime = AIP_FIXED8;
+                break;
+            default:
+                die("Invalid DNN runtime: %d.\n", arg.val);
+                break;
+            }
+        }
         /*******************Hyunho************************/
         else
             argj++;
@@ -892,7 +923,7 @@ static int main_loop(int argc, const char **argv_)
     switch (mobinas_cfg->decode_mode)
     {
     case DECODE:
-        sprintf(mobinas_cfg->log_dir, "%s/log/%s/snpe", content_dir, input_video_name);
+        sprintf(mobinas_cfg->log_dir, "%s/log/%s", content_dir, input_video_name);
         sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
         _mkdir(mobinas_cfg->log_dir);
         _mkdir(mobinas_cfg->input_frame_dir);
@@ -900,14 +931,12 @@ static int main_loop(int argc, const char **argv_)
 			sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
         break;
     case DECODE_SR:
-    	sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/sr", content_dir, input_video_name, dnn_name);
+    	sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
     	sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
-    	sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/sr", content_dir, input_video_name, dnn_name);
+    	sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
         _mkdir(mobinas_cfg->log_dir);
 		_mkdir(mobinas_cfg->input_frame_dir);
 		_mkdir(mobinas_cfg->sr_frame_dir);
-		if (mobinas_cfg->dnn_mode == OFFLINE_DNN)
-			sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s", content_dir, dnn_video_name);
 		if (mobinas_cfg->save_quality) {
 			sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, input_video_name);
 			sprintf(mobinas_cfg->sr_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
@@ -919,23 +948,22 @@ static int main_loop(int argc, const char **argv_)
         {
         case PROFILE_CACHE:
             sprintf(path, "%s", cache_profile_path);
-            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
-            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
             break;
         case KEY_FRAME_CACHE:
-            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/cache_key_frame", content_dir, input_video_name, dnn_name);
-            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/cache_key_frame", content_dir, input_video_name, dnn_name);
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/cache_key_frame", content_dir, input_video_name, dnn_name);
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/cache_key_frame", content_dir, input_video_name, dnn_name);
             break;
         case NO_CACHE:
-            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/snpe/cache_no_frame", content_dir, input_video_name, dnn_name);
-            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/snpe/cache_no_frame", content_dir, input_video_name, dnn_name);
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/cache_no_frame", content_dir, input_video_name, dnn_name);
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/cache_no_frame", content_dir, input_video_name, dnn_name);
         	break;
         }
         _mkdir(mobinas_cfg->log_dir);
 		_mkdir(mobinas_cfg->input_frame_dir);
 		_mkdir(mobinas_cfg->sr_frame_dir);
-		if (mobinas_cfg->dnn_mode == OFFLINE_DNN)
-			sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s", content_dir, dnn_video_name);
+
         if (mobinas_cfg->save_quality)
         {
             sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, input_video_name);
@@ -944,6 +972,19 @@ static int main_loop(int argc, const char **argv_)
         break;
     }
 
+    /* dnn configuration */
+    switch(mobinas_cfg->dnn_mode) {
+    case OFFLINE_DNN:
+        sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s", content_dir, dnn_name);
+        break;
+    case ONLINE_DNN:
+        sprintf(mobinas_cfg->dnn_path, "%s/checkpoint/%s/%s", content_dir, dnn_name, dnn_file);
+        break;
+    case NO_DNN:
+        break;
+    }
+
+    /* bilinear, cache profile */
     mobinas_cfg->get_scale = default_scale_policy;
     if (mobinas_cfg->decode_mode == DECODE_CACHE) {
 		mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
@@ -1112,6 +1153,7 @@ static int main_loop(int argc, const char **argv_)
 
                 if (vpx_codec_decode(&decoder, buf, (unsigned int) bytes_in_buffer, NULL, 0))
                 {
+                    printf("decode fail\n");
                     const char *detail = vpx_codec_error_detail(&decoder);
                     warn("Failed to decode frame %d: %s", frame_in, vpx_codec_error(&decoder));
                     if (detail)
@@ -1120,7 +1162,6 @@ static int main_loop(int argc, const char **argv_)
                     if (!keep_going)
                         goto fail;
                 }
-
                 if (framestats_file)
                 {
                     int qp;

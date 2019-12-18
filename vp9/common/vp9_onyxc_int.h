@@ -120,8 +120,8 @@ typedef struct VP9Common {
     //General
     struct scale_factors sf_upsample_inter;
     mobinas_cfg_t *mobinas_cfg;
-    uint8_t scale;
-    uint8_t apply_dnn;
+    int scale;
+    int apply_dnn;
 
     mobinas_latency_info_t latency; //logging decoding end-to-end latency
 

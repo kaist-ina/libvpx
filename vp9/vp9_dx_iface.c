@@ -37,6 +37,10 @@
 #include <vpx_dsp/ssim.h>
 #include <vpx_dsp_rtcd.h>
 
+#if CONFIG_SNPE
+#include "vpx/snpe/main.hpp"
+#endif
+
 #define VP9_CAP_POSTPROC (CONFIG_VP9_POSTPROC ? VPX_CODEC_CAP_POSTPROC : 0)
 
 //hyunho
@@ -298,15 +302,20 @@ static int is_valid_mobinas_cfg(const mobinas_cfg_t *mobinas_cfg) {
                 return -1;
             }
             break;
+        case KEY_FRAME_CACHE:
+            break;
+        case NO_CACHE:
+            break;
         }
         break;
+    case DECODE:
+        break;
     }
-
     return 0;
 }
 
 //check whether mobinas_cfg is valid and runtime configuration
-static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, const mobinas_cfg_t *mobinas_cfg) {
+static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
     assert(mobinas_cfg != NULL);
 
     if (is_valid_mobinas_cfg(mobinas_cfg)) {
@@ -314,13 +323,18 @@ static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, const mobinas
         return VPX_MOBINAS_ERROR;
     }
 
-    ctx->mobinas_cfg = mobinas_cfg;
-    if (ctx->mobinas_cfg->dnn_mode == ONLINE_DNN)
+    if (mobinas_cfg->dnn_mode == ONLINE_DNN)
     {
-        //TODO (chanju): check runtime availability
-        //TODO (chanju): handle failure
+#if CONFIG_SNPE
+        mobinas_cfg->dnn_class = snpe_alloc(mobinas_cfg->dnn_runtime);
+        if (snpe_check_runtime(mobinas_cfg->dnn_class)) {
+            fprintf(stderr, "%s: Failed to check runtime\n", __func__);
+            return VPX_MOBINAS_ERROR;
+        }
+#endif
     }
 
+    ctx->mobinas_cfg = mobinas_cfg;
     return VPX_CODEC_OK;
 }
 
@@ -370,7 +384,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     ctx->pbi->common.sr_compare_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
 
     if (ctx->mobinas_cfg->save_quality) {
-        sprintf(file_path, "%s/quality.txt", ctx->mobinas_cfg->log_dir, ctx->mobinas_cfg->prefix);
+        sprintf(file_path, "%s/quality.txt", ctx->mobinas_cfg->log_dir);
         if ((ctx->pbi->common.quality_log = fopen(file_path, "w")) == NULL) {
             fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
             ctx->mobinas_cfg->save_quality = 0;
@@ -590,6 +604,8 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     uint32_t frame_sizes[8];
     int frame_count;
     VP9_COMMON *cm;
+
+    LOGE("test");
 
     if (data == NULL && data_sz == 0) {
         ctx->flushed = 1;
