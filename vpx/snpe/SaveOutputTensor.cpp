@@ -20,6 +20,28 @@
 #include "DlSystem/TensorMap.hpp"
 #include "DlSystem/TensorShape.hpp"
 
+#ifdef __ANDROID_API__
+#include <android/log.h>
+#define TAG "LoadInputTensor JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+#endif
 
 /*** Chanju ***/
 void saveOutputToBuffer(zdl::DlSystem::TensorMap outputTensorMap, float * buffer){
@@ -32,11 +54,10 @@ void saveOutputToBuffer(zdl::DlSystem::TensorMap outputTensorMap, float * buffer
         auto tensorPtr = outputTensorMap.getTensor(name);
         size_t batchChunk = tensorPtr->getSize();
 
-
         auto it = tensorPtr->cbegin();
-        memcpy(buffer, it.dataPointer(), batchChunk * 4);
+        memcpy(buffer, it.dataPointer(), batchChunk * sizeof(float));
 
-//        for ( auto it = tensorPtr->cbegin(); it != tensorPtr->cbegin() + batchChunk; ++it )
+        //        for ( auto it = tensorPtr->cbegin(); it != tensorPtr->cbegin() + batchChunk; ++it )
 //        {
 //            *(buffer++) = *it;
 //        }

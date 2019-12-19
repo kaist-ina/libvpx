@@ -299,6 +299,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
     }
     pbi->hold_ref_buf = 0;
     if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
+//        cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not
         cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
     }
     else {

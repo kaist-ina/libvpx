@@ -330,6 +330,8 @@ static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
         }
         break;
     case DECODE:
+        if (mobinas_cfg->dnn_mode != NO_DNN) return -1;
+        if (mobinas_cfg->cache_policy != NO_CACHE) return -1;
         break;
     }
     return 0;
@@ -340,7 +342,7 @@ static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t
     assert(mobinas_cfg != NULL);
 
     if (is_valid_mobinas_cfg(mobinas_cfg)) {
-        fprintf(stderr, "%s: invalid mobinas cfg config\n", __func__);
+        fprintf(stderr, "%s: Invalid mobinas cfg config\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
 
@@ -356,6 +358,16 @@ static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t
     }
 
     ctx->mobinas_cfg = mobinas_cfg;
+    return VPX_CODEC_OK;
+}
+
+static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
+#if CONFIG_SNPE
+    if (snpe_load_network(mobinas_cfg->dnn_class, mobinas_cfg->dnn_path)) {
+        fprintf(stderr, "%s: Failed to load network\n", __func__);
+        return VPX_MOBINAS_ERROR;
+    }
+#endif
     return VPX_CODEC_OK;
 }
 
@@ -505,11 +517,11 @@ static void save_frame(VP9_COMMON *cm) {
         save_input_frame(cm);
         break;
     case DECODE_SR:
-//        save_input_frame(cm); //overlapped with existing images
+        save_input_frame(cm); //overlapped with existing images
         save_sr_frame(cm);
         break;
     case DECODE_CACHE:
-//        save_input_frame(cm); //overlapped with existing images
+        save_input_frame(cm); //overlapped with existing images
         save_sr_frame(cm);
         break;
     }
@@ -557,8 +569,9 @@ static void save_sr_quality(VP9_COMMON *cm) {
         sprintf(log, "output,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
         fputs(log, cm->quality_log);
 
-        //print
+#else
         fprintf(stderr, "output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr);
+#endif
 }
 
 //Note: Current version loads/saves in RGB24, measure quality in RGB24
@@ -568,7 +581,7 @@ static void save_quality(VP9_COMMON *cm) {
             save_input_quality(cm);
             break;
         case DECODE_SR:
-            save_input_quality(cm);
+//            save_input_quality(cm);
             save_sr_quality(cm);
             break;
         case DECODE_CACHE:
@@ -1044,6 +1057,7 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
                 NULL   // vpx_codec_enc_mr_get_mem_loc_fn_t
         },
         {
-            load_mobinas_cfg
+            load_mobinas_cfg,
+            load_mobinas_dnn
         }
 };

@@ -21,6 +21,29 @@
 
 #include "vpx/vpx_mobinas.h"
 
+#ifdef __ANDROID_API__
+#include <android/log.h>
+#define TAG "LoadInputTensor JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+#endif
+
 #define BUFFER_UNIT_LEN 1000
 #define FRACTION_BIT (5)
 #define FRACTION_SCALE (1 << FRACTION_BIT)
@@ -464,6 +487,24 @@ int default_scale_policy (int resolution){
     }
 }
 
+//TODO: optimize by neon,SIMD instructions
+int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf) {
+    if(rbf == NULL) {
+        return -1;
+    }
+
+    float *src = rbf->buffer_alloc_float;
+    uint8_t *dst = rbf->buffer_alloc;
+
+    int w, h;
+    for (h = 0; h < rbf->height; h++) {
+        for (w = 0; w < rbf->width; w++) {
+            *(dst + w + h * rbf->stride) = clamp(round(*(src + w + h * rbf->stride)), 0, 255);
+        }
+    }
+
+    return 0;
+}
 
 int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
@@ -551,6 +592,8 @@ int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {
         src += rbf->stride;
     } while (--h);
 
+    fclose(serialize_file);
+
     return 0;
 }
 
@@ -573,6 +616,8 @@ int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {
     }
     while (--h);
 
+    fclose(serialize_file);
+
     return 0;
 }
 
@@ -586,21 +631,34 @@ int RGB24_alloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) {
 
 int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) {
     if(rbf) {
-        const int stride = (width * 3 + 31) & ~31; //Note: Multiply by 3 each for R,G,B channels
+//        const int stride = (width * 3 + 31) & ~31; //Note: Multiply by 3 each for R,G,B channels
+        const int stride = width * 3;
+
         const int frame_size = height * stride;
 
         if (frame_size > rbf->buffer_alloc_sz) {
             vpx_free(rbf->buffer_alloc);
             rbf->buffer_alloc = NULL;
 
-            rbf->buffer_alloc = (uint8_t *) vpx_memalign(32, (size_t) frame_size * sizeof(uint8_t));
-            if (!rbf->buffer_alloc) return -1;
+//            rbf->buffer_alloc = (uint8_t *) vpx_memalign(32, (size_t) frame_size * sizeof(uint8_t));
+            rbf->buffer_alloc = (uint8_t *) vpx_calloc(1, (size_t) frame_size * sizeof(uint8_t));
+            if (!rbf->buffer_alloc) {
+                LOGD("buffer_alloc error");
+                return -1;
+            }
+
+//            rbf->buffer_alloc_float = (float *) vpx_memalign(32, (size_t) frame_size * sizeof(float));
+            rbf->buffer_alloc_float = (float *) vpx_calloc(1, (size_t) frame_size * sizeof(float));
+            if (!rbf->buffer_alloc_float) {
+                LOGD("buffer_alloc error");
+                return -1;
+            }
 
             rbf->buffer_alloc_sz = (int) frame_size;
 
             memset(rbf->buffer_alloc, 0, rbf->buffer_alloc_sz);
+            memset(rbf->buffer_alloc_float, 0, rbf->buffer_alloc_sz);
         }
-
         rbf->height = height;
         rbf->width = width * 3;
         rbf->stride = stride;
@@ -614,6 +672,7 @@ int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf) {
     if (rbf) {
         if (rbf->buffer_alloc_sz > 0) {
             vpx_free(rbf->buffer_alloc);
+            vpx_free(rbf->buffer_alloc_float);
         }
         memset(rbf, 0, sizeof(RGB24_BUFFER_CONFIG));
     }

@@ -12,4 +12,5 @@ text default_scale_policy
 text init_vp9_bilinear_profile
 text init_mobinas_cache_profile
 text vpx_load_mobinas_cfg
+text vpx_load_mobinas_dnn
 text remove_mobinas_cfg

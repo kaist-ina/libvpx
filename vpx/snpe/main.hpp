@@ -1,6 +1,3 @@
-//TODO (snpe): snpe_cfg_t
-//TODO (snpe): snpe_runtime_mode (CPU, GPU, GPU16, DSP)
-
 #ifdef __cplusplus
 class SNPE
 {
@@ -24,7 +21,7 @@ extern "C" {
     void *snpe_alloc(mobinas_dnn_runtime);
     void snpe_free(void *);
     int snpe_check_runtime(void *);
-    int snpe_init_network(void *, const char *);
+    int snpe_load_network(void *, const char *);
     int snpe_execute_byte(void *, uint8_t*,float *, int);
     int snpe_execute_float(void *, float *,float *, int);
 #ifdef __cplusplus

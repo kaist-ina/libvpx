@@ -50,6 +50,7 @@
 #include <vpx_dsp/vpx_constant.h>
 #include <vpx_dsp/vpx_copy.h>
 #include <vpx/vpx_mobinas.h>
+#include <vpx/snpe/main.hpp>
 
 //Hyunho: for debuggin
 #define DEBUG_LATENCY 1
@@ -57,6 +58,29 @@
 #define DEBUG_RESIDUAL 0
 #define BILLION  1E9
 #define CACHE_RESET_TRESHOLD 0
+
+#ifdef __ANDROID_API__
+#include <android/log.h>
+#define TAG "vp9_decode_frame.c JNI"
+#define _UNKNOWN   0
+#define _DEFAULT   1
+#define _VERBOSE   2
+#define _DEBUG    3
+#define _INFO        4
+#define _WARN        5
+#define _ERROR    6
+#define _FATAL    7
+#define _SILENT       8
+#define LOGUNK(...) __android_log_print(_UNKNOWN,TAG,__VA_ARGS__)
+#define LOGDEF(...) __android_log_print(_DEFAULT,TAG,__VA_ARGS__)
+#define LOGV(...) __android_log_print(_VERBOSE,TAG,__VA_ARGS__)
+#define LOGD(...) __android_log_print(_DEBUG,TAG,__VA_ARGS__)
+#define LOGI(...) __android_log_print(_INFO,TAG,__VA_ARGS__)
+#define LOGW(...) __android_log_print(_WARN,TAG,__VA_ARGS__)
+#define LOGE(...) __android_log_print(_ERROR,TAG,__VA_ARGS__)
+#define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
+#define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
+#endif
 
 static int is_compound_reference_allowed(const VP9_COMMON *cm) {
     int i;
@@ -3325,6 +3349,14 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
                 //TODO (hyunho): implement ONLINE_DNN
+#if CONFIG_SNPE
+                RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
+                RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
+                YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
+                snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
+                RGB24_float_to_uint8(cm->sr_frame);
+                RGB24_to_YV12_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
+#endif
                 break;
             case OFFLINE_DNN:
                 //load a super-resolutioned frame

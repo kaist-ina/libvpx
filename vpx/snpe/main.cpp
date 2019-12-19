@@ -164,7 +164,7 @@ int SNPE::init_network(const char *path){
 }
 
 //TODO (snpe): config best user buffer
-int snpe_init_network(void *snpe, const char *path){
+int snpe_load_network(void *snpe, const char *path){
     return static_cast<SNPE *>(snpe)->init_network(path);
 }
 

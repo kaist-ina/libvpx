@@ -169,7 +169,8 @@ typedef struct rgb24_buffer_config{
     int height;
     int stride;
     int buffer_alloc_sz;
-    uint8_t *buffer_alloc;
+    uint8_t *buffer_alloc; //TODO: here
+    float *buffer_alloc_float;
 } RGB24_BUFFER_CONFIG;
 
 #ifdef __cplusplus
@@ -210,6 +211,7 @@ void init_bilinear_config(mobinas_bilinear_config_t *config, int scale, int widt
 void remove_bilinear_config(mobinas_bilinear_config_t *config);
 
 //color space conversion
+int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf);
 int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);

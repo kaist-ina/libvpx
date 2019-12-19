@@ -194,3 +194,11 @@ vpx_codec_err_t vpx_load_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobina
 
     return SAVE_STATUS(ctx, res);
 }
+
+vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg){
+  vpx_codec_err_t res;
+
+  res = ctx->iface->mobinas.load_dnn(get_alg_priv(ctx), mobinas_cfg);
+
+  return SAVE_STATUS(ctx, res);
+}
