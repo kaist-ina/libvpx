@@ -3228,6 +3228,10 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     const int tile_cols = 1 << cm->log2_tile_cols;
     YV12_BUFFER_CONFIG *const new_fb = get_frame_new_buffer(cm); //check: original frame
     xd->cur_buf = new_fb;
+#if DEBUG_LATENCY
+    struct timespec start_time, finish_time;
+    double diff;
+#endif
 
     if (!first_partition_size) {
         // showing a frame directly
@@ -3352,10 +3356,46 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 #if CONFIG_SNPE
                 RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
                 RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
                 YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &finish_time);
+                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+                cm->latency.convert_yuv_to_rgb += diff;
+#endif
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
                 snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &finish_time);
+                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+                cm->latency.execue_dnn += diff;
+#endif
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
                 RGB24_float_to_uint8(cm->sr_frame);
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &finish_time);
+                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+                cm->latency.convert_float_to_int += diff;
+#endif
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
                 RGB24_to_YV12_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
+#if DEBUG_LATENCY
+                clock_gettime(CLOCK_MONOTONIC, &finish_time);
+                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+                cm->latency.convert_rgb_to_yuv += diff;
+#endif
 #endif
                 break;
             case OFFLINE_DNN:

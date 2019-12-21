@@ -14,12 +14,23 @@ typedef int (*mobinas_get_scale_fn_t) (int);
 int default_scale_policy (int resolution);
 
 typedef struct mobinas_latency_info {
+    //decode
     double decode_frame;
-    double interp_intra_block;
-    double interp_inter_residual;
     double decode_intra_block;
     double decode_inter_block;
     double decode_inter_residual;
+
+    //interpolation
+    double interp_intra_block;
+    double interp_inter_residual;
+
+    //dnn
+//    double check_runtime;
+//    double load_dnn;
+    double convert_rgb_to_yuv;
+    double execue_dnn;
+    double convert_yuv_to_rgb;
+    double convert_float_to_int;
 } mobinas_latency_info_t;
 
 typedef struct mobinas_metadata_info {

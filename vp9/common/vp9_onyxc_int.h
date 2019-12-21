@@ -126,6 +126,8 @@ typedef struct VP9Common {
     mobinas_latency_info_t latency; //logging decoding end-to-end latency
 
     FILE *quality_log; // quality log
+    FILE *latency_log; // latency log
+
     YV12_BUFFER_CONFIG *lr_reference_frame;
     YV12_BUFFER_CONFIG *hr_reference_frame;
     YV12_BUFFER_CONFIG *hr_bilinear_frame;

@@ -423,6 +423,14 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             ctx->mobinas_cfg->save_quality = 0;
         };
     }
+
+    if (ctx->mobinas_cfg->save_latency) {
+        sprintf(file_path, "%s/latency.txt", ctx->mobinas_cfg->log_dir);
+        if ((ctx->pbi->common.latency_log = fopen(file_path, "w")) == NULL) {
+            fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
+            ctx->mobinas_cfg->save_latency = 0;
+        };
+    }
     /*******************Hyunho************************/
 
     return VPX_CODEC_OK;
@@ -505,7 +513,7 @@ static void save_sr_frame(VP9_COMMON *cm){
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-    YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->sr_frame);
+    YV12_to_RGB24_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
 
     //save
     RGB24_save_frame_buffer(cm->sr_frame, file_path);
@@ -569,6 +577,8 @@ static void save_sr_quality(VP9_COMMON *cm) {
         sprintf(log, "output,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
         fputs(log, cm->quality_log);
 
+#ifdef __ANDROID_API__
+        LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr);
 #else
         fprintf(stderr, "output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr);
 #endif
@@ -594,7 +604,7 @@ static void save_quality(VP9_COMMON *cm) {
 static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
 {
     int i;
-    char log[LOG_MAX];
+    char log[LOG_MAX] = {0};
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (i = 0; i < num_threads; ++i) {
@@ -602,13 +612,27 @@ static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_s
 
         //latency log
         memset(log, 0, sizeof(log));
-        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
-                current_super_frame, pbi->common.latency.decode_frame,
-                mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
+        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
+                current_super_frame, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
                 mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,
                 mwd->latency.decode_inter_residual);
         fputs(log, mwd->latency_log);
     }
+
+    if (pbi->common.apply_dnn == 0) {
+        sprintf(log, "%d\t%d\t%.2f\n", current_video_frame, current_super_frame, pbi->common.latency.decode_frame);
+    }
+    else {
+        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, current_super_frame, pbi->common.latency.decode_frame,
+                                            pbi->common.latency.convert_yuv_to_rgb, pbi->common.latency.execue_dnn,
+                                            pbi->common.latency.convert_float_to_int, pbi->common.latency.convert_rgb_to_yuv);
+#ifdef __ANDROID_API__
+        LOGI("%d, %d frame: %.2fmsec", current_video_frame, current_super_frame, pbi->common.latency.decode_frame);
+#else
+        fprintf(stderr, "%d, %d frmae: %.2fmsec", current_video_frame, current_super_frame, pbi->common.latency.decode_frame);
+#endif
+    }
+    fputs(log, pbi->common.latency_log);
 }
 
 static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
