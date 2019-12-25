@@ -1170,7 +1170,7 @@ static void dec_build_inter_predictors_sb(VP9Decoder *const pbi,
 
     for (ref = 0; ref < 1 + is_compound; ++ref) {
         const MV_REFERENCE_FRAME frame = mi->ref_frame[ref];
-        RefBuffer *ref_buf = &pbi->common.frame_refs[frame - LAST_FRAME];
+        RefBuffer *ref_buf = &pbi->common.frame_refs [frame - LAST_FRAME];
         const struct scale_factors *const sf = &ref_buf->sf;
         const int idx = ref_buf->idx;
         BufferPool *const pool = pbi->common.buffer_pool;
@@ -1386,7 +1386,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
     double diff;
 #endif
 
-    mwd->metadata.count++;
+    mwd->metadata.num_blocks++;
     MODE_INFO *mi = set_offsets(cm, xd, bsize, mi_row, mi_col, bw, bh, x_mis,
                                 y_mis, bwl, bhl);
 
@@ -1408,7 +1408,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-        mwd->metadata.intra_count++;
+        mwd->metadata.num_intrablocks++;
         int plane;
         for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
             const struct macroblockd_plane *const pd = &xd->plane[plane];
@@ -1452,7 +1452,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 #endif
     } else {
         /*******************Hyunho************************/
-        mwd->metadata.inter_count++;
+        mwd->metadata.num_interblocks++;
 
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -1485,7 +1485,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
         if (!mi->skip) {
-            mwd->metadata.inter_noskip_count++;
+            mwd->metadata.num_noskip_interblocks++;
         }
 
         /*******************Hyunho************************/
@@ -1923,6 +1923,12 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
     pool->frame_bufs[cm->new_fb_idx].buf.color_range = cm->color_range;
     pool->frame_bufs[cm->new_fb_idx].buf.render_width = cm->render_width;
     pool->frame_bufs[cm->new_fb_idx].buf.render_height = cm->render_height;
+
+    /*******************Hyunho************************/
+    pool->frame_bufs[cm->new_fb_idx].current_video_frame = cm->current_video_frame;
+    pool->frame_bufs[cm->new_fb_idx].current_super_frame = cm->current_super_frame;
+    /*******************Hyunho************************/
+
 }
 
 static void setup_sr_frame_size(VP9_COMMON *cm) {
@@ -2036,6 +2042,11 @@ static void setup_frame_size_with_refs(VP9_COMMON *cm,
     pool->frame_bufs[cm->new_fb_idx].buf.color_range = cm->color_range;
     pool->frame_bufs[cm->new_fb_idx].buf.render_width = cm->render_width;
     pool->frame_bufs[cm->new_fb_idx].buf.render_height = cm->render_height;
+
+    /*******************Hyunho************************/
+    pool->frame_bufs[cm->new_fb_idx].current_video_frame = cm->current_video_frame;
+    pool->frame_bufs[cm->new_fb_idx].current_super_frame = cm->current_super_frame;
+    /*******************Hyunho************************/
 }
 
 static void setup_sr_frame_size_with_refs(VP9_COMMON *cm) {
@@ -3009,6 +3020,9 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                 ref_frame->buf = &frame_bufs[idx].buf;
                 ref_frame->buf_sr = &frame_bufs[idx].sr_buf;
                 cm->ref_frame_sign_bias[LAST_FRAME + i] = vpx_rb_read_bit(rb);
+
+                cm->metadata.reference_frames[i].current_video_frame = frame_bufs[idx].current_video_frame;
+                cm->metadata.reference_frames[i].current_super_frame = frame_bufs[idx].current_super_frame;
             }
 
             setup_frame_size_with_refs(cm, rb);

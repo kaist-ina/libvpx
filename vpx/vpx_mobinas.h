@@ -33,11 +33,18 @@ typedef struct mobinas_latency_info {
     double convert_float_to_int;
 } mobinas_latency_info_t;
 
+typedef struct mobinas_frame_info {
+    int current_video_frame;
+    int current_super_frame;
+} mobinas_frame_info_t;
+
 typedef struct mobinas_metadata_info {
-    int count;
-    int intra_count;
-    int inter_count;
-    int inter_noskip_count;
+    mobinas_frame_info_t reference_frames[3];
+
+    int num_blocks;
+    int num_intrablocks;
+    int num_interblocks;
+    int num_noskip_interblocks;
 } mobinas_metadata_info_t;
 
 typedef enum{

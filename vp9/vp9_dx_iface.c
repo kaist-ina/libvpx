@@ -431,6 +431,14 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             ctx->mobinas_cfg->save_latency = 0;
         };
     }
+
+    if (ctx->mobinas_cfg->save_metadata) {
+        sprintf(file_path, "%s/metadata.txt", ctx->mobinas_cfg->log_dir);
+        if ((ctx->pbi->common.metadata_log = fopen(file_path, "w")) == NULL) {
+            fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
+            ctx->mobinas_cfg->save_metadata = 0;
+        };
+    }
     /*******************Hyunho************************/
 
     return VPX_CODEC_OK;
@@ -609,9 +617,6 @@ static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_s
 
     for (i = 0; i < num_threads; ++i) {
         mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
-
-        //latency log
-        memset(log, 0, sizeof(log));
         sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
                 current_super_frame, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
                 mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,
@@ -638,19 +643,26 @@ static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_s
 static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
 {
     int i;
-    char log[LOG_MAX];
+    char log[LOG_MAX] = {0};
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (i = 0; i < num_threads; ++i) {
         mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
-
-        //metadata log
-		memset(log, 0, sizeof(log));
-		sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame,
-				current_super_frame, pbi->common.apply_dnn, mwd->metadata.count,
-				mwd->metadata.intra_count, mwd->metadata.inter_count, mwd->metadata.inter_noskip_count);
+		sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame,
+		        mwd->metadata.num_blocks, mwd->metadata.num_intrablocks, mwd->metadata.num_interblocks, mwd->metadata.num_noskip_interblocks);
 		fputs(log, mwd->metadata_log);
     }
+
+    if(pbi->common.frame_type == KEY_FRAME || pbi->common.intra_only) {
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only);
+    }
+    else {
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only,
+                pbi->common.metadata.reference_frames[0].current_video_frame, pbi->common.metadata.reference_frames[0].current_super_frame,
+                pbi->common.metadata.reference_frames[1].current_video_frame, pbi->common.metadata.reference_frames[1].current_super_frame,
+                pbi->common.metadata.reference_frames[2].current_video_frame, pbi->common.metadata.reference_frames[2].current_super_frame);
+    }
+    fputs(log, pbi->common.metadata_log);
 }
 
 static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
