@@ -631,7 +631,6 @@ int RGB24_alloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) {
 
 int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) {
     if(rbf) {
-//        const int stride = (width * 3 + 31) & ~31; //Note: Multiply by 3 each for R,G,B channels
         const int stride = width * 3;
 
         const int frame_size = height * stride;
@@ -640,17 +639,13 @@ int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) 
             vpx_free(rbf->buffer_alloc);
             rbf->buffer_alloc = NULL;
 
-//            rbf->buffer_alloc = (uint8_t *) vpx_memalign(32, (size_t) frame_size * sizeof(uint8_t));
             rbf->buffer_alloc = (uint8_t *) vpx_calloc(1, (size_t) frame_size * sizeof(uint8_t));
             if (!rbf->buffer_alloc) {
-                LOGD("buffer_alloc error");
                 return -1;
             }
 
-//            rbf->buffer_alloc_float = (float *) vpx_memalign(32, (size_t) frame_size * sizeof(float));
             rbf->buffer_alloc_float = (float *) vpx_calloc(1, (size_t) frame_size * sizeof(float));
             if (!rbf->buffer_alloc_float) {
-                LOGD("buffer_alloc error");
                 return -1;
             }
 

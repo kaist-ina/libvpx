@@ -131,8 +131,8 @@ static const arg_def_t savelatencyarg =
         ARG_DEF(NULL, "save-latency", 0, "Save latency results");
 static const arg_def_t savemetadataarg =
         ARG_DEF(NULL, "save-metadata", 0, "Save metadata results");
-static const arg_def_t prefixarg =
-        ARG_DEF(NULL, "prefix", 1, "Prefix for a directory name");
+static const arg_def_t postfixarg =
+        ARG_DEF(NULL, "postfix", 1, "Prefix for a directory name");
 static const arg_def_t cacheprofilearg =
         ARG_DEF(NULL, "cache-profile", 1, "Cache profile to apply");
 static const arg_def_t dnnnamearg =
@@ -151,7 +151,7 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
     &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
-    &prefixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, NULL};
+    &postfixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, NULL};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -616,6 +616,13 @@ static void _mkdir(const char *dir) {
         mkdir(tmp, S_IRWXU);
 }
 
+static void add_postfix_to_path (char *path, const char *postfix) {
+    if (postfix) {
+        strcat(path, "/");
+        strcat(path, postfix);
+    }
+}
+
 static int main_loop(int argc, const char **argv_)
 {
     vpx_codec_ctx_t decoder;
@@ -685,7 +692,7 @@ static int main_loop(int argc, const char **argv_)
 
     /* MobiNAS variable */
     mobinas_cfg_t *mobinas_cfg = init_mobinas_cfg();
-    char path[PATH_MAX] = {"\0"};
+    char path[PATH_MAX] = {0};
     char *cache_profile_path = NULL;
     const char *dnn_name = NULL;
     const char *dnn_file = NULL;
@@ -693,7 +700,7 @@ static int main_loop(int argc, const char **argv_)
     const char *input_video_name = NULL;
     const char *dnn_video_name = NULL;
     const char *compare_video_name = NULL;
-    const char *prefix = NULL;
+    const char *postfix = NULL;
     char *tmp;
 
     /* Parse command line */
@@ -812,8 +819,6 @@ static int main_loop(int argc, const char **argv_)
             content_dir = arg.val;
         else if (arg_match(&arg, &inputvideoarg, argi))
             input_video_name = arg.val;
-        else if (arg_match(&arg, &dnnvideoarg, argi))
-            dnn_video_name = arg.val;
         else if (arg_match(&arg, &comparevideoarg, argi))
             compare_video_name = arg.val;
         else if (arg_match(&arg, &decodemodearg, argi))
@@ -876,8 +881,8 @@ static int main_loop(int argc, const char **argv_)
             mobinas_cfg->save_latency = 1;
         else if (arg_match(&arg, &savemetadataarg, argi))
             mobinas_cfg->save_metadata = 1;
-        else if (arg_match(&arg, &prefixarg, argi))
-            prefix = arg.val;
+        else if (arg_match(&arg, &postfixarg, argi))
+            postfix = arg.val;
         else if (arg_match(&arg, &cacheprofilearg, argi))
             cache_profile_path = arg.val;
         else if (arg_match(&arg, &dnnnamearg, argi))
@@ -923,51 +928,90 @@ static int main_loop(int argc, const char **argv_)
     switch (mobinas_cfg->decode_mode)
     {
     case DECODE:
-        sprintf(mobinas_cfg->log_dir, "%s/log/%s", content_dir, input_video_name);
-        sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
-        _mkdir(mobinas_cfg->log_dir);
-        _mkdir(mobinas_cfg->input_frame_dir);
+        if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s", content_dir, input_video_name);
+            add_postfix_to_path(mobinas_cfg->log_dir, postfix);
+            _mkdir(mobinas_cfg->log_dir);
+        }
+        if (mobinas_cfg->save_frame) {
+            sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
+            add_postfix_to_path(mobinas_cfg->input_frame_dir, postfix);
+            _mkdir(mobinas_cfg->input_frame_dir);
+        }
         if (mobinas_cfg->save_quality)
-			sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+        {
+            sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+            add_postfix_to_path(mobinas_cfg->input_compare_frame_dir, postfix);
+        }
         break;
     case DECODE_SR:
-    	sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
-    	sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
-    	sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
-        _mkdir(mobinas_cfg->log_dir);
-		_mkdir(mobinas_cfg->input_frame_dir);
-		_mkdir(mobinas_cfg->sr_frame_dir);
+        if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
+            add_postfix_to_path(mobinas_cfg->log_dir, postfix);
+            _mkdir(mobinas_cfg->log_dir);
+        }
+    	if (mobinas_cfg->save_frame) {
+            sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
+            add_postfix_to_path(mobinas_cfg->input_frame_dir, postfix);
+            add_postfix_to_path(mobinas_cfg->sr_frame_dir, postfix);
+            _mkdir(mobinas_cfg->input_frame_dir);
+            _mkdir(mobinas_cfg->sr_frame_dir);
+    	}
 		if (mobinas_cfg->save_quality) {
 			sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, input_video_name);
 			sprintf(mobinas_cfg->sr_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+            add_postfix_to_path(mobinas_cfg->input_compare_frame_dir, postfix);
+            add_postfix_to_path(mobinas_cfg->sr_compare_frame_dir, postfix);
 		}
         break;
     case DECODE_CACHE:
-    	sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
-        switch (mobinas_cfg->cache_policy)
-        {
-        case PROFILE_CACHE:
-            sprintf(path, "%s", cache_profile_path);
-            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
-            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/cache_%s", content_dir, input_video_name, dnn_name, basename(path));
-            break;
-        case KEY_FRAME_CACHE:
-            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/cache_key_frame", content_dir, input_video_name, dnn_name);
-            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/cache_key_frame", content_dir, input_video_name, dnn_name);
-            break;
-        case NO_CACHE:
-            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s/cache_no_frame", content_dir, input_video_name, dnn_name);
-            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s/cache_no_frame", content_dir, input_video_name, dnn_name);
-        	break;
-        }
-        _mkdir(mobinas_cfg->log_dir);
-		_mkdir(mobinas_cfg->input_frame_dir);
-		_mkdir(mobinas_cfg->sr_frame_dir);
+        if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
+            sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
+            switch (mobinas_cfg->cache_policy)
+            {
+                case PROFILE_CACHE:
+                    sprintf(path, "%s", cache_profile_path);
+                    add_postfix_to_path(mobinas_cfg->log_dir, basename(path));
+                    break;
+                case KEY_FRAME_CACHE:
+                    add_postfix_to_path(mobinas_cfg->log_dir, "cache_keyframe");
+                    break;
+                case NO_CACHE:
+                    add_postfix_to_path(mobinas_cfg->log_dir, "cache_noframe");
+                    break;
+            }
+            add_postfix_to_path(mobinas_cfg->log_dir, postfix);
+            _mkdir(mobinas_cfg->log_dir);
 
+        }
+        if (mobinas_cfg->save_frame) {
+            sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
+            sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
+
+            switch (mobinas_cfg->cache_policy)
+            {
+                case PROFILE_CACHE:
+                    sprintf(path, "%s", cache_profile_path);
+                    add_postfix_to_path(mobinas_cfg->sr_frame_dir, basename(path));
+                    break;
+                case KEY_FRAME_CACHE:
+                    add_postfix_to_path(mobinas_cfg->sr_frame_dir, "cache_keyframe");
+                    break;
+                case NO_CACHE:
+                    add_postfix_to_path(mobinas_cfg->sr_frame_dir, "cache_noframe");
+                    break;
+            }
+            _mkdir(mobinas_cfg->input_frame_dir);
+            _mkdir(mobinas_cfg->sr_frame_dir);
+
+        }
         if (mobinas_cfg->save_quality)
         {
             sprintf(mobinas_cfg->input_compare_frame_dir, "%s/image/%s", content_dir, input_video_name);
             sprintf(mobinas_cfg->sr_compare_frame_dir, "%s/image/%s", content_dir, compare_video_name);
+            add_postfix_to_path(mobinas_cfg->input_compare_frame_dir, postfix);
+            add_postfix_to_path(mobinas_cfg->sr_compare_frame_dir, postfix);
         }
         break;
     }
