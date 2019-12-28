@@ -550,7 +550,7 @@ static void save_input_quality(VP9_COMMON *cm) {
 
         //YV12 to RGB24
         RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-        YV12_to_RGB24(get_frame_new_buffer(cm), cm->frame);
+        YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
 
         //load a reference frame
         sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->input_compare_frame_dir, cm->current_video_frame - 1);
@@ -573,7 +573,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
 
         //YV12 to RGB24
         RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-        YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->sr_frame);
+        YV12_to_RGB24_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
 
         //load a reference frame
         sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_compare_frame_dir, cm->current_video_frame - 1);

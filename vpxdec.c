@@ -1020,7 +1020,8 @@ static int main_loop(int argc, const char **argv_)
     /* dnn configuration */
     switch(mobinas_cfg->dnn_mode) {
     case OFFLINE_DNN:
-        sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s", content_dir, dnn_name);
+        sprintf(mobinas_cfg->sr_offline_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
+        add_postfix_to_path(mobinas_cfg->sr_offline_frame_dir, postfix);
         break;
     case ONLINE_DNN:
         sprintf(mobinas_cfg->dnn_path, "%s/checkpoint/%s/%s", content_dir, dnn_name, dnn_file);
