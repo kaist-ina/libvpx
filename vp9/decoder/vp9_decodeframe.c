@@ -3415,7 +3415,10 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             case OFFLINE_DNN:
                 //load a super-resolutioned frame
                 printf("cm->current_video_frame: %d\n", cm->current_video_frame);
-                sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
+                if (cm->show_frame)
+                    sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
+                else
+                    sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
                 RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
                 RGB24_load_frame_buffer(cm->sr_frame, file_path);
                 RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);

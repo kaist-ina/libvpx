@@ -968,6 +968,7 @@ static int main_loop(int argc, const char **argv_)
     case DECODE_CACHE:
         if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
             sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
+            add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             switch (mobinas_cfg->cache_policy)
             {
                 case PROFILE_CACHE:
@@ -981,13 +982,14 @@ static int main_loop(int argc, const char **argv_)
                     add_postfix_to_path(mobinas_cfg->log_dir, "cache_noframe");
                     break;
             }
-            add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             _mkdir(mobinas_cfg->log_dir);
 
         }
         if (mobinas_cfg->save_frame) {
             sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
             sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
+            add_postfix_to_path(mobinas_cfg->input_frame_dir, postfix);
+            add_postfix_to_path(mobinas_cfg->sr_frame_dir, postfix);
 
             switch (mobinas_cfg->cache_policy)
             {
@@ -1004,7 +1006,6 @@ static int main_loop(int argc, const char **argv_)
             }
             _mkdir(mobinas_cfg->input_frame_dir);
             _mkdir(mobinas_cfg->sr_frame_dir);
-
         }
         if (mobinas_cfg->save_quality)
         {
