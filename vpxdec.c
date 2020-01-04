@@ -928,7 +928,7 @@ static int main_loop(int argc, const char **argv_)
     switch (mobinas_cfg->decode_mode)
     {
     case DECODE:
-        if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
+        if (mobinas_cfg->save_quality || mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
             sprintf(mobinas_cfg->log_dir, "%s/log/%s", content_dir, input_video_name);
             add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             _mkdir(mobinas_cfg->log_dir);
@@ -945,7 +945,7 @@ static int main_loop(int argc, const char **argv_)
         }
         break;
     case DECODE_SR:
-        if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
+        if (mobinas_cfg->save_quality || mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
             sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
             add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             _mkdir(mobinas_cfg->log_dir);
@@ -966,7 +966,7 @@ static int main_loop(int argc, const char **argv_)
 		}
         break;
     case DECODE_CACHE:
-        if (mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
+        if (mobinas_cfg->save_quality || mobinas_cfg->save_metadata || mobinas_cfg->save_latency) {
             sprintf(mobinas_cfg->log_dir, "%s/log/%s/%s", content_dir, input_video_name, dnn_name);
             add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             switch (mobinas_cfg->cache_policy)
