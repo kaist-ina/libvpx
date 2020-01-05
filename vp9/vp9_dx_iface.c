@@ -559,10 +559,11 @@ static void save_input_quality(VP9_COMMON *cm) {
 
         //calculate psnr
         psnr = RGB24_calc_psnr(cm->frame, cm->compare_frame);  //check: sr frame
-        sprintf(log, "input,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
+        //sprintf(log, "input,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
+        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr);
         fputs(log, cm->quality_log);
 
-        fprintf(stdout, "input,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr);
+        fprintf(stdout, "%.2f\n", cm->current_video_frame - 1, psnr);
 }
 
 static void save_sr_quality(VP9_COMMON *cm) {
@@ -581,7 +582,8 @@ static void save_sr_quality(VP9_COMMON *cm) {
 
         //calculate psnr
         psnr = RGB24_calc_psnr(cm->sr_frame, cm->sr_compare_frame);  //check: sr frame
-        sprintf(log, "output,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
+        //sprintf(log, "output,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
+        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr);
         fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
@@ -598,11 +600,11 @@ static void save_quality(VP9_COMMON *cm) {
             save_input_quality(cm);
             break;
         case DECODE_SR:
-//            save_input_quality(cm);
+            //save_input_quality(cm);
             save_sr_quality(cm);
             break;
         case DECODE_CACHE:
-            save_input_quality(cm);
+            //save_input_quality(cm);
             save_sr_quality(cm);
             break;
     }
