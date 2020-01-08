@@ -43,6 +43,7 @@
 
 #include <vpx_dsp/psnr.h>
 #include <vpx/snpe/main.hpp>
+#include <android/log.h>
 
 static void initialize_dec(void) {
     static volatile int init_done = 0;
@@ -305,6 +306,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
     if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
 //        cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not
         cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
+//        cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not
     }
     else {
         cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not
@@ -350,6 +352,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
         pool->release_fb_cb(pool->cb_priv,
                             &frame_bufs[cm->new_fb_idx].raw_frame_buffer);
         if (pool->mode == DECODE_CACHE || pool->mode == DECODE_SR) {
+
             pool->release_fb_cb(pool->cb_priv,
                                 &frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer);
         }
@@ -366,6 +369,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
 
     // Assign a MV array to the frame buffer.
     cm->cur_frame = &pool->frame_bufs[cm->new_fb_idx];
+
 
     pbi->hold_ref_buf = 0;
     pbi->cur_buf = &frame_bufs[cm->new_fb_idx];
