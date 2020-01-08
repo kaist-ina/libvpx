@@ -173,9 +173,13 @@ int SNPE::execute_byte(uint8_t *input_buffer, float *output_buffer, int number_o
     zdl::DlSystem::TensorMap outputTensorMap;
     std::unique_ptr<zdl::DlSystem::ITensor> inputTensor = loadInputTensorFromByteBuffer(snpe, input_buffer, number_of_elements);
 
-    execStatus = snpe->execute(inputTensor.get(), outputTensorMap);
 
-    // Save the execution results if execution successful
+    LOGE("asdf");
+    execStatus = snpe->execute(inputTensor.get(), outputTensorMap);
+    LOGE("end");
+
+
+//     Save the execution results if execution successful
     if (!execStatus){
         LOGE("Failed to run a model");
         return -1;
@@ -183,7 +187,7 @@ int SNPE::execute_byte(uint8_t *input_buffer, float *output_buffer, int number_o
 
     saveOutputToBuffer(outputTensorMap, output_buffer);
 
-    LOGI("SNPE: Execue a DNN");
+    LOGE("SNPE: Execute a DNN");
     return 0;
 }
 
@@ -205,7 +209,7 @@ int SNPE::execute_float(float *input_buffer, float *output_buffer, int number_of
     }
 
     saveOutputToBuffer(outputTensorMap, output_buffer);
-    LOGI("SNPE: Execue a DNN");
+    LOGE("SNPE: Execute a DNN");
     return 0;
 }
 
