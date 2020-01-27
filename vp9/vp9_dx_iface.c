@@ -364,6 +364,7 @@ static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t
 static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
 #if CONFIG_SNPE
     if (snpe_load_network(mobinas_cfg->dnn_class, mobinas_cfg->dnn_path)) {
+        __android_log_print(6,"vpx_jni", "load dnn fail");
         fprintf(stderr, "%s: Failed to load network\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
@@ -439,6 +440,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             ctx->mobinas_cfg->save_metadata = 0;
         };
     }
+
     /*******************Hyunho************************/
 
     return VPX_CODEC_OK;
@@ -703,8 +705,10 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     double diff;
 #endif
 
+
     cm->current_super_frame = 0;
     if (frame_count > 0) {
+
         int i;
         int current_video_frame;
 
@@ -721,13 +725,13 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
+
             if (res != VPX_CODEC_OK) return res;
 #if DEBUG_LATENCY
             clock_gettime( CLOCK_MONOTONIC, &finish_time);
             diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
             cm->latency.decode_frame += diff;
 #endif
-
             data_start += frame_size;
 
             /*******************Hyunho************************/
@@ -743,13 +747,16 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
         }
     } else {
         while (data_start < data_end) {
+
             const uint32_t frame_size = (uint32_t) (data_end - data_start);
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
             clock_gettime( CLOCK_MONOTONIC, &start_time);
 #endif
             const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv, deadline);
+
             if (res != VPX_CODEC_OK) return res;
+
 #if DEBUG_LATENCY
             clock_gettime( CLOCK_MONOTONIC, &finish_time);
             diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
@@ -764,11 +771,15 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
                 ++data_start;
             }
+
             /*******************Hyunho************************/
             if (cm->mobinas_cfg->save_frame) save_frame(cm);
-            if (cm->mobinas_cfg->save_latency) save_latency(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
+            if (cm->mobinas_cfg->save_latency){
+                save_latency(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
+            }
             if (cm->mobinas_cfg->save_metadata) save_metadata(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
             /*******************Hyunho************************/
+
         }
     }
     /*******************Hyunho************************/
@@ -795,7 +806,15 @@ static vpx_image_t *decoder_get_frame(vpx_codec_alg_priv_t *ctx,
             ctx->last_show_frame = ctx->pbi->common.new_fb_idx;
             if (ctx->need_resync) return NULL;
             yuvconfig2image(&ctx->img, &sd, ctx->user_priv);
-            ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
+
+            /*** chanju ***/
+            if(ctx->mobinas_cfg->decode_mode==DECODE_CACHE || ctx->mobinas_cfg->decode_mode == DECODE_SR){
+                ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer.priv;
+            }else{
+                ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
+            }
+            /*** chanju ***/
+//            ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
             img = &ctx->img;
             return img;
         }
