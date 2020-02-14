@@ -61,6 +61,8 @@
 
 #ifdef __ANDROID_API__
 #include <android/log.h>
+#include <third_party/libyuv/include/libyuv/scale.h>
+
 #define TAG "vp9_decode_frame.c JNI"
 #define _UNKNOWN   0
 #define _DEFAULT   1
@@ -3233,6 +3235,104 @@ BITSTREAM_PROFILE vp9_read_profile(struct vpx_read_bit_buffer *rb) {
     return (BITSTREAM_PROFILE) profile;
 }
 
+void apply_offline_dnn_y(VP9_COMMON *const cm) {
+    //TODO
+}
+
+void apply_online_dnn_y(VP9_COMMON *const cm) {
+#if DEBUG_LATENCY
+    struct timespec start_time, finish_time;
+    double diff;
+#endif
+    YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *sr_frame = get_frame_new_buffer(cm);
+
+    //TODO 1: pass a y frame of get_frame_new_buffer()
+    //TODO 2: pass a y float frame
+    //TODO 3: copy a upscaled y frame inside save_output
+
+    //apply bilinear interpolation to U,V frame
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
+    ScalePlane(lr_frame->u_buffer, lr_frame->uv_stride, lr_frame->uv_width, lr_frame->uv_height,
+            sr_frame->u_buffer, sr_frame->uv_stride, sr_frame->uv_width, sr_frame->uv_height, 2);
+    ScalePlane(lr_frame->v_buffer, lr_frame->uv_stride, lr_frame->uv_width, lr_frame->uv_height,
+               sr_frame->v_buffer, sr_frame->uv_stride, sr_frame->uv_width, sr_frame->uv_height, 2);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    cm->latency.convert_float_to_int += diff;
+    LOGD("elapsed time (uv, bilinear): %f", diff);
+#endif
+}
+
+void apply_offline_dnn_rgb(VP9_COMMON *const cm) {
+    char file_path[PATH_MAX] = {0};
+    if (cm->show_frame)
+        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
+    else
+        sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
+    RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
+    RGB24_load_frame_buffer(cm->sr_frame, file_path);
+    RGB24_to_YV12_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
+}
+
+void apply_online_dnn_rgb(VP9_COMMON *const cm) {
+#if DEBUG_LATENCY
+    struct timespec start_time, finish_time;
+    double diff;
+#endif
+
+#if CONFIG_SNPE
+    RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
+    RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->frame);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    cm->latency.convert_yuv_to_rgb += diff;
+#endif
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
+    snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    cm->latency.execue_dnn += diff;
+#endif
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
+    RGB24_float_to_uint8(cm->sr_frame);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    cm->latency.convert_float_to_int += diff;
+    LOGD("elapsed time (float-to-int): %f", diff);
+#endif
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    cm->latency.convert_rgb_to_yuv += diff;
+    LOGD("elapsed time (rgb-to-yuv): %f", diff);
+#endif
+#endif
+}
+
 //TODO (hyunho): add loop filter to super-resolutioned frame, but quite complex to modify 'vp9_loop_filter_worker()'
 //TODO (hyunho): replace bilinear interpolation by libyuv
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
@@ -3373,61 +3473,12 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
         switch (cm->mobinas_cfg->dnn_mode) {
             case ONLINE_DNN:
-                //TODO (hyunho): implement ONLINE_DNN
-#if CONFIG_SNPE
-                RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-                RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &start_time);
-#endif
-                YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &finish_time);
-                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
-                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-                cm->latency.convert_yuv_to_rgb += diff;
-#endif
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &start_time);
-#endif
-                snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &finish_time);
-                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
-                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-                cm->latency.execue_dnn += diff;
-#endif
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &start_time);
-#endif
-                RGB24_float_to_uint8(cm->sr_frame);
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &finish_time);
-                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
-                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-                cm->latency.convert_float_to_int += diff;
-#endif
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &start_time);
-#endif
-                RGB24_to_YV12_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
-#if DEBUG_LATENCY
-                clock_gettime(CLOCK_MONOTONIC, &finish_time);
-                diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
-                       + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-                cm->latency.convert_rgb_to_yuv += diff;
-#endif
-#endif
+                apply_online_dnn_rgb(cm);
+//                apply_online_dnn_y(cm);
                 break;
             case OFFLINE_DNN:
                 //load a super-resolutioned frame
-                if (cm->show_frame)
-                    sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
-                else
-                    sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
-                RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-                RGB24_load_frame_buffer(cm->sr_frame, file_path);
-                RGB24_to_YV12_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
+                apply_offline_dnn_rgb(cm);
                 break;
             case NO_DNN:
                 break;
