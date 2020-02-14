@@ -1931,6 +1931,9 @@ static void setup_frame_size(VP9_COMMON *cm, struct vpx_read_bit_buffer *rb) {
     pool->frame_bufs[cm->new_fb_idx].current_super_frame = cm->current_super_frame;
     /*******************Hyunho************************/
 
+//    __android_log_print(6, "vpx_jni", "alloc normal frame: id=%d", (*(int*) (pool->frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv)));
+
+
 }
 
 static void setup_sr_frame_size(VP9_COMMON *cm) {
@@ -1955,6 +1958,9 @@ static void setup_sr_frame_size(VP9_COMMON *cm) {
     pool->frame_bufs[cm->new_fb_idx].sr_buf.color_range = cm->color_range;
     pool->frame_bufs[cm->new_fb_idx].sr_buf.render_width = cm->render_width * cm->scale;
     pool->frame_bufs[cm->new_fb_idx].sr_buf.render_height = cm->render_height * cm->scale;
+
+//    __android_log_print(6, "vpx_jni", "alloc normal frame: id=%d", (*(int*) (pool->frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer.priv)));
+
 }
 
 
@@ -3062,6 +3068,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
 #if CONFIG_VP9_HIGHBITDEPTH
     get_frame_new_buffer(cm)->bit_depth = cm->bit_depth;
 #endif
+
     get_frame_new_buffer(cm)->color_space = cm->color_space; //check: original frame
     get_frame_new_buffer(cm)->color_range = cm->color_range; //check: original frame
     get_frame_new_buffer(cm)->render_width = cm->render_width; //check: original frame

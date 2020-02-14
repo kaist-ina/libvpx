@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <stdio.h>
+#include <android/log.h>
 
 #include "vpx_scale/yv12config.h"
 #include "vpx_mem/vpx_mem.h"
@@ -430,6 +431,9 @@ int vpx_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
                              int border, int byte_alignment,
                              vpx_codec_frame_buffer_t *fb,
                              vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv) {
+
+    __android_log_print(6,"vpx_jni","libvpx allocate normal");
+
     if (ybf) {
         const int vp9_byte_align = (byte_alignment == 0) ? 1 : byte_alignment;
         const int aligned_width = (width + 7) & ~7;
@@ -498,6 +502,9 @@ int vpx_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
             // removed if border is totally removed.
             memset(ybf->buffer_alloc, 0, ybf->buffer_alloc_sz);
         }
+
+//        __android_log_print(6, "vpx_jni", "alloc normal frame: id=%d", (*(int*)fb->priv));
+
 
         /* Only support allocating buffers that have a border that's a multiple
          * of 32. The border restriction is required to get 16-byte alignment of
@@ -568,6 +575,9 @@ int vpx_realloc_scaled_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int crop
     width = width * scale;
     height = height * scale;
 
+    __android_log_print(6,"vpx_jni","libvpx allocate sr");
+
+
     if (ybf) {
         const int vp9_byte_align = (byte_alignment == 0) ? 1 : byte_alignment;
         const int aligned_width = (width + 7) & ~7;
@@ -636,6 +646,8 @@ int vpx_realloc_scaled_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int crop
             // removed if border is totally removed.
             memset(ybf->buffer_alloc, 0, ybf->buffer_alloc_sz);
         }
+
+//        __android_log_print(6, "vpx_jni", "alloc sr frame: id=%d", (*(int*)fb->priv));
 
         /* Only support allocating buffers that have a border that's a multiple
          * of 32. The border restriction is required to get 16-byte alignment of
