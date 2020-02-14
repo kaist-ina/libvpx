@@ -23,6 +23,8 @@
 
 #ifdef __ANDROID_API__
 #include <android/log.h>
+#include <arm_neon.h>
+
 #define TAG "LoadInputTensor JNI"
 #define _UNKNOWN   0
 #define _DEFAULT   1
@@ -487,8 +489,54 @@ int default_scale_policy (int resolution){
     }
 }
 
-//TODO: optimize by neon,SIMD instructions
 int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf) {
+    return RGB24_float_to_uint8_neon(rbf);
+}
+
+int RGB24_float_to_uint8_neon(RGB24_BUFFER_CONFIG *rbf) {
+    if (rbf == NULL) {
+        return -1;
+    }
+
+    float *src = rbf->buffer_alloc_float;
+    uint8_t *dst = rbf->buffer_alloc;
+
+    int w, h;
+    LOGD("height: %d, width: %d", rbf->height, rbf->width);
+
+    const float init[4] = {0.5, 0.5, 0.5, 0.5};
+    float32x4_t c0 = vld1q_f32(init);
+
+    for (h = 0; h < rbf->height; h++) {
+        for (w = 0; w < rbf->width; w += 8) {
+            if(rbf->width - w < 8) {
+                for (; w < rbf->width; w++) {
+                    *(dst + w + h * rbf->stride) = clamp(round(*(src + w + h * rbf->stride)), 0, 255);
+                }
+            }
+            else {
+                float32x4_t src_float_0 = vld1q_f32(src + w + h * rbf->stride);
+                src_float_0 = vaddq_f32(src_float_0, c0);
+                uint32x4_t dst_uint32_0 = vcvtq_u32_f32(src_float_0);
+                uint16x4_t dst_uint16_0 = vqmovn_s32(dst_uint32_0);
+
+                float32x4_t src_float_1 = vld1q_f32(src + w + 4 + h * rbf->stride);
+                src_float_1 = vaddq_f32(src_float_1, c0);
+                uint32x4_t dst_uint32_1 =  vcvtq_u32_f32(src_float_1);
+                uint16x4_t dst_uint16_1 =  vqmovn_s32(dst_uint32_1);
+
+                uint16x8_t dst_uint16 = vcombine_u16(dst_uint16_0, dst_uint16_1);
+                uint8x8_t dst_uint8 = vqmovn_u16(dst_uint16);
+
+                vst1_u8(dst + w + h * rbf->stride, dst_uint8);
+            }
+        }
+    }
+
+    return 0;
+}
+
+int RGB24_float_to_uint8_c(RGB24_BUFFER_CONFIG *rbf) {
     if(rbf == NULL) {
         return -1;
     }
@@ -499,7 +547,7 @@ int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf) {
     int w, h;
     for (h = 0; h < rbf->height; h++) {
         for (w = 0; w < rbf->width; w++) {
-            *(dst + w + h * rbf->stride) = clamp(round(*(src + w + h * rbf->stride)), 0, 255);
+               *(dst + w + h * rbf->stride) = clamp(round(*(src + w + h * rbf->stride)), 0, 255);
         }
     }
 
@@ -510,13 +558,22 @@ int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
     }
-    int result = RGB24ToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
+    int result = RAWToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
                                  ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
                                  ybf->y_crop_width, ybf->y_crop_height);
     return result;
 }
 
-//TODO: select between bt601, bt709
+int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    if(ybf == NULL || rbf == NULL) {
+        return -1;
+    }
+    int result = I420ToRAW(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
+                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
+                             ybf->y_crop_width, ybf->y_crop_height);
+    return result;
+}
+
 int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
@@ -542,16 +599,6 @@ int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     return 0;
 }
 
-//TODO: select between bt601, bt709
-int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
-    if(ybf == NULL || rbf == NULL) {
-        return -1;
-    }
-    int result = I420ToRGB24(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
-                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
-                             ybf->y_crop_width, ybf->y_crop_height);
-    return result;
-}
 
 int YV12_to_RGB24_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     if(ybf == NULL || rbf == NULL) {
