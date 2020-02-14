@@ -12,7 +12,9 @@
 #define VP9_DECODER_VP9_DECODER_H_
 
 #include <stdbool.h>
+#ifdef __ANDROID_API__
 #include <android/log.h>
+#endif
 #include "./vpx_config.h"
 
 #include "vpx/vpx_codec.h"
@@ -127,11 +129,9 @@ static INLINE void decrease_ref_count(int idx, RefCntBuffer *const frame_bufs,
 
     if (!frame_bufs[idx].released && frame_bufs[idx].ref_count == 0 &&
         frame_bufs[idx].raw_frame_buffer.priv) {
-          __android_log_print(6, "vpx_jni", "libvpx release");
 
       pool->release_fb_cb(pool->cb_priv, &frame_bufs[idx].raw_frame_buffer);
       if (pool->mode == DECODE_CACHE || pool->mode == DECODE_SR) {
-        __android_log_print(6, "vpx_jni", "libvpx release sr");
 
         pool->release_fb_cb(pool->cb_priv, &frame_bufs[idx].raw_sr_frame_buffer);
       }

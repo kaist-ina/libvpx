@@ -43,7 +43,9 @@
 
 #include <vpx_dsp/psnr.h>
 #include <vpx/snpe/main.hpp>
+#ifdef __ANDROID_API__
 #include <android/log.h>
+#endif
 
 static void initialize_dec(void) {
     static volatile int init_done = 0;

@@ -510,6 +510,74 @@ static void save_input_frame(VP9_COMMON *cm) {
     RGB24_save_frame_buffer(cm->frame, file_path);
 }
 
+static void save_frame_yuv(YV12_BUFFER_CONFIG *frame, const char* save_dir, const char *file_name) {
+    char file_path[PATH_MAX] = { 0 };
+    FILE *serialize_file = NULL;
+
+    //y-channel
+    sprintf(file_path, "%s/%s.y", save_dir, file_name);
+    serialize_file = fopen(file_path, "wb");
+    if(serialize_file == NULL)
+    {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    uint8_t *src = frame->y_buffer;
+    int h = frame->y_height;
+    do {
+        fwrite(src, sizeof(uint8_t), frame->y_width, serialize_file);
+        src += frame->y_stride;
+    } while (--h);
+    fclose(serialize_file);
+
+    //u-channel
+    sprintf(file_path, "%s/%s.u", save_dir, file_name);
+    serialize_file = fopen(file_path, "wb");
+    if(serialize_file == NULL)
+    {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    src = frame->u_buffer;
+    h = frame->uv_crop_height;
+    do {
+        fwrite(src, sizeof(uint8_t), frame->uv_crop_width, serialize_file);
+        src += frame->uv_stride;
+    } while (--h);
+    fclose(serialize_file);
+
+    //v-channel
+    sprintf(file_path, "%s/%s.v", save_dir, file_name);
+    serialize_file = fopen(file_path, "wb");
+    if(serialize_file == NULL)
+    {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    src = frame->v_buffer;
+    h = frame->uv_crop_height;
+    do {
+        fwrite(src, sizeof(uint8_t), frame->uv_crop_width, serialize_file);
+        src += frame->uv_stride;
+    } while (--h);
+    fclose(serialize_file);
+}
+
+static void save_input_frame_yuv(VP9_COMMON *cm) {
+    char file_name[PATH_MAX] = { 0 };
+    YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+
+    //y-channel
+    if (cm->show_frame) {
+        sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    }
+    else {
+        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
+    }
+
+    save_frame_yuv(frame, cm->mobinas_cfg->input_frame_dir, file_name);
+}
+
 static void save_sr_frame(VP9_COMMON *cm){
     char file_path[PATH_MAX] = { 0 };
 
@@ -529,19 +597,37 @@ static void save_sr_frame(VP9_COMMON *cm){
     RGB24_save_frame_buffer(cm->sr_frame, file_path);
 }
 
+static void save_sr_frame_yuv(VP9_COMMON *cm) {
+    char file_name[PATH_MAX] = { 0 };
+    YV12_BUFFER_CONFIG *frame = get_sr_frame_new_buffer(cm);
+
+    //y-channel
+    if (cm->show_frame) {
+        sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    }
+    else {
+        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
+    }
+
+    save_frame_yuv(frame, cm->mobinas_cfg->input_frame_dir, file_name);
+}
+
 static void save_frame(VP9_COMMON *cm) {
-    switch (cm->mobinas_cfg->decode_mode) {
-    case DECODE:
-        save_input_frame(cm);
-        break;
-    case DECODE_SR:
-        save_input_frame(cm); //overlapped with existing images
-        save_sr_frame(cm);
-        break;
-    case DECODE_CACHE:
-        save_input_frame(cm); //overlapped with existing images
-        save_sr_frame(cm);
-        break;
+    if (cm->mobinas_cfg->filter_interval == 0 || cm->current_video_frame % cm->mobinas_cfg->filter_interval) {
+        switch (cm->mobinas_cfg->decode_mode) {
+        case DECODE:
+            save_input_frame(cm);
+            save_input_frame_yuv(cm);
+            break;
+        case DECODE_SR:
+            //save_input_frame(cm); //overlapped with existing images
+            save_sr_frame(cm);
+            break;
+        case DECODE_CACHE:
+            //save_input_frame(cm); //overlapped with existing images
+            save_sr_frame(cm);
+            break;
+        }
     }
 }
 

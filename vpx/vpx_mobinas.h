@@ -163,6 +163,7 @@ typedef struct mobinas_cfg{
     int save_quality;
     int save_latency;
     int save_metadata;
+    int filter_interval;
 
     //decode
     mobinas_decode_mode decode_mode;
