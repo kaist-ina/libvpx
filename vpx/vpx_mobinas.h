@@ -159,7 +159,8 @@ typedef struct mobinas_cfg{
     char sr_offline_frame_dir[PATH_MAX]; //OFFLINE_DNN (load images)
 
     //log options
-    int save_frame;
+    int save_frame; // rgb
+    int save_yuvframe;
     int save_quality;
     int save_latency;
     int save_metadata;

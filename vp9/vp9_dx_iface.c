@@ -491,26 +491,7 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
     return VPX_CODEC_OK;
 }
 
-static void save_input_frame(VP9_COMMON *cm) {
-    char file_path[PATH_MAX] = { 0 };
-
-    //file name
-    if (cm->show_frame) {
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->input_frame_dir, cm->current_video_frame - 1);
-    }
-    else {
-        sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->input_frame_dir, cm->current_video_frame, cm->current_super_frame);
-    }
-
-    //YV12 to RGB
-    RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-    YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
-
-    //save
-    RGB24_save_frame_buffer(cm->frame, file_path);
-}
-
-static void save_frame_yuv(YV12_BUFFER_CONFIG *frame, const char* save_dir, const char *file_name) {
+static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_dir, const char *file_name) {
     char file_path[PATH_MAX] = { 0 };
     FILE *serialize_file = NULL;
 
@@ -563,19 +544,31 @@ static void save_frame_yuv(YV12_BUFFER_CONFIG *frame, const char* save_dir, cons
     fclose(serialize_file);
 }
 
+static void save_input_frame(VP9_COMMON *cm) {
+    char file_path[PATH_MAX] = { 0 };
+
+    //file name
+    if (cm->show_frame) {
+        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->input_frame_dir, cm->current_video_frame - 1);
+    }
+    else {
+        sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->input_frame_dir, cm->current_video_frame, cm->current_super_frame);
+    }
+
+    //YV12 to RGB
+    RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
+    YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
+
+    //save
+    RGB24_save_frame_buffer(cm->frame, file_path);
+}
+
 static void save_input_frame_yuv(VP9_COMMON *cm) {
     char file_name[PATH_MAX] = { 0 };
     YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
 
-    //y-channel
-    if (cm->show_frame) {
-        sprintf(file_name, "%04d", cm->current_video_frame - 1);
-    }
-    else {
-        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
-    }
-
-    save_frame_yuv(frame, cm->mobinas_cfg->input_frame_dir, file_name);
+    sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    YV12_save_frame_buffer(frame, cm->mobinas_cfg->input_frame_dir, file_name);
 }
 
 static void save_sr_frame(VP9_COMMON *cm){
@@ -601,32 +594,40 @@ static void save_sr_frame_yuv(VP9_COMMON *cm) {
     char file_name[PATH_MAX] = { 0 };
     YV12_BUFFER_CONFIG *frame = get_sr_frame_new_buffer(cm);
 
-    //y-channel
-    if (cm->show_frame) {
-        sprintf(file_name, "%04d", cm->current_video_frame - 1);
-    }
-    else {
-        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
-    }
-
-    save_frame_yuv(frame, cm->mobinas_cfg->input_frame_dir, file_name);
+    sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    YV12_save_frame_buffer(frame, cm->mobinas_cfg->sr_frame_dir, file_name);
 }
 
 static void save_frame(VP9_COMMON *cm) {
-    if (cm->mobinas_cfg->filter_interval == 0 || (cm->current_video_frame - 1) % cm->mobinas_cfg->filter_interval == 0) {
-        switch (cm->mobinas_cfg->decode_mode) {
-        case DECODE:
-            save_input_frame(cm);
-            save_input_frame_yuv(cm);
-            break;
-        case DECODE_SR:
-            //save_input_frame(cm); //overlapped with existing images
-            save_sr_frame(cm);
-            break;
-        case DECODE_CACHE:
-            //save_input_frame(cm); //overlapped with existing images
-            save_sr_frame(cm);
-            break;
+    switch (cm->mobinas_cfg->decode_mode) {
+    case DECODE:
+        save_input_frame(cm);
+        break;
+    case DECODE_SR:
+        //save_input_frame(cm); //overlapped with existing images
+        save_sr_frame(cm);
+        break;
+    case DECODE_CACHE:
+        //save_input_frame(cm); //overlapped with existing images
+        save_sr_frame(cm);
+        break;
+    }
+}
+
+static void save_yuvframe(VP9_COMMON *cm) {
+    if (cm->show_frame) {
+        if (cm->mobinas_cfg->filter_interval == 0 || (cm->current_video_frame - 1) % cm->mobinas_cfg->filter_interval == 0) {
+            switch (cm->mobinas_cfg->decode_mode) {
+            case DECODE:
+                save_input_frame_yuv(cm);
+                break;
+            case DECODE_SR:
+                save_sr_frame_yuv(cm);
+                break;
+            case DECODE_CACHE:
+                save_sr_frame_yuv(cm);
+                break;
+            }
         }
     }
 }
@@ -825,6 +826,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             else current_video_frame = cm->current_video_frame - 1;
 
             if (cm->mobinas_cfg->save_frame) save_frame(cm);
+            if (cm->mobinas_cfg->save_yuvframe) save_yuvframe(cm);
             if (cm->mobinas_cfg->save_latency) save_latency(ctx->pbi, current_video_frame, cm->current_super_frame);
             if (cm->mobinas_cfg->save_metadata) save_metadata(ctx->pbi, current_video_frame, cm->current_super_frame);
 
@@ -860,6 +862,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 
             /*******************Hyunho************************/
             if (cm->mobinas_cfg->save_frame) save_frame(cm);
+            if (cm->mobinas_cfg->save_yuvframe) save_yuvframe(cm);
             if (cm->mobinas_cfg->save_latency){
                 save_latency(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
             }

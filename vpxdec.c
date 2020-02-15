@@ -143,6 +143,8 @@ static const arg_def_t dnnruntimearg =
         ARG_DEF(NULL, "dnn-runtime", 1, "DNN to apply");
 static const arg_def_t filterintervalarg=
         ARG_DEF(NULL, "filter-interval", 1, "Filter interval to save frames");
+static const arg_def_t saveyuvframearg=
+        ARG_DEF(NULL, "save-yuvframe", 0, "Save yuv frame");
 static const arg_def_t *all_args[] =
 {   &help, &codecarg, &use_yv12, &use_i420, &flipuvarg, &rawvideo, &noblitarg, &progressarg, &limitarg, &skiparg,
     &postprocarg, &summaryarg, &outputfile, &threadsarg, &frameparallelarg, &verbosearg, &scalearg, &fb_arg,
@@ -152,7 +154,7 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
     &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
-    &postfixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, &filterintervalarg, NULL};
+    &postfixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, &filterintervalarg, &saveyuvframearg, NULL};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -916,6 +918,8 @@ static int main_loop(int argc, const char **argv_)
         }
         else if (arg_match(&arg, &filterintervalarg, argi))
             mobinas_cfg->filter_interval = atoi(arg.val);
+        else if (arg_match(&arg, &saveyuvframearg, argi))
+            mobinas_cfg->save_yuvframe = 1;
         /*******************Hyunho************************/
         else
             argj++;
@@ -936,7 +940,7 @@ static int main_loop(int argc, const char **argv_)
             add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             _mkdir(mobinas_cfg->log_dir);
         }
-        if (mobinas_cfg->save_frame) {
+        if (mobinas_cfg->save_frame || mobinas_cfg->save_yuvframe) {
             sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
             add_postfix_to_path(mobinas_cfg->input_frame_dir, postfix);
             _mkdir(mobinas_cfg->input_frame_dir);
@@ -953,7 +957,7 @@ static int main_loop(int argc, const char **argv_)
             add_postfix_to_path(mobinas_cfg->log_dir, postfix);
             _mkdir(mobinas_cfg->log_dir);
         }
-    	if (mobinas_cfg->save_frame) {
+    	if (mobinas_cfg->save_frame || mobinas_cfg->save_yuvframe) {
             sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
             sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
             add_postfix_to_path(mobinas_cfg->input_frame_dir, postfix);
@@ -990,7 +994,7 @@ static int main_loop(int argc, const char **argv_)
             _mkdir(mobinas_cfg->log_dir);
 
         }
-        if (mobinas_cfg->save_frame) {
+        if (mobinas_cfg->save_frame || mobinas_cfg->save_yuvframe) {
             sprintf(mobinas_cfg->input_frame_dir, "%s/image/%s", content_dir, input_video_name);
             sprintf(mobinas_cfg->sr_frame_dir, "%s/image/%s/%s", content_dir, input_video_name, dnn_name);
             add_postfix_to_path(mobinas_cfg->input_frame_dir, postfix);
