@@ -613,7 +613,7 @@ static void save_sr_frame_yuv(VP9_COMMON *cm) {
 }
 
 static void save_frame(VP9_COMMON *cm) {
-    if (cm->mobinas_cfg->filter_interval == 0 || cm->current_video_frame % cm->mobinas_cfg->filter_interval) {
+    if (cm->mobinas_cfg->filter_interval == 0 || (cm->current_video_frame - 1) % cm->mobinas_cfg->filter_interval == 0) {
         switch (cm->mobinas_cfg->decode_mode) {
         case DECODE:
             save_input_frame(cm);

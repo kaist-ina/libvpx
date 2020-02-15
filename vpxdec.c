@@ -141,7 +141,8 @@ static const arg_def_t dnnfilearg =
         ARG_DEF(NULL, "dnn-file", 1, "DNN file to apply (e.g., ckpt-300.dlc");
 static const arg_def_t dnnruntimearg =
         ARG_DEF(NULL, "dnn-runtime", 1, "DNN to apply");
-
+static const arg_def_t filterintervalarg=
+        ARG_DEF(NULL, "filter-interval", 1, "Filter interval to save frames");
 static const arg_def_t *all_args[] =
 {   &help, &codecarg, &use_yv12, &use_i420, &flipuvarg, &rawvideo, &noblitarg, &progressarg, &limitarg, &skiparg,
     &postprocarg, &summaryarg, &outputfile, &threadsarg, &frameparallelarg, &verbosearg, &scalearg, &fb_arg,
@@ -151,7 +152,7 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
     &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
-    &postfixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, NULL};
+    &postfixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, &filterintervalarg, NULL};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -913,6 +914,8 @@ static int main_loop(int argc, const char **argv_)
                 break;
             }
         }
+        else if (arg_match(&arg, &filterintervalarg, argi))
+            mobinas_cfg->filter_interval = atoi(arg.val);
         /*******************Hyunho************************/
         else
             argj++;

@@ -494,6 +494,7 @@ int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf) {
 }
 
 int RGB24_float_to_uint8_neon(RGB24_BUFFER_CONFIG *rbf) {
+    /*
     if (rbf == NULL) {
         return -1;
     }
@@ -532,6 +533,7 @@ int RGB24_float_to_uint8_neon(RGB24_BUFFER_CONFIG *rbf) {
             }
         }
     }
+    */
 
     return 0;
 }

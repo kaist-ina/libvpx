@@ -3264,7 +3264,6 @@ void apply_online_dnn_y(VP9_COMMON *const cm) {
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     cm->latency.convert_float_to_int += diff;
-    LOGD("elapsed time (uv, bilinear): %f", diff);
 #endif
 }
 
@@ -3317,7 +3316,6 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     cm->latency.convert_float_to_int += diff;
-    LOGD("elapsed time (float-to-int): %f", diff);
 #endif
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -3328,7 +3326,6 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     cm->latency.convert_rgb_to_yuv += diff;
-    LOGD("elapsed time (rgb-to-yuv): %f", diff);
 #endif
 #endif
 }
