@@ -504,9 +504,9 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
         return -1;
     }
     uint8_t *src = frame->y_buffer;
-    int h = frame->y_height;
+    int h = frame->y_crop_height;
     do {
-        fwrite(src, sizeof(uint8_t), frame->y_width, serialize_file);
+        fwrite(src, sizeof(uint8_t), frame->y_crop_width, serialize_file);
         src += frame->y_stride;
     } while (--h);
     fclose(serialize_file);
