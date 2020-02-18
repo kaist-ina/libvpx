@@ -3275,7 +3275,7 @@ void apply_offline_dnn_rgb(VP9_COMMON *const cm) {
         sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
     RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
     RGB24_load_frame_buffer(cm->sr_frame, file_path);
-    RGB24_to_YV12_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);
 }
 
 void apply_online_dnn_rgb(VP9_COMMON *const cm) {

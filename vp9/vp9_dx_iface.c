@@ -557,7 +557,7 @@ static void save_input_frame(VP9_COMMON *cm) {
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-    YV12_to_RGB24_c(get_frame_new_buffer(cm), cm->frame);
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->frame);
 
     //save
     RGB24_save_frame_buffer(cm->frame, file_path);
@@ -584,7 +584,7 @@ static void save_sr_frame(VP9_COMMON *cm){
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-    YV12_to_RGB24_c(get_sr_frame_new_buffer(cm), cm->sr_frame);
+    YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->sr_frame);
 
     //save
     RGB24_save_frame_buffer(cm->sr_frame, file_path);
