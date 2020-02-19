@@ -65,11 +65,15 @@ mobinas_cfg_t *init_mobinas_cfg() {
     config->dnn_profiles[0] = init_mobinas_dnn_profile(1920, 1080, 4);
     config->dnn_profiles[1] = init_mobinas_dnn_profile(1920, 1080, 3);
     config->dnn_profiles[2] = init_mobinas_dnn_profile(1920, 1080, 2);
+    config->dnn_profiles[3] = init_mobinas_dnn_profile(1920, 1080, 1);
+    config->dnn_profiles[4] = init_mobinas_dnn_profile(1920, 1080, 1);
 
     //cache profile
     config->cache_profiles[0] = init_mobinas_cache_profile();
     config->cache_profiles[1] = init_mobinas_cache_profile();
     config->cache_profiles[2] = init_mobinas_cache_profile();
+    config->cache_profiles[3] = init_mobinas_cache_profile();
+    config->cache_profiles[4] = init_mobinas_cache_profile();
 
     return config;
 }

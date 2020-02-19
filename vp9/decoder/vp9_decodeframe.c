@@ -3278,9 +3278,9 @@ void apply_offline_dnn_rgb(VP9_COMMON *const cm) {
         sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
     else
         sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
-    RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-    RGB24_load_frame_buffer(cm->sr_frame, file_path);
-    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);
+    RGB24_realloc_frame_buffer(cm->rgb24_frame_1, cm->width * cm->scale, cm->height * cm->scale);
+    RGB24_load_frame_buffer(cm->rgb24_frame_1, file_path);
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_frame_1);
 }
 
 void apply_online_dnn_rgb(VP9_COMMON *const cm) {
@@ -3290,12 +3290,12 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #endif
 
 #if CONFIG_SNPE
-    RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-    RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
+    RGB24_realloc_frame_buffer(cm->rgb24_frame_0, cm->width, cm->height);
+    RGB24_realloc_frame_buffer(cm->rgb24_frame_1, cm->width * cm->scale, cm->height * cm->scale);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    YV12_to_RGB24(get_frame_new_buffer(cm), cm->frame);
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_frame_0);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
@@ -3305,8 +3305,8 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    //snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
-    snpe_execute_byte(get_dnn_profile(cm->mobinas_cfg, cm->height)->dnn_instance, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
+    //snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->rgb24_frame_0->buffer_alloc, cm->rgb24_frame_1->buffer_alloc_float, 3 * cm->height * cm->width);
+    snpe_execute_byte(get_dnn_profile(cm->mobinas_cfg, cm->height)->dnn_instance, cm->rgb24_frame_0->buffer_alloc, cm->rgb24_frame_1->buffer_alloc_float, 3 * cm->height * cm->width);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
@@ -3316,7 +3316,7 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    RGB24_float_to_uint8(cm->sr_frame);
+    RGB24_float_to_uint8(cm->rgb24_frame_1);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
@@ -3326,7 +3326,7 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->sr_frame);
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_frame_1);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000

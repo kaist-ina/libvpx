@@ -189,8 +189,8 @@ typedef struct rgb24_buffer_config{
     int height;
     int stride;
     int buffer_alloc_sz;
-    uint8_t *buffer_alloc; //TODO: here
-    float *buffer_alloc_float;
+    uint8_t *buffer_alloc; 
+    float *buffer_alloc_float; //TODO: remove this
 } RGB24_BUFFER_CONFIG;
 
 #ifdef __cplusplus
@@ -240,6 +240,8 @@ int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
 int YV12_to_RGB24_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
+
+//rgb24 buffer
 int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
 int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
 int RGB24_alloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);

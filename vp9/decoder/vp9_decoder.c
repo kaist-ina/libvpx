@@ -133,9 +133,10 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     cm->latency_log = NULL;
     cm->metadata_log = NULL;
     cm->mobinas_cfg = NULL;
-    cm->lr_reference_frame = NULL;
-    cm->hr_reference_frame = NULL;
-    cm->hr_bilinear_frame = NULL;
+    cm->yv12_frame_0 = NULL;
+    cm->yv12_frame_1 = NULL;
+    cm->rgb24_frame_0 = NULL;
+    cm->rgb24_frame_1 = NULL;
     /*******************Hyunho************************/
 
     return pbi;
@@ -163,21 +164,14 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
 
     /*******************Hyunho************************/
     //free frames
-    vpx_free_frame_buffer(pbi->common.hr_reference_frame);
-    vpx_free_frame_buffer(pbi->common.lr_reference_frame);
-    vpx_free_frame_buffer(pbi->common.hr_bilinear_frame);
-    vpx_free(pbi->common.hr_reference_frame);
-    vpx_free(pbi->common.lr_reference_frame);
-    vpx_free(pbi->common.hr_bilinear_frame);
-
-    RGB24_free_frame_buffer(pbi->common.frame);
-    RGB24_free_frame_buffer(pbi->common.sr_frame);
-    RGB24_free_frame_buffer(pbi->common.compare_frame);
-    RGB24_free_frame_buffer(pbi->common.sr_compare_frame);
-    vpx_free(pbi->common.frame);
-    vpx_free(pbi->common.sr_frame);
-    vpx_free(pbi->common.compare_frame);
-    vpx_free(pbi->common.sr_compare_frame);
+    vpx_free_frame_buffer(pbi->common.yv12_frame_0);
+    vpx_free_frame_buffer(pbi->common.yv12_frame_1);
+    vpx_free(pbi->common.yv12_frame_0);
+    vpx_free(pbi->common.yv12_frame_1);
+    RGB24_free_frame_buffer(pbi->common.rgb24_frame_0);
+    RGB24_free_frame_buffer(pbi->common.rgb24_frame_1);
+    vpx_free(pbi->common.rgb24_frame_0);
+    vpx_free(pbi->common.rgb24_frame_1);
 
     //close logs
     if (pbi->common.quality_log != NULL) fclose(pbi->common.quality_log);

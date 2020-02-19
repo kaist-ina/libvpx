@@ -422,10 +422,10 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
     ctx->pbi->common.buffer_pool->mode = ctx->mobinas_cfg->decode_mode;
 
-    ctx->pbi->common.frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-    ctx->pbi->common.sr_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-    ctx->pbi->common.compare_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-    ctx->pbi->common.sr_compare_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+    ctx->pbi->common.yv12_frame_0 = (YV12_BUFFER_CONFIG*) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    ctx->pbi->common.yv12_frame_1 = (YV12_BUFFER_CONFIG*) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    ctx->pbi->common.rgb24_frame_0 = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+    ctx->pbi->common.rgb24_frame_1 = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
 
     if (ctx->mobinas_cfg->save_quality) {
         sprintf(file_path, "%s/quality.txt", ctx->mobinas_cfg->log_dir);
@@ -566,11 +566,11 @@ static void save_input_frame(VP9_COMMON *cm) {
     }
 
     //YV12 to RGB
-    RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-    YV12_to_RGB24(get_frame_new_buffer(cm), cm->frame);
+    RGB24_realloc_frame_buffer(cm->rgb24_frame_0, cm->width, cm->height);
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_frame_0);
 
     //save
-    RGB24_save_frame_buffer(cm->frame, file_path);
+    RGB24_save_frame_buffer(cm->rgb24_frame_0, file_path);
 }
 
 static void save_input_frame_yuv(VP9_COMMON *cm) {
@@ -593,11 +593,11 @@ static void save_sr_frame(VP9_COMMON *cm){
     }
 
     //YV12 to RGB
-    RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-    YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->sr_frame);
+    RGB24_realloc_frame_buffer(cm->rgb24_frame_1, cm->width * cm->scale, cm->height * cm->scale);
+    YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->rgb24_frame_1);
 
     //save
-    RGB24_save_frame_buffer(cm->sr_frame, file_path);
+    RGB24_save_frame_buffer(cm->rgb24_frame_1, file_path);
 }
 
 static void save_sr_frame_yuv(VP9_COMMON *cm) {
@@ -643,52 +643,126 @@ static void save_yuvframe(VP9_COMMON *cm) {
 }
 
 static void save_input_quality(VP9_COMMON *cm) {
-        double psnr;
         char file_path[PATH_MAX] = { 0 };
         char log[LOG_MAX] = { 0 };
 
-        //YV12 to RGB24
-        RGB24_realloc_frame_buffer(cm->frame, cm->width, cm->height);
-        YV12_to_RGB24(get_frame_new_buffer(cm), cm->frame);
+        //width, height
+        mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
+        int width = dnn_profile->target_width;
+        int height = dnn_profile->target_height;
 
-        //load a reference frame
+        //upscale a frame
+        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+        YV12_BUFFER_CONFIG *upscaled_frame = cm->yv12_frame_0;
+        vpx_realloc_frame_buffer(
+            upscaled_frame, width, height,
+            cm->subsampling_x,
+            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+            cm->use_highbitdepth,
+#endif
+            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            NULL, NULL, NULL);
+        I420Scale(frame->y_buffer, frame->y_stride, 
+                    frame->u_buffer, frame->uv_stride,
+                    frame->v_buffer, frame->uv_stride,
+                    frame->y_crop_width, frame->y_crop_height,
+                    upscaled_frame->y_buffer, upscaled_frame->y_stride, 
+                    upscaled_frame->u_buffer, upscaled_frame->uv_stride,
+                    upscaled_frame->v_buffer, upscaled_frame->uv_stride,
+                    upscaled_frame->y_crop_width, upscaled_frame->y_crop_height,
+                    3);
+
+        //load a reference frame & convert it into yv12
+        YV12_BUFFER_CONFIG *compare_frame = cm->yv12_frame_1;
+        vpx_realloc_frame_buffer(
+            compare_frame, width, height,
+            cm->subsampling_x,
+            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+            cm->use_highbitdepth,
+#endif
+            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            NULL, NULL, NULL);
+        RGB24_realloc_frame_buffer(cm->rgb24_frame_1, width, height);
         sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->input_compare_frame_dir, cm->current_video_frame - 1);
-        RGB24_realloc_frame_buffer(cm->compare_frame, cm->width, cm->height);
-        RGB24_load_frame_buffer(cm->compare_frame, file_path);
+        RGB24_load_frame_buffer(cm->rgb24_frame_1, file_path);
+        RGB24_to_YV12(compare_frame, cm->rgb24_frame_1);
 
-        //calculate psnr
-        psnr = RGB24_calc_psnr(cm->frame, cm->compare_frame);  //check: sr frame
-        //sprintf(log, "input,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
-        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr);
-        fputs(log, cm->quality_log);
-
-        fprintf(stdout, "%.2f\n", cm->current_video_frame - 1, psnr);
-}
-
-static void save_sr_quality(VP9_COMMON *cm) {
-        double psnr;
-        char file_path[PATH_MAX] = { 0 };
-        char log[LOG_MAX] = { 0 };
-
-        //YV12 to RGB24
-        RGB24_realloc_frame_buffer(cm->sr_frame, cm->width * cm->scale, cm->height * cm->scale);
-        YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->sr_frame);
-
-        //load a reference frame
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_compare_frame_dir, cm->current_video_frame - 1);
-        RGB24_realloc_frame_buffer(cm->sr_compare_frame, cm->width * cm->scale, cm->height * cm->scale);
-        RGB24_load_frame_buffer(cm->sr_compare_frame, file_path);
-
-        //calculate psnr
-        psnr = RGB24_calc_psnr(cm->sr_frame, cm->sr_compare_frame);  //check: sr frame
-        //sprintf(log, "output,%d\t%.2f\n", cm->current_video_frame - 1, psnr);
-        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr);
+        //calculate a pnsr value
+        PSNR_STATS psnr_stats;
+        vpx_calc_psnr(upscaled_frame, compare_frame, &psnr_stats);
+        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
         fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
-        LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr);
+        LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-        fprintf(stdout, "output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr);
+        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+#endif
+}
+
+static void save_sr_quality(VP9_COMMON *cm) {
+        char file_path[PATH_MAX] = { 0 };
+        char log[LOG_MAX] = { 0 };
+
+        //width, height
+        mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
+        int width = dnn_profile->target_width;
+        int height = dnn_profile->target_height;
+        printf("width: %d, height: %d\n", width, height);
+
+        //upscale a frame
+        //YV12_BUFFER_CONFIG *sr_frame = get_frame_new_buffer(cm);
+        YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);
+        YV12_BUFFER_CONFIG *sr_upscaled_frame = cm->yv12_frame_0;
+        vpx_realloc_frame_buffer(
+            sr_upscaled_frame, width, height,
+            cm->subsampling_x,
+            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+            cm->use_highbitdepth,
+#endif
+            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            NULL, NULL, NULL);
+        I420Scale(sr_frame->y_buffer, sr_frame->y_stride, 
+                    sr_frame->u_buffer, sr_frame->uv_stride,
+                    sr_frame->v_buffer, sr_frame->uv_stride,
+                    sr_frame->y_crop_width, sr_frame->y_crop_height,
+                    sr_upscaled_frame->y_buffer, sr_upscaled_frame->y_stride, 
+                    sr_upscaled_frame->u_buffer, sr_upscaled_frame->uv_stride,
+                    sr_upscaled_frame->v_buffer, sr_upscaled_frame->uv_stride,
+                    sr_upscaled_frame->y_crop_width, sr_upscaled_frame->y_crop_height,
+                    3);
+
+        //load a reference frame & convert it into yv12
+        YV12_BUFFER_CONFIG *sr_compare_frame = cm->yv12_frame_1;
+        vpx_realloc_frame_buffer(
+            sr_compare_frame, width, height,
+            cm->subsampling_x,
+            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+            cm->use_highbitdepth,
+#endif
+            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            NULL, NULL, NULL);
+        RGB24_realloc_frame_buffer(cm->rgb24_frame_1, width, height);
+        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_compare_frame_dir, cm->current_video_frame - 1);
+        RGB24_load_frame_buffer(cm->rgb24_frame_1, file_path);
+        RGB24_to_YV12(sr_compare_frame, cm->rgb24_frame_1);
+
+        //calculate a pnsr value
+        PSNR_STATS psnr_stats;
+        vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats);
+        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+        fputs(log, cm->quality_log);
+
+#ifdef __ANDROID_API__
+        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+        LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+#else
+        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 

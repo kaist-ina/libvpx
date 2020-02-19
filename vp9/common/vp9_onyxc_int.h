@@ -134,14 +134,10 @@ typedef struct VP9Common {
     FILE *latency_log; // latency log
     FILE *metadata_log; // metadata log
 
-    YV12_BUFFER_CONFIG *lr_reference_frame;
-    YV12_BUFFER_CONFIG *hr_reference_frame;
-    YV12_BUFFER_CONFIG *hr_bilinear_frame;
-
-    RGB24_BUFFER_CONFIG *frame;
-    RGB24_BUFFER_CONFIG *compare_frame; //measure LR quality
-    RGB24_BUFFER_CONFIG *sr_frame;
-    RGB24_BUFFER_CONFIG *sr_compare_frame; // measure SR quality
+    YV12_BUFFER_CONFIG *yv12_frame_0; // quality 
+    YV12_BUFFER_CONFIG *yv12_frame_1; //quality 
+    RGB24_BUFFER_CONFIG *rgb24_frame_0; // super-resolution, frame
+    RGB24_BUFFER_CONFIG *rgb24_frame_1; // super-resolution, frame
     /*******************Hyunho************************/
 
     YV12_BUFFER_CONFIG *frame_to_show;
