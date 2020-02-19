@@ -282,6 +282,7 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
 }
 
 /* Validate MobiNAS configuration */
+/*
 static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
     if (mobinas_cfg == NULL)
     {
@@ -292,8 +293,8 @@ static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
     switch (mobinas_cfg->decode_mode)
     {
     case DECODE_SR:
-        if (mobinas_cfg->get_scale == NULL)
-            mobinas_cfg->get_scale = default_scale_policy;
+        //if (mobinas_cfg->get_scale == NULL)
+        //    mobinas_cfg->get_scale = default_scale_policy;
 
         switch (mobinas_cfg->dnn_mode)
         {
@@ -309,15 +310,15 @@ static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
         }
         break;
     case DECODE_CACHE:
-        if (mobinas_cfg->get_scale == NULL)
-            mobinas_cfg->get_scale = default_scale_policy;
-        if (mobinas_cfg->bilinear_profile == NULL)
-            mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
+        //if (mobinas_cfg->get_scale == NULL)
+        //    mobinas_cfg->get_scale = default_scale_policy;
+        //if (mobinas_cfg->bilinear_profile == NULL)
+        //    mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
 
         switch (mobinas_cfg->cache_policy)
         {
         case PROFILE_CACHE:
-            if (!mobinas_cfg->cache_profile)
+            if (!mobinas_cfg->cache_profiles)
             {
                 fprintf(stderr, "%s: cache_profile is NULL\n", __func__);
                 return -1;
@@ -336,41 +337,50 @@ static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
     }
     return 0;
 }
+*/
 
 //check whether mobinas_cfg is valid and runtime configuration
 static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
     assert(mobinas_cfg != NULL);
-
+    ctx->mobinas_cfg = mobinas_cfg;
+    return VPX_CODEC_OK;
+    /*
     if (is_valid_mobinas_cfg(mobinas_cfg)) {
         fprintf(stderr, "%s: Invalid mobinas cfg config\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
-
-    if (mobinas_cfg->dnn_mode == ONLINE_DNN)
-    {
-#if CONFIG_SNPE
-        mobinas_cfg->dnn_class = snpe_alloc(mobinas_cfg->dnn_runtime);
-        if (snpe_check_runtime(mobinas_cfg->dnn_class)) {
-            fprintf(stderr, "%s: Failed to check runtime\n", __func__);
-            return VPX_MOBINAS_ERROR;
-        }
-#endif
-    }
-
-    ctx->mobinas_cfg = mobinas_cfg;
-    return VPX_CODEC_OK;
+    */
 }
 
-static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
+static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char* dnn_file) {
 #if CONFIG_SNPE
-    if (snpe_load_network(mobinas_cfg->dnn_class, mobinas_cfg->dnn_path)) {
-        __android_log_print(6,"vpx_jni", "load dnn fail");
+    mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(mobinas_cfg, resolution);
+    dnn_profile->dnn_instance = snpe_alloc(mobinas_cfg->dnn_runtime);
+
+    if (snpe_check_runtime(dnn_profile->dnn_instance)) {
+        fprintf(stderr, "%s: Failed to check runtime\n", __func__);
+        return VPX_MOBINAS_ERROR;
+    }
+
+    if (snpe_load_network(dnn_profile->dnn_instance, dnn_file)) {
         fprintf(stderr, "%s: Failed to load network\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
 #endif
     return VPX_CODEC_OK;
 }
+
+static vpx_codec_err_t load_mobinas_cache_profile(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char* cache_profile_file) {
+    mobinas_cache_profile_t *cache_profile = get_cache_profile(mobinas_cfg, resolution);
+
+    if ((cache_profile->file = fopen(cache_profile_file, "rb")) == NULL) {
+        fprintf(stderr, "%s: fail to open a file %s", __func__, cache_profile_file);
+        return VPX_MOBINAS_ERROR;
+    }
+
+    return VPX_CODEC_OK;
+}
+
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     char file_path[PATH_MAX] = {0};
@@ -501,7 +511,7 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
     if(serialize_file == NULL)
     {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
-        return -1;
+        return;
     }
     uint8_t *src = frame->y_buffer;
     int h = frame->y_crop_height;
@@ -517,7 +527,7 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
     if(serialize_file == NULL)
     {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
-        return -1;
+        return;
     }
     src = frame->u_buffer;
     h = frame->uv_crop_height;
@@ -533,7 +543,7 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
     if(serialize_file == NULL)
     {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
-        return -1;
+        return;
     }
     src = frame->v_buffer;
     h = frame->uv_crop_height;
@@ -1203,6 +1213,7 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
         },
         {
             load_mobinas_cfg,
-            load_mobinas_dnn
+            load_mobinas_dnn,
+            load_mobinas_cache_profile
         }
 };

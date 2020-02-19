@@ -271,8 +271,11 @@ typedef vpx_codec_err_t (*vpx_codec_enc_mr_get_mem_loc_fn_t)(
 typedef vpx_codec_err_t (*mobinas_load_cfg_fn_t)(
         vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg);
 
-typedef vpx_codec_err_t (*mobinas_load_network_fn_t)(
-        vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg);
+typedef vpx_codec_err_t (*mobinas_load_dnn_fn_t)(
+        vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char *dnn_file);
+
+typedef vpx_codec_err_t (*mobinas_load_cache_profile_fn_t)(
+        vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char *cache_profile_file);
 /*******************Hyunho************************/
 
 /*!\brief usage configuration mapping
@@ -328,7 +331,8 @@ struct vpx_codec_iface {
     /*******************Hyunho************************/
     struct mobinas_iface {
         mobinas_load_cfg_fn_t load_cfg;
-        mobinas_load_network_fn_t load_dnn;
+        mobinas_load_dnn_fn_t load_dnn;
+        mobinas_load_cache_profile_fn_t load_cache_profile;
   } mobinas;
     /*******************Hyunho************************/
 };

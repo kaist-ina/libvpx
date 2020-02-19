@@ -53,26 +53,66 @@
 mobinas_cfg_t *init_mobinas_cfg() {
     mobinas_cfg_t *config = (mobinas_cfg_t *) vpx_calloc(1, sizeof(mobinas_cfg_t));
 
+    //mode
     config->decode_mode = DECODE;
     config->dnn_mode = NO_DNN;
     config->cache_policy = NO_CACHE;
+
+    //bilinear
+    config->bilinear_profile = init_vp9_bilinear_profile();
+
+    //dnn profile
+    config->dnn_profiles[0] = init_mobinas_dnn_profile(1920, 1080, 4);
+    config->dnn_profiles[1] = init_mobinas_dnn_profile(1920, 1080, 3);
+    config->dnn_profiles[2] = init_mobinas_dnn_profile(1920, 1080, 2);
+
+    //cache profile
+    config->cache_profiles[0] = init_mobinas_cache_profile();
+    config->cache_profiles[1] = init_mobinas_cache_profile();
+    config->cache_profiles[2] = init_mobinas_cache_profile();
 
     return config;
 }
 
 void remove_mobinas_cfg(mobinas_cfg_t *config) {
     if (config) {
-        remove_mobinas_cache_profile(config->cache_profile);
+        for (int i=0; i<5; i++) {
+            remove_mobinas_cache_profile(config->cache_profiles[i]);
+            remove_mobinas_dnn_profile(config->dnn_profiles[i]);
+        }
         remove_vp9_bilinear_profile(config->bilinear_profile);
         vpx_free(config);
     }
 }
 
-mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path) {
-    char tmp[PATH_MAX];
+mobinas_dnn_profile_t *init_mobinas_dnn_profile(int width, int height, int scale) {
+    mobinas_dnn_profile_t *profile = (mobinas_dnn_profile_t *) vpx_calloc(1, sizeof(mobinas_dnn_profile_t));
+    profile->dnn_instance = NULL;
+    profile->target_height = height;
+    profile->target_width = width;
+    profile->scale = scale;
 
+    return profile;
+}
+
+void remove_mobinas_dnn_profile(mobinas_dnn_profile_t *profile) {
+    if (profile) {
+        if (profile->dnn_instance) {
+#if CONFIG_SNPE
+            snpe_free(profile->dnn_instance);
+#endif
+        }
+        vpx_free(profile);
+    }
+}
+
+mobinas_cache_profile_t *init_mobinas_cache_profile() {
     mobinas_cache_profile_t *profile = (mobinas_cache_profile_t *) vpx_calloc(1, sizeof(mobinas_cache_profile_t));
+    profile->file = NULL;
 
+    return profile;
+    /*
+    char tmp[PATH_MAX];
     if ((profile->file = fopen(path, "rb")) == NULL) {
         fprintf(stderr, "%s: fail to open a file %s", __func__, path);
         vpx_free(profile);
@@ -81,8 +121,7 @@ mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path) {
 
     sprintf(tmp, "%s", path);
     sprintf(profile->name, "%s", basename(tmp));
-
-    return profile;
+    */
 }
 
 void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile) {
@@ -489,12 +528,17 @@ int default_scale_policy (int resolution){
     }
 }
 
+//TODO: Implement float-int conversion inside vpx_dsp module
 int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf) {
+#ifdef __ANDROID_API__
     return RGB24_float_to_uint8_neon(rbf);
+#else
+    return RGB24_float_to_uint8_c(rbf);
+#endif
 }
 
 int RGB24_float_to_uint8_neon(RGB24_BUFFER_CONFIG *rbf) {
-    /*
+#ifdef __ANDROID_API__
     if (rbf == NULL) {
         return -1;
     }
@@ -533,8 +577,7 @@ int RGB24_float_to_uint8_neon(RGB24_BUFFER_CONFIG *rbf) {
             }
         }
     }
-    */
-
+#endif
     return 0;
 }
 
@@ -685,8 +728,12 @@ int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) 
         const int frame_size = height * stride;
 
         if (frame_size > rbf->buffer_alloc_sz) {
-            vpx_free(rbf->buffer_alloc);
-            rbf->buffer_alloc = NULL;
+            //printf("rbf->buffer_alloc_sz: %d\n", rbf->buffer_alloc_sz);
+            //printf("rbf->buffer_alloc: %p\n", rbf->buffer_alloc); 
+            if (rbf->buffer_alloc_sz != 0) {
+                vpx_free(rbf->buffer_alloc);
+                vpx_free(rbf->buffer_alloc_float);
+            }
 
             rbf->buffer_alloc = (uint8_t *) vpx_calloc(1, (size_t) frame_size * sizeof(uint8_t));
             if (!rbf->buffer_alloc) {
@@ -699,9 +746,6 @@ int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height) 
             }
 
             rbf->buffer_alloc_sz = (int) frame_size;
-
-            memset(rbf->buffer_alloc, 0, rbf->buffer_alloc_sz);
-            memset(rbf->buffer_alloc_float, 0, rbf->buffer_alloc_sz);
         }
         rbf->height = height;
         rbf->width = width * 3;
@@ -805,4 +849,40 @@ double RGB24_calc_psnr(const RGB24_BUFFER_CONFIG *a, const RGB24_BUFFER_CONFIG *
     psnr = vpx_sse_to_psnr(samples, peak, (double) sse);
 
     return psnr;
+}
+
+mobinas_dnn_profile_t *get_dnn_profile(mobinas_cfg_t *mobinas_cfg, int resolution){
+    switch(resolution){
+        case 240:
+            return mobinas_cfg->dnn_profiles[0];
+        case 360:
+            return mobinas_cfg->dnn_profiles[1];
+        case 480:
+            return mobinas_cfg->dnn_profiles[2];
+        case 720:
+            return mobinas_cfg->dnn_profiles[3];
+        case 1080:
+            return mobinas_cfg->dnn_profiles[4];
+        default:
+            fprintf(stderr, "Invalid resolution\n");
+            return NULL;
+    }
+}
+
+mobinas_cache_profile_t *get_cache_profile(mobinas_cfg_t *mobinas_cfg, int resolution){
+    switch(resolution){
+        case 240:
+            return mobinas_cfg->cache_profiles[0];
+        case 360:
+            return mobinas_cfg->cache_profiles[1];
+        case 480:
+            return mobinas_cfg->cache_profiles[2];
+        case 720:
+            return mobinas_cfg->cache_profiles[3];
+        case 1080:
+            return mobinas_cfg->cache_profiles[4];
+        default:
+            fprintf(stderr, "Invalid resolution\n");
+            return NULL;
+    }
 }

@@ -179,18 +179,17 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     vpx_free(pbi->common.compare_frame);
     vpx_free(pbi->common.sr_compare_frame);
 
+    //close logs
     if (pbi->common.quality_log != NULL) fclose(pbi->common.quality_log);
     if (pbi->common.latency_log != NULL) fclose(pbi->common.latency_log);
     if (pbi->common.metadata_log != NULL) fclose(pbi->common.metadata_log);
 
+    //free workers
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
     remove_mobinas_worker(pbi->mobinas_worker_data, num_threads);
 
-    if (pbi->common.mobinas_cfg->dnn_mode == ONLINE_DNN) {
-#if CONFIG_SNPE
-        snpe_free(pbi->common.mobinas_cfg->dnn_class);
-#endif
-    }
+    //free mobinas_cfg
+    remove_mobinas_cfg(pbi->common.mobinas_cfg);
     /*******************Hyunho************************/
 
     vp9_remove_common(&pbi->common);

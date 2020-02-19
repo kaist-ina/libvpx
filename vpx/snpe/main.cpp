@@ -72,27 +72,32 @@ SNPE::SNPE(mobinas_dnn_runtime runtime_mode)
         switch (runtime_mode) {
             case CPU_FLOAT32:
                 runtime = zdl::DlSystem::Runtime_t::CPU_FLOAT32;
+                fprintf(stdout, "SNPE: CPU_FLOAT32\n");
                 break;
             case GPU_FLOAT32_16_HYBRID:
                 runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT32_16_HYBRID;
+                fprintf(stdout, "SNPE: GPU_FLOAT32_16_HYBRID\n");
                 break;
             case DSP_FIXED8:
                 runtime = zdl::DlSystem::Runtime_t::DSP_FIXED8_TF;
+                fprintf(stdout, "SNPE: DSP_FIXED8\n");
                 break;
             case GPU_FLOAT16:
                 runtime = zdl::DlSystem::Runtime_t::GPU_FLOAT16;
+                fprintf(stdout, "SNPE: GPU_FLOAT16\n");
                 break;
             case AIP_FIXED8:
                 runtime = zdl::DlSystem::Runtime_t::AIP_FIXED8_TF;
+                fprintf(stdout, "SNPE: AIP_FIXED8\n");
                 break;
             default:
-                LOGE("Selected runtime not present. Falling back to UNSET.");
+                fprintf(stdout, "SNPE: Unset\n");
                 runtime = zdl::DlSystem::Runtime_t::UNSET;
                 break;
         }
     }
 
-    LOGI("SNPE: Allocate class");
+    fprintf(stdout, "SNPE: Allocate class\n");
 }
 
 void *snpe_alloc(mobinas_dnn_runtime runtime_mode) {
@@ -113,14 +118,14 @@ void snpe_free(void *snpe) {
 int SNPE::check_runtime(void){
     int result;
     static zdl::DlSystem::Version_t Version = zdl::SNPE::SNPEFactory::getLibraryVersion();
-    LOGI("SNPE: Version %s", Version.asString().c_str()); //Print Version number
+    fprintf(stdout, "SNPE: Version %s\n", Version.asString().c_str()); //Print Version number
 
     if (!zdl::SNPE::SNPEFactory::isRuntimeAvailable(runtime)) {
-        LOGE("Selected runtime not present. Falling back to CPU.");
+        fprintf(stdout, "Selected runtime not present. Falling back to CPU.\n");
         return -1;
     }
 
-    LOGI("SNPE: Check runtime");
+    fprintf(stdout, "SNPE: Check runtime\n");
     return 0;
 }
 
@@ -140,7 +145,7 @@ int SNPE::init_network(const char *path){
     //check if dlc is valid file
     std::ifstream dlcFile(path);
     if(!dlcFile){
-        LOGE("DLC does not exist");
+        fprintf(stdout, "DLC does not exist\n");
         return -1;
     }
 
@@ -148,18 +153,18 @@ int SNPE::init_network(const char *path){
     std::unique_ptr<zdl::DlContainer::IDlContainer> container = loadContainerFromFile(path);
     if (container == nullptr)
     {
-        LOGE("Failed to open a dlc file");
+        fprintf(stdout, "Failed to open a dlc file\n");
         return -1;
     }
 
 
     snpe = setBuilderOptions(container, runtime, runtimeList, udlBundle, useUserSuppliedBuffers, platformConfig, usingInitCaching);
     if(snpe == nullptr){
-        LOGE("Failed build a snpe object");
+        fprintf(stdout, "Failed build a snpe object\n");
         return -1;
     }
 
-    LOGI("SNPE: Init network");
+    fprintf(stdout, "SNPE: Init network\n");
     return 0;
 }
 
@@ -173,21 +178,16 @@ int SNPE::execute_byte(uint8_t *input_buffer, float *output_buffer, int number_o
     zdl::DlSystem::TensorMap outputTensorMap;
     std::unique_ptr<zdl::DlSystem::ITensor> inputTensor = loadInputTensorFromByteBuffer(snpe, input_buffer, number_of_elements);
 
-
-    LOGE("asdf");
     execStatus = snpe->execute(inputTensor.get(), outputTensorMap);
-    LOGE("end");
 
-
-//     Save the execution results if execution successful
+    //Save the execution results if execution successful
     if (!execStatus){
-        LOGE("Failed to run a model");
+        fprintf(stdout, "Failed to run a model\n");
         return -1;
     }
 
     saveOutputToBuffer(outputTensorMap, output_buffer);
-
-    LOGE("SNPE: Execute a DNN");
+    fprintf(stdout, "SNPE: Execute a DNN\n");
     return 0;
 }
 
@@ -204,12 +204,12 @@ int SNPE::execute_float(float *input_buffer, float *output_buffer, int number_of
 
     // Save the execution results if execution successful
     if (!execStatus){
-        LOGE("Failed to run a model");
+        fprintf(stdout, "Failed to run a model\n");
         return -1;
     }
 
     saveOutputToBuffer(outputTensorMap, output_buffer);
-    LOGE("SNPE: Execute a DNN");
+    fprintf(stdout, "SNPE: Execute a DNN\n");
     return 0;
 }
 

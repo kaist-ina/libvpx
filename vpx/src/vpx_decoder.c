@@ -195,10 +195,20 @@ vpx_codec_err_t vpx_load_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobina
     return SAVE_STATUS(ctx, res);
 }
 
-vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg){
+vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char *dnn_file){
   vpx_codec_err_t res;
 
-  res = ctx->iface->mobinas.load_dnn(get_alg_priv(ctx), mobinas_cfg);
+  //res = ctx->iface->mobinas.load_dnn(get_alg_priv(ctx), mobinas_cfg);
+  res = ctx->iface->mobinas.load_dnn(get_alg_priv(ctx), mobinas_cfg, resolution, dnn_file);
+
+  return SAVE_STATUS(ctx, res);
+}
+
+vpx_codec_err_t vpx_load_mobinas_cache_profile(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char *cache_profile_file){
+  vpx_codec_err_t res;
+
+  //res = ctx->iface->mobinas.load_dnn(get_alg_priv(ctx), mobinas_cfg);
+  res = ctx->iface->mobinas.load_cache_profile(get_alg_priv(ctx), mobinas_cfg, resolution, cache_profile_file);
 
   return SAVE_STATUS(ctx, res);
 }

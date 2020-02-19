@@ -2976,7 +2976,8 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
         }
         /*******************Hyunho************************/
         if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
-            cm->scale = cm->mobinas_cfg->get_scale(cm->height);
+            //cm->scale = cm->mobinas_cfg->get_scale(cm->height);
+            cm->scale = get_dnn_profile(cm->mobinas_cfg, cm->height)->scale;
             if (cm->scale == -1) {
                 vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR, "Failed to set cm->scale");
             }
@@ -3300,7 +3301,8 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
+    //snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
+    snpe_execute_byte(get_dnn_profile(cm->mobinas_cfg, cm->height)->dnn_instance, cm->frame->buffer_alloc, cm->sr_frame->buffer_alloc_float, 3 * cm->height * cm->width);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
@@ -3406,6 +3408,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
     /*******************Hyunho************************/
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
+
+    //worker
     for (i = 0; i < num_threads; i++) {
         if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
             memset(pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc_sz);
@@ -3413,6 +3417,9 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         memset(&pbi->mobinas_worker_data[i].latency, 0, sizeof(mobinas_latency_info_t));
         memset(&pbi->mobinas_worker_data[i].metadata, 0, sizeof(mobinas_metadata_info_t));
     }
+
+    //dnn
+    mobinas_cache_profile_t *cache_profile; 
     switch(cm->mobinas_cfg->decode_mode) {
     case DECODE_SR:
         cm->apply_dnn = 1;
@@ -3421,8 +3428,8 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         switch (cm->mobinas_cfg->cache_policy)
         {
         case PROFILE_CACHE:
-            //TODO (hyunho): read a cache profile
-            if ((cm->apply_dnn = read_cache_profile(cm->mobinas_cfg->cache_profile)) == -1)
+            cache_profile = get_cache_profile(cm->mobinas_cfg, cm->height);
+            if ((cm->apply_dnn = read_cache_profile(cache_profile)) == -1)
             {
                 fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
                 cm->mobinas_cfg->cache_policy = NO_CACHE;
@@ -3438,9 +3445,9 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         }
         break;
    case DECODE:
+        cm->apply_dnn = 0;
         break;
     }
-
     /*******************Hyunho************************/
 
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
@@ -3467,18 +3474,23 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     /*******************Hyunho************************/
     if(cm->apply_dnn) {
         char file_path[PATH_MAX];
+        mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
 
-        switch (cm->mobinas_cfg->dnn_mode) {
-            case ONLINE_DNN:
-                apply_online_dnn_rgb(cm);
-//                apply_online_dnn_y(cm);
-                break;
-            case OFFLINE_DNN:
-                //load a super-resolutioned frame
-                apply_offline_dnn_rgb(cm);
-                break;
-            case NO_DNN:
-                break;
+        if (dnn_profile == NULL){
+            fprintf(stdout, "DNN is not loaded for %dp\n", cm->height);
+            //TODO: apply_bilinear interpolation
+        }
+        else {
+            switch (cm->mobinas_cfg->dnn_mode) {
+                case ONLINE_DNN:
+                    apply_online_dnn_rgb(cm);
+                    break;
+                case OFFLINE_DNN:
+                    apply_offline_dnn_rgb(cm);
+                    break;
+                case NO_DNN:
+                    break;
+            }
         }
     }
     /*******************Hyunho************************/

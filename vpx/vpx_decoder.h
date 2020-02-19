@@ -365,7 +365,10 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
 vpx_codec_err_t vpx_load_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
 
-vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
+//vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
+vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg, int, const char*);
+
+vpx_codec_err_t vpx_load_mobinas_cache_profile(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg, int, const char*);
 
 #ifdef __cplusplus
 }

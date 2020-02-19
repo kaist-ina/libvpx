@@ -11,8 +11,6 @@
 
 typedef int (*mobinas_get_scale_fn_t) (int);
 
-int default_scale_policy (int resolution);
-
 typedef struct mobinas_latency_info {
     //decode
     double decode_frame;
@@ -102,11 +100,17 @@ typedef struct mobinas_cache_reset_profile {
 } mobinas_cache_reset_profile_t;
 
 typedef struct mobinas_cache_profile {
-    char name[PATH_MAX];
     FILE *file;
     uint64_t offset;
     uint8_t byte_value;
 } mobinas_cache_profile_t;
+
+typedef struct mobinas_dnn_profile{
+    void *dnn_instance;
+    int target_width;
+    int target_height;
+    int scale;
+} mobinas_dnn_profile_t;
 
 typedef struct mobinas_interp_block{
     int mi_row;
@@ -169,19 +173,15 @@ typedef struct mobinas_cfg{
     //decode
     mobinas_decode_mode decode_mode;
 
-    //scale, upsampling
-    mobinas_get_scale_fn_t get_scale;
+    //bilinear
     vp9_bilinear_profile_t *bilinear_profile;
 
-    //cache
+    //dnn, cache
     mobinas_cache_policy cache_policy;
-    mobinas_cache_profile_t *cache_profile;
-
-    //DNN
     mobinas_dnn_mode dnn_mode;
-    char dnn_path[PATH_MAX]; //ONLINE_DNN
     mobinas_dnn_runtime dnn_runtime;
-    void *dnn_class;
+    mobinas_dnn_profile_t *dnn_profiles[5];
+    mobinas_cache_profile_t *cache_profiles[5];
 } mobinas_cfg_t;
 
 typedef struct rgb24_buffer_config{
@@ -201,8 +201,12 @@ extern "C" {
 mobinas_cfg_t *init_mobinas_cfg();
 void remove_mobinas_cfg(mobinas_cfg_t *config);
 
+//dnn profile
+mobinas_dnn_profile_t *init_mobinas_dnn_profile(int width, int height, int scale);
+void remove_mobinas_dnn_profile(mobinas_dnn_profile_t *profile);
+
 //cache profile
-mobinas_cache_profile_t *init_mobinas_cache_profile(const char *path);
+mobinas_cache_profile_t *init_mobinas_cache_profile();
 void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile);
 int read_cache_profile(mobinas_cache_profile_t *profile);
 
@@ -243,6 +247,9 @@ int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);
 int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf);
 double RGB24_calc_psnr(const RGB24_BUFFER_CONFIG *a, const RGB24_BUFFER_CONFIG *b);
 
+int default_scale_policy (int resolution);
+mobinas_dnn_profile_t *get_dnn_profile(mobinas_cfg_t *mobinas_cfg, int resolution);
+mobinas_cache_profile_t *get_cache_profile(mobinas_cfg_t *mobinas_cfg, int resolution);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -133,18 +133,20 @@ static const arg_def_t savemetadataarg =
         ARG_DEF(NULL, "save-metadata", 0, "Save metadata results");
 static const arg_def_t postfixarg =
         ARG_DEF(NULL, "postfix", 1, "Prefix for a directory name");
-static const arg_def_t cacheprofilearg =
-        ARG_DEF(NULL, "cache-profile", 1, "Cache profile to apply");
+static const arg_def_t cacheprofilenamearg =
+        ARG_DEF(NULL, "cache-profile-name", 1, "Cache profile name to apply");
 static const arg_def_t dnnnamearg =
         ARG_DEF(NULL, "dnn-name", 1, "DNN name to apply (e.g., EDSR_S_B8_F64)");
-static const arg_def_t dnnfilearg =
-        ARG_DEF(NULL, "dnn-file", 1, "DNN file to apply (e.g., ckpt-300.dlc");
+static const arg_def_t checkpointnamearg =
+        ARG_DEF(NULL, "checkpoint-name", 1, "Checkpoint name to apply (e.g., ckpt-300.dlc");
 static const arg_def_t dnnruntimearg =
         ARG_DEF(NULL, "dnn-runtime", 1, "DNN to apply");
 static const arg_def_t filterintervalarg=
         ARG_DEF(NULL, "filter-interval", 1, "Filter interval to save frames");
 static const arg_def_t saveyuvframearg=
         ARG_DEF(NULL, "save-yuvframe", 0, "Save yuv frame");
+static const arg_def_t resolutionarg=
+        ARG_DEF(NULL, "resolution", 1, "Video resolution");
 static const arg_def_t *all_args[] =
 {   &help, &codecarg, &use_yv12, &use_i420, &flipuvarg, &rawvideo, &noblitarg, &progressarg, &limitarg, &skiparg,
     &postprocarg, &summaryarg, &outputfile, &threadsarg, &frameparallelarg, &verbosearg, &scalearg, &fb_arg,
@@ -154,7 +156,8 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
     &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
-    &postfixarg, &cacheprofilearg, &dnnnamearg, &dnnfilearg, &dnnruntimearg, &filterintervalarg, &saveyuvframearg, NULL};
+    &postfixarg, &cacheprofilenamearg, &dnnnamearg, &checkpointnamearg, &dnnruntimearg, &filterintervalarg, &saveyuvframearg, 
+    &resolutionarg, NULL};
 
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
@@ -696,15 +699,18 @@ static int main_loop(int argc, const char **argv_)
     /* MobiNAS variable */
     mobinas_cfg_t *mobinas_cfg = init_mobinas_cfg();
     char path[PATH_MAX] = {0};
-    char *cache_profile_path = NULL;
+    const char *cache_profile_name = NULL;
     const char *dnn_name = NULL;
-    const char *dnn_file = NULL;
+    const char *checkpoint_name = NULL;
+    char dnn_file[PATH_MAX] = {0};
+    char cache_profile_file[PATH_MAX] = {0};
     const char *content_dir = NULL;
     const char *input_video_name = NULL;
     const char *dnn_video_name = NULL;
     const char *compare_video_name = NULL;
     const char *postfix = NULL;
     char *tmp;
+    int resolution;
 
     /* Parse command line */
     exec_name = argv_[0];
@@ -886,12 +892,12 @@ static int main_loop(int argc, const char **argv_)
             mobinas_cfg->save_metadata = 1;
         else if (arg_match(&arg, &postfixarg, argi))
             postfix = arg.val;
-        else if (arg_match(&arg, &cacheprofilearg, argi))
-            cache_profile_path = arg.val;
+        else if (arg_match(&arg, &cacheprofilenamearg, argi))
+            cache_profile_name = arg.val;
         else if (arg_match(&arg, &dnnnamearg, argi))
             dnn_name = arg.val;
-        else if (arg_match(&arg, &dnnfilearg, argi))
-            dnn_file = arg.val;
+        else if (arg_match(&arg, &checkpointnamearg, argi))
+            checkpoint_name = arg.val;
         else if (arg_match(&arg, &dnnruntimearg, argi))
         {
             switch (arg_parse_uint(&arg))
@@ -920,6 +926,8 @@ static int main_loop(int argc, const char **argv_)
             mobinas_cfg->filter_interval = atoi(arg.val);
         else if (arg_match(&arg, &saveyuvframearg, argi))
             mobinas_cfg->save_yuvframe = 1;
+        else if (arg_match(&arg, &resolutionarg, argi))
+            resolution = atoi(arg.val);
         /*******************Hyunho************************/
         else
             argj++;
@@ -980,8 +988,7 @@ static int main_loop(int argc, const char **argv_)
             switch (mobinas_cfg->cache_policy)
             {
                 case PROFILE_CACHE:
-                    sprintf(path, "%s", cache_profile_path);
-                    add_postfix_to_path(mobinas_cfg->log_dir, basename(path));
+                    add_postfix_to_path(mobinas_cfg->log_dir, cache_profile_name);
                     break;
                 case KEY_FRAME_CACHE:
                     add_postfix_to_path(mobinas_cfg->log_dir, "cache_keyframe");
@@ -1003,8 +1010,7 @@ static int main_loop(int argc, const char **argv_)
             switch (mobinas_cfg->cache_policy)
             {
                 case PROFILE_CACHE:
-                    sprintf(path, "%s", cache_profile_path);
-                    add_postfix_to_path(mobinas_cfg->sr_frame_dir, basename(path));
+                    add_postfix_to_path(mobinas_cfg->sr_frame_dir, cache_profile_name);
                     break;
                 case KEY_FRAME_CACHE:
                     add_postfix_to_path(mobinas_cfg->sr_frame_dir, "cache_keyframe");
@@ -1033,18 +1039,20 @@ static int main_loop(int argc, const char **argv_)
         add_postfix_to_path(mobinas_cfg->sr_offline_frame_dir, postfix);
         break;
     case ONLINE_DNN:
-        sprintf(mobinas_cfg->dnn_path, "%s/checkpoint/%s/%s", content_dir, dnn_name, dnn_file);
+        sprintf(dnn_file, "%s/checkpoint/%s/%s", content_dir, dnn_name, checkpoint_name);
         break;
     case NO_DNN:
         break;
     }
 
-    /* bilinear, cache profile */
-    mobinas_cfg->get_scale = default_scale_policy;
-    if (mobinas_cfg->decode_mode == DECODE_CACHE) {
-		mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
-		if (mobinas_cfg->cache_policy == PROFILE_CACHE)
-			mobinas_cfg->cache_profile = init_mobinas_cache_profile(cache_profile_path);
+    switch(mobinas_cfg->cache_policy){
+        case NO_CACHE:
+            break;
+        case KEY_FRAME_CACHE:
+            break;
+        case PROFILE_CACHE:
+            sprintf(cache_profile_file, "%s/checkpoint/%s/%s", content_dir, dnn_name, cache_profile_name);
+            break;
     }
     /*******************Hyunho************************/
 
@@ -1186,6 +1194,21 @@ static int main_loop(int argc, const char **argv_)
          warn("Failed to initialize mobinas cfg: %s\n", vpx_codec_error(&decoder));
          goto fail;
      };
+
+    
+    if (mobinas_cfg->dnn_mode == ONLINE_DNN && (mobinas_cfg->dnn_mode == DECODE_SR || mobinas_cfg->dnn_mode == DECODE_CACHE)) {
+        if(vpx_load_mobinas_dnn(&decoder, mobinas_cfg, resolution, dnn_file)){
+            warn("Failed to load mobinas dnn: %s\n", vpx_codec_error(&decoder));
+            goto fail;
+        }
+    }
+    
+    if (mobinas_cfg->cache_policy == PROFILE_CACHE){
+        if(vpx_load_mobinas_cache_profile(&decoder, mobinas_cfg, resolution, cache_profile_file)){
+            warn("Failed to load mobinas cache: %s\n", vpx_codec_error(&decoder));
+            goto fail;
+        }
+    }
     /*******************Hyunho************************/
 
     /* Decode file */
@@ -1208,7 +1231,6 @@ static int main_loop(int argc, const char **argv_)
 
                 if (vpx_codec_decode(&decoder, buf, (unsigned int) bytes_in_buffer, NULL, 0))
                 {
-                    printf("decode fail\n");
                     const char *detail = vpx_codec_error_detail(&decoder);
                     warn("Failed to decode frame %d: %s", frame_in, vpx_codec_error(&decoder));
                     if (detail)
@@ -1217,6 +1239,7 @@ static int main_loop(int argc, const char **argv_)
                     if (!keep_going)
                         goto fail;
                 }
+
                 if (framestats_file)
                 {
                     int qp;
@@ -1491,7 +1514,7 @@ static int main_loop(int argc, const char **argv_)
         }
     }
 
-    remove_mobinas_cfg(mobinas_cfg);
+    //remove_mobinas_cfg(mobinas_cfg);
 
 #if CONFIG_WEBM_IO
     if (input.vpx_input_ctx->file_type == FILE_TYPE_WEBM)
