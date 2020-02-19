@@ -43,20 +43,19 @@ MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf) {
     return res;
 }
 
-static INLINE int scaled_x_(int val, const struct scale_factors *sf) {
+static INLINE int scaled_x_mobinas(int val, const struct scale_factors *sf) {
     return (int) ((int64_t) val * sf->scale >> REF_SCALE_SHIFT);
 }
 
-static INLINE int scaled_y_(int val, const struct scale_factors *sf) {
+static INLINE int scaled_y_mobinas(int val, const struct scale_factors *sf) {
     return (int) ((int64_t) val * sf->scale >> REF_SCALE_SHIFT);
 }
 
-MV32 vp9_scale_mv_(const MV *mv, int x, int y, const struct scale_factors *sf) {
-    const int x_off_q4 = scaled_x_(x << SUBPEL_BITS, sf) & SUBPEL_MASK;
-    const int y_off_q4 = scaled_y_(y << SUBPEL_BITS, sf) & SUBPEL_MASK;
-    const MV32 res = {scaled_y_(mv->row, sf) + y_off_q4,
-                      scaled_x_(mv->col, sf) + x_off_q4};
-
+MV32 vp9_scale_mv_mobinas(const MV *mv, int x, int y, const struct scale_factors *sf) {
+    const int x_off_q4 = scaled_x_mobinas(x << SUBPEL_BITS, sf) & SUBPEL_MASK;
+    const int y_off_q4 = scaled_y_mobinas(y << SUBPEL_BITS, sf) & SUBPEL_MASK;
+    const MV32 res = {scaled_y_mobinas(mv->row, sf) + y_off_q4,
+                      scaled_x_mobinas(mv->col, sf) + x_off_q4};
     return res;
 }
 
@@ -77,7 +76,7 @@ void vp9_setup_scale_factors_for_sr_frame(struct scale_factors *sf, int other_w,
         return;
     }
     */
-    sf->scale = scale;
+    sf->scale = scale << REF_SCALE_SHIFT;
 
     if (upsample) { //hyunho: both scale x_scale_fp, x_step_q4
         sf->x_scale_fp = get_fixed_point_scale_factor(this_w, other_w);

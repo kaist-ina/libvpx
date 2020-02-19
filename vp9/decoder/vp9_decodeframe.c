@@ -922,7 +922,10 @@ static void dec_build_sr_inter_predictors(
         int is_scaled, int ref, int is_sr) {
     struct macroblockd_plane *const pd = &xd->plane[plane];
 
-    int scale = (sf->x_scale_fp >> REF_SCALE_SHIFT); //TODO: bug
+    //int scale = (sf->x_scale_fp >> REF_SCALE_SHIFT); 
+    int scale = sf->scale >> REF_SCALE_SHIFT; //updated
+    //printf("scale: %d\n");
+    //printf("sf->x_scale_fp: %d, REF_SCALE_SHIFT: %d", sf->x_scale_fp, REF_SCALE_SHIFT);
 
     /*******************Hyunho************************/
     uint8_t *const dst = is_sr ? dst_buf->buf + dst_buf->stride * scale * y + scale * x :
@@ -996,7 +999,8 @@ static void dec_build_sr_inter_predictors(
         //if (mv_q4.row > -16 && mv_q4.row < 0) mv_q4.row = 0;
         //if (mv_q4.col > -16 && mv_q4.col < 0) mv_q4.col = 0;
 
-        scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
+        scaled_mv = vp9_scale_mv_mobinas(&mv_q4, mi_x + x, mi_y + y, sf); //updated
+        //scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
         xs = sf->x_step_q4;
         ys = sf->y_step_q4;
     } else {
@@ -3059,7 +3063,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                 if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf_sr, ref_buf->buf_sr->y_crop_width,
-                            ref_buf->buf_sr->y_crop_height, cm->width, cm->height, false, false, 1);
+                            ref_buf->buf_sr->y_crop_height, cm->width, cm->height, false, false, cm->scale);
                 }
                 /*******************Hyunho************************/
 #endif
