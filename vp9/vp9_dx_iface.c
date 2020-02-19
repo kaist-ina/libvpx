@@ -711,7 +711,6 @@ static void save_sr_quality(VP9_COMMON *cm) {
         mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
         int width = dnn_profile->target_width;
         int height = dnn_profile->target_height;
-        printf("width: %d, height: %d\n", width, height);
 
         //upscale a frame
         //YV12_BUFFER_CONFIG *sr_frame = get_frame_new_buffer(cm);

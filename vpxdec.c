@@ -133,8 +133,8 @@ static const arg_def_t savemetadataarg =
         ARG_DEF(NULL, "save-metadata", 0, "Save metadata results");
 static const arg_def_t postfixarg =
         ARG_DEF(NULL, "postfix", 1, "Prefix for a directory name");
-static const arg_def_t cacheprofilenamearg =
-        ARG_DEF(NULL, "cache-profile-name", 1, "Cache profile name to apply");
+static const arg_def_t cacheprofilearg =
+        ARG_DEF(NULL, "cache-profile", 1, "Cache profile name to apply");
 static const arg_def_t dnnnamearg =
         ARG_DEF(NULL, "dnn-name", 1, "DNN name to apply (e.g., EDSR_S_B8_F64)");
 static const arg_def_t checkpointnamearg =
@@ -156,7 +156,7 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg, &contentdirarg, &inputvideoarg, &dnnvideoarg, &comparevideoarg, &decodemodearg,
     &dnnmodearg, &cachepolicyarg, &saveframedarg, &savequalityarg, &savelatencyarg,
-    &postfixarg, &cacheprofilenamearg, &dnnnamearg, &checkpointnamearg, &dnnruntimearg, &filterintervalarg, &saveyuvframearg, 
+    &postfixarg, &cacheprofilearg, &dnnnamearg, &checkpointnamearg, &dnnruntimearg, &filterintervalarg, &saveyuvframearg, 
     &resolutionarg, NULL};
 
 #if CONFIG_VP8_DECODER
@@ -699,11 +699,11 @@ static int main_loop(int argc, const char **argv_)
     /* MobiNAS variable */
     mobinas_cfg_t *mobinas_cfg = init_mobinas_cfg();
     char path[PATH_MAX] = {0};
-    const char *cache_profile_name = NULL;
+    const char *cache_profile = NULL;
+    char *cache_profile_name = NULL;
     const char *dnn_name = NULL;
     const char *checkpoint_name = NULL;
     char dnn_file[PATH_MAX] = {0};
-    char cache_profile_file[PATH_MAX] = {0};
     const char *content_dir = NULL;
     const char *input_video_name = NULL;
     const char *dnn_video_name = NULL;
@@ -892,8 +892,11 @@ static int main_loop(int argc, const char **argv_)
             mobinas_cfg->save_metadata = 1;
         else if (arg_match(&arg, &postfixarg, argi))
             postfix = arg.val;
-        else if (arg_match(&arg, &cacheprofilenamearg, argi))
-            cache_profile_name = arg.val;
+        else if (arg_match(&arg, &cacheprofilearg, argi)) {
+            cache_profile = arg.val;
+            cache_profile_name = basename(cache_profile);
+            printf("cache_profile_name: %s\n", cache_profile_name);
+        }
         else if (arg_match(&arg, &dnnnamearg, argi))
             dnn_name = arg.val;
         else if (arg_match(&arg, &checkpointnamearg, argi))
@@ -1043,16 +1046,6 @@ static int main_loop(int argc, const char **argv_)
         break;
     case NO_DNN:
         break;
-    }
-
-    switch(mobinas_cfg->cache_policy){
-        case NO_CACHE:
-            break;
-        case KEY_FRAME_CACHE:
-            break;
-        case PROFILE_CACHE:
-            sprintf(cache_profile_file, "%s/checkpoint/%s/%s", content_dir, dnn_name, cache_profile_name);
-            break;
     }
     /*******************Hyunho************************/
 
@@ -1204,7 +1197,7 @@ static int main_loop(int argc, const char **argv_)
     }
     
     if (mobinas_cfg->cache_policy == PROFILE_CACHE){
-        if(vpx_load_mobinas_cache_profile(&decoder, mobinas_cfg, resolution, cache_profile_file)){
+        if(vpx_load_mobinas_cache_profile(&decoder, mobinas_cfg, resolution, cache_profile)){
             warn("Failed to load mobinas cache: %s\n", vpx_codec_error(&decoder));
             goto fail;
         }
