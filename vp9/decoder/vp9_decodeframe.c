@@ -721,6 +721,79 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
     buf_ptr = mc_buf + border_offset;
 
     /*******************Hyunho************************/
+    int width, height;
+    int w_proc_size;
+    int h_proc_size;
+    switch (w) {
+        case 4: case 8: case 16: case 32: case 64:
+            w_proc_size = w;
+            break;
+        case 12:
+            w_proc_size = 4;
+            break;
+        case 24:
+            w_proc_size = 8;
+            break;
+        case 48:
+            w_proc_size = 16;
+            break;
+        case 96:
+            w_proc_size = 32;
+            break;
+        case 128:
+            w_proc_size = 64;
+            break;
+        case 192:
+            w_proc_size = 64;
+            break;
+        case 256:
+            w_proc_size = 64;
+            break;
+        default:
+            printf("Invalid w_proc_size\n");
+    }
+    switch (h) {
+        case 4: case 8: case 16: case 32: case 64:
+            h_proc_size = h;
+            break;
+        case 12:
+            h_proc_size = 4;
+            break;
+        case 24:
+            h_proc_size = 8;
+            break;
+        case 48:
+            h_proc_size = 16;
+            break;
+        case 96:
+            h_proc_size = 32;
+            break;
+        case 128:
+            h_proc_size = 64;
+            break;
+        case 192:
+            h_proc_size = 64;
+            break;
+        case 256:
+            h_proc_size = 64;
+            break;
+        default:
+            printf("Invalid h_proc_size\n");
+    }
+
+    for (w_offset = 0; w_offset < w; w_offset += w_proc_size) {
+        for (h_offset = 0; h_offset < h; h_offset += h_proc_size) {
+            //calculate height, width
+            int height = h_proc_size;
+            int width = w_proc_size;
+
+            inter_predictor(&buf_ptr[h_offset * b_w + w_offset], b_w,
+                            &dst[h_offset * dst_buf_stride + w_offset],
+                            dst_buf_stride, subpel_x, subpel_y,
+                            sf, width, height, ref, kernel, xs, ys);
+        }
+    }
+    /*
     int proc_size = 64, height, width;
     if (w > 64 && h > 64) {
         for (w_offset = 0; w_offset < w; w_offset += proc_size) {
@@ -763,6 +836,7 @@ static void extend_and_resize_and_predict(const uint8_t *buf_ptr1, int pre_buf_s
         inter_predictor(buf_ptr, b_w, dst, dst_buf_stride, subpel_x, subpel_y,
                         sf, w, h, ref, kernel, xs, ys);
     }
+    */
 }
 
 static void dec_build_inter_predictors(
@@ -924,6 +998,7 @@ static void dec_build_sr_inter_predictors(
 
     //int scale = (sf->x_scale_fp >> REF_SCALE_SHIFT); 
     int scale = sf->scale >> REF_SCALE_SHIFT; //updated
+    //int scale = 3;
     //printf("scale: %d\n");
     //printf("sf->x_scale_fp: %d, REF_SCALE_SHIFT: %d", sf->x_scale_fp, REF_SCALE_SHIFT);
 
@@ -1106,7 +1181,80 @@ static void dec_build_sr_inter_predictors(
 
     /*******************Hyunho************************/
     if (is_sr) {
-        int proc_size = 64, height, width;
+        int width, height;
+        int w_proc_size;
+        int h_proc_size;
+        switch (w) {
+            case 4: case 8: case 16: case 32: case 64:
+                w_proc_size = w;
+                break;
+            case 12:
+                w_proc_size = 4;
+                break;
+            case 24:
+                w_proc_size = 8;
+                break;
+            case 48:
+                w_proc_size = 16;
+                break;
+            case 96:
+                w_proc_size = 32;
+                break;
+            case 128:
+                w_proc_size = 64;
+                break;
+            case 192:
+                w_proc_size = 64;
+                break;
+            case 256:
+                w_proc_size = 64;
+                break;
+            default:
+                printf("Invalid w_proc_size\n");
+        }
+        switch (h) {
+            case 4: case 8: case 16: case 32: case 64:
+                h_proc_size = h;
+                break;
+            case 12:
+                h_proc_size = 4;
+                break;
+            case 24:
+                h_proc_size = 8;
+                break;
+            case 48:
+                h_proc_size = 16;
+                break;
+            case 96:
+                h_proc_size = 32;
+                break;
+            case 128:
+                h_proc_size = 64;
+                break;
+            case 192:
+                h_proc_size = 64;
+                break;
+            case 256:
+                h_proc_size = 64;
+                break;
+            default:
+                printf("Invalid h_proc_size\n");
+        }
+
+        for (w_offset = 0; w_offset < w; w_offset += w_proc_size) {
+            for (h_offset = 0; h_offset < h; h_offset += h_proc_size) {
+                //calculate height, width
+                height = h_proc_size;
+                width = w_proc_size;
+
+                inter_predictor(&buf_ptr[h_offset * buf_stride + w_offset], buf_stride,
+                                &dst[h_offset * dst_buf->stride + w_offset],
+                                dst_buf->stride, subpel_x, subpel_y,
+                                sf, width, height, ref, kernel, xs, ys);
+            }
+        }
+
+        /*
         if (w > proc_size && h > proc_size) {
             for (w_offset = 0; w_offset < w; w_offset += proc_size) {
                 for (h_offset = 0; h_offset < h; h_offset += proc_size) {
@@ -1152,10 +1300,12 @@ static void dec_build_sr_inter_predictors(
             inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
                             sf, w, h, ref, kernel, xs, ys);
         }
+        */
     } else {
         inter_predictor(buf_ptr, buf_stride, dst, dst_buf->stride, subpel_x, subpel_y,
                         sf, w, h, ref, kernel, xs, ys); //Hyunho: xs, ys, subpel_x, subpel_y
     }
+
 
     /*******************Hyunho************************/
 #endif  // CONFIG_VP9_HIGHBITDEPTH

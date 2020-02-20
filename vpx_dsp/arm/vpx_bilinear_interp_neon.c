@@ -38,10 +38,12 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
                                               const mobinas_bilinear_config_t *config) {
     int x, y;
 
+    /*
     if (scale == 2 || scale == 3) {
         fprintf(stderr, "%s: Need to compare neon and c implementations", __func__);
         assert(1);
     }
+    */
 
     for (y = 0; y < height; ++y) {
         for (x = 0; x < width * scale; x = x + 2) {
@@ -75,10 +77,12 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
                                               const mobinas_bilinear_config_t *config) {
     int x, y;
 
+    /*
     if (scale == 2 || scale == 3) {
         fprintf(stderr, "%s: Need to compare neon and c implementations", __func__);
         assert(1);
     }
+    */
 
     for (y = 0; y < height; ++y) {
         for (x = 0; x < width * scale; x = x + 2) {
@@ -118,8 +122,8 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
     int16x8_t qT_01234567_0;
     int16x8_t y_lerp_fixed_v;
 
-    fprintf(stderr, "%s: Not tested yet", __func__);
-    assert(1);
+    //fprintf(stderr, "%s: Not tested yet", __func__);
+    //assert(1);
 
     for (y = 0; y < height * scale; ++y) {
         x = 0;
@@ -146,8 +150,8 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
 
         //2. process remaining 8 values // case: 12x12
         for (x = 0; x < width * scale; x = x + 2) {
-            fprintf(stderr, "%s: Not tested yet", __func__);
-            assert(1);
+            //fprintf(stderr, "%s: Not tested yet", __func__);
+            //assert(1);
 
             const int16_t top_0 = src[top_y_index * src_stride + x];
             const int16_t bottom_0 = src[bottom_y_index * src_stride + x];
@@ -231,8 +235,8 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
 
         //2. process remaining 8 values // case: 24x24
         for (; x < width * scale; x += 8) {
-            fprintf(stderr, "%s: Not tested yet", __func__);
-            assert(1);
+            //fprintf(stderr, "%s: Not tested yet", __func__);
+            //assert(1);
 
             //a. load source pixels: top0,1, bottom0,1
             qS0_01234567_0 = vld1q_s16(&src[top_y_index * src_stride + x]);
@@ -253,8 +257,8 @@ static void
 vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride, uint8_t *dst,
                                        ptrdiff_t dst_stride, int width, int height, int scale,
                                        const mobinas_bilinear_config_t *config) {
-    fprintf(stderr, "%s: Not tested yet", __func__);
-    assert(1);
+    //fprintf(stderr, "%s: Not tested yet", __func__);
+    //assert(1);
 
     int x, y;
 
@@ -295,8 +299,8 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
 
         //2. process remaining 4 values // case: 12x12
         for (; x < width * scale; x += 2) { //hyunho: it consists of only 4 pixels, so process by non-neon instructions
-            fprintf(stderr, "%s: Not tested yet", __func__);
-            assert(1);
+            //fprintf(stderr, "%s: Not tested yet", __func__);
+            //assert(1);
 
             //a. load source pixels: top0,1, bottom0,1
             const int16_t top_0 = src[top_y_index * src_stride + x];
@@ -373,8 +377,8 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
         //2. process remaining 8 values // case: 24x24
         //TODO (hyunho) - need quality & latency test for scale x3
         for (; x < width * scale; x += 8) {
-            fprintf(stderr, "Not tested yet: vpx_bilinear_interp_vert_neon_w16_int16()");
-            assert(1);
+            //fprintf(stderr, "Not tested yet: vpx_bilinear_interp_vert_neon_w16_int16()");
+            //assert(1);
 
             //a. load source pixels: top0,1, bottom0,1
             qS0_01234567_0 = vld1q_s16(&src[top_y_index * src_stride + x]);
