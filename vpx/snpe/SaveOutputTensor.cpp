@@ -56,12 +56,6 @@ void saveOutputToBuffer(zdl::DlSystem::TensorMap outputTensorMap, float * buffer
 
         auto it = tensorPtr->cbegin();
         memcpy(buffer, it.dataPointer(), batchChunk * sizeof(float)); // here causes free()
-
-        //        for ( auto it = tensorPtr->cbegin(); it != tensorPtr->cbegin() + batchChunk; ++it )
-//        {
-//            *(buffer++) = *it;
-//        }
-
     });
 }
 /*** Chanju ***/

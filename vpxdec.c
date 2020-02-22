@@ -1042,7 +1042,7 @@ static int main_loop(int argc, const char **argv_)
         add_postfix_to_path(mobinas_cfg->sr_offline_frame_dir, postfix);
         break;
     case ONLINE_DNN:
-        sprintf(dnn_file, "%s/checkpoint/%s/%s", content_dir, dnn_name, checkpoint_name);
+        sprintf(dnn_file, "%s/checkpoint/%s/%s/%s", content_dir, input_video_name, dnn_name, checkpoint_name);
         break;
     case NO_DNN:
         break;
