@@ -113,6 +113,7 @@ void remove_mobinas_dnn_profile(mobinas_dnn_profile_t *profile) {
 mobinas_cache_profile_t *init_mobinas_cache_profile() {
     mobinas_cache_profile_t *profile = (mobinas_cache_profile_t *) vpx_calloc(1, sizeof(mobinas_cache_profile_t));
     profile->file = NULL;
+    profile->num_dummy_bits = 0;
 
     return profile;
     /*
@@ -133,6 +134,45 @@ void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile) {
         if (profile->file) fclose(profile->file);
         vpx_free(profile);
     }
+}
+
+int read_cache_profile_dummy_bits(mobinas_cache_profile_t *profile) {
+    size_t bytes_read;
+    uint8_t byte_value, apply_dnn;
+    int i, dummy;
+
+    if (profile == NULL) {
+        fprintf(stderr, "%s: profile is NULL", __func__);
+        return -1;
+    }
+
+    if (profile->file == NULL) {
+        fprintf(stderr, "%s: profile->file is NULL", __func__);
+        return -1;
+    }
+
+    if (profile->num_dummy_bits > 0) {
+        for (i = 0; i < profile->num_dummy_bits; i++) {
+            /*
+            if (fread(&dummy, sizeof(uint8_t), 1, profile->file) != 1) {
+                fprintf(stderr, "%s: fail to read a cache profile", __func__);
+                return -1;
+            }
+            */
+            profile->offset += 1;
+        }
+    }
+    printf("profile->offset: %d\n", profile->offset);
+
+    if (fread(&profile->num_dummy_bits, sizeof(int), 1, profile->file) != 1)
+    {
+        fprintf(stderr, "%s: fail to read a cache profile", __func__);
+        return -1;
+    }
+
+    printf("num_dummy_bits: %d\n", profile->num_dummy_bits);
+
+    return 0;
 }
 
 int read_cache_profile(mobinas_cache_profile_t *profile) {

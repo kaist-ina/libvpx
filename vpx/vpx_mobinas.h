@@ -103,6 +103,7 @@ typedef struct mobinas_cache_profile {
     FILE *file;
     uint64_t offset;
     uint8_t byte_value;
+    int num_dummy_bits;
 } mobinas_cache_profile_t;
 
 typedef struct mobinas_dnn_profile{
@@ -209,6 +210,7 @@ void remove_mobinas_dnn_profile(mobinas_dnn_profile_t *profile);
 mobinas_cache_profile_t *init_mobinas_cache_profile();
 void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile);
 int read_cache_profile(mobinas_cache_profile_t *profile);
+int read_cache_profile_dummy_bits(mobinas_cache_profile_t *profile); 
 
 //cache reset (deprecated)
 void remove_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);

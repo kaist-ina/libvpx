@@ -3583,6 +3583,13 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         {
         case PROFILE_CACHE:
             cache_profile = get_cache_profile(cm->mobinas_cfg, cm->height);
+            if (cm->frame_type == KEY_FRAME) {
+                if (read_cache_profile_dummy_bits(cache_profile) == -1) {
+                    fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                    cm->mobinas_cfg->cache_policy = NO_CACHE;
+                    cm->apply_dnn = 0;
+                }
+            }
             if ((cm->apply_dnn = read_cache_profile(cache_profile)) == -1)
             {
                 fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
