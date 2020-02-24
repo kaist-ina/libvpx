@@ -162,7 +162,6 @@ int read_cache_profile_dummy_bits(mobinas_cache_profile_t *profile) {
             profile->offset += 1;
         }
     }
-    printf("profile->offset: %d\n", profile->offset);
 
     if (fread(&profile->num_dummy_bits, sizeof(int), 1, profile->file) != 1)
     {
