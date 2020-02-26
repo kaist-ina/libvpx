@@ -118,6 +118,7 @@ void snpe_free(void *snpe) {
 int SNPE::check_runtime(void){
     int result;
     static zdl::DlSystem::Version_t Version = zdl::SNPE::SNPEFactory::getLibraryVersion();
+    LOGE("SNPE: version %s", Version.asString().c_str());
     fprintf(stdout, "SNPE: Version %s\n", Version.asString().c_str()); //Print Version number
 
     if (!zdl::SNPE::SNPEFactory::isRuntimeAvailable(runtime)) {
@@ -145,6 +146,7 @@ int SNPE::init_network(const char *path){
     //check if dlc is valid file
     std::ifstream dlcFile(path);
     if(!dlcFile){
+        LOGE("DLC does not exist");
         fprintf(stdout, "DLC does not exist\n");
         return -1;
     }
@@ -153,6 +155,7 @@ int SNPE::init_network(const char *path){
     std::unique_ptr<zdl::DlContainer::IDlContainer> container = loadContainerFromFile(path);
     if (container == nullptr)
     {
+        LOGE("Faild to open a dlc file");
         fprintf(stdout, "Failed to open a dlc file\n");
         return -1;
     }
@@ -160,6 +163,7 @@ int SNPE::init_network(const char *path){
 
     snpe = setBuilderOptions(container, runtime, runtimeList, udlBundle, useUserSuppliedBuffers, platformConfig, usingInitCaching);
     if(snpe == nullptr){
+        LOGE("failed to build a snpe object");
         fprintf(stdout, "Failed build a snpe object\n");
         return -1;
     }
