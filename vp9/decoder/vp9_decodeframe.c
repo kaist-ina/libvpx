@@ -3588,12 +3588,10 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             if (cm->frame_type == KEY_FRAME) {
                 //if first frame, reset cache profile
                 if(cm->current_video_frame % 8991 == 0){
-                    LOGE("8991");
                     cache_profile->offset = 0;
                     rewind(cache_profile->file);
                 }else{
                     if (read_cache_profile_dummy_bits(cache_profile) == -1) {
-                        LOGE("cant read dummy bits");
                         fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
                         cm->mobinas_cfg->cache_policy = NO_CACHE;
                         cm->apply_dnn = 0;
@@ -3604,7 +3602,6 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
             if ((cm->apply_dnn = read_cache_profile(cache_profile)) == -1)
             {
-                LOGE("can't read cache profile");
                 fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
                 cm->mobinas_cfg->cache_policy = NO_CACHE;
                 cm->apply_dnn = 0;
