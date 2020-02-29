@@ -104,6 +104,7 @@ typedef struct mobinas_cache_profile {
     FILE *file;
     uint64_t offset;
     uint8_t byte_value;
+    off_t file_size;
     int num_dummy_bits;
 } mobinas_cache_profile_t;
 

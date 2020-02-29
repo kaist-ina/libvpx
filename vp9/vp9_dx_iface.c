@@ -43,6 +43,8 @@
 
 #ifdef __ANDROID_API__
 #include <android/log.h>
+#include <sys/stat.h>
+
 #define TAG "vp9_dx_iface.c JNI"
 #define _UNKNOWN   0
 #define _DEFAULT   1
@@ -358,11 +360,13 @@ static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t
     dnn_profile->dnn_instance = snpe_alloc(mobinas_cfg->dnn_runtime);
 
     if (snpe_check_runtime(dnn_profile->dnn_instance)) {
+        LOGE("Failed to check runtime");
         fprintf(stderr, "%s: Failed to check runtime\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
 
     if (snpe_load_network(dnn_profile->dnn_instance, dnn_file)) {
+        LOGE("Failed to load network");
         fprintf(stderr, "%s: Failed to load network\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
@@ -374,9 +378,14 @@ static vpx_codec_err_t load_mobinas_cache_profile(vpx_codec_alg_priv_t *ctx, mob
     mobinas_cache_profile_t *cache_profile = get_cache_profile(mobinas_cfg, resolution);
 
     if ((cache_profile->file = fopen(cache_profile_file, "rb")) == NULL) {
+        LOGE("Failed to open a file");
         fprintf(stderr, "%s: fail to open a file %s", __func__, cache_profile_file);
         return VPX_MOBINAS_ERROR;
     }
+
+    struct stat buf;
+    fstat(fileno(cache_profile->file), &buf);
+    cache_profile->file_size = buf.st_size;
 
     return VPX_CODEC_OK;
 }

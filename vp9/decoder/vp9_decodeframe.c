@@ -3591,23 +3591,33 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     //dnn
-    mobinas_cache_profile_t *cache_profile; 
+    mobinas_cache_profile_t *cache_profile;
+
     switch(cm->mobinas_cfg->decode_mode) {
     case DECODE_SR:
         cm->apply_dnn = 1;
         break;
     case DECODE_CACHE:
-        switch (cm->mobinas_cfg->cache_policy)
+            switch (cm->mobinas_cfg->cache_policy)
         {
         case PROFILE_CACHE:
             cache_profile = get_cache_profile(cm->mobinas_cfg, cm->height);
+
             if (cm->frame_type == KEY_FRAME) {
-                if (read_cache_profile_dummy_bits(cache_profile) == -1) {
-                    fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
-                    cm->mobinas_cfg->cache_policy = NO_CACHE;
-                    cm->apply_dnn = 0;
+                //if first frame, reset cache profile
+                if(cm->current_video_frame % 8991 == 0){
+                    cache_profile->offset = 0;
+                    rewind(cache_profile->file);
+                }else{
+                    if (read_cache_profile_dummy_bits(cache_profile) == -1) {
+                        fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                        cm->mobinas_cfg->cache_policy = NO_CACHE;
+                        cm->apply_dnn = 0;
+                    }
                 }
             }
+
+
             if ((cm->apply_dnn = read_cache_profile(cache_profile)) == -1)
             {
                 fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
