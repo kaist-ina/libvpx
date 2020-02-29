@@ -790,10 +790,12 @@ static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_s
 
     for (i = 0; i < num_threads; ++i) {
         mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
-        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
-                current_super_frame, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
-                mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,
-                mwd->latency.decode_inter_residual);
+        //sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
+        //        current_super_frame, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
+        //        mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,  mwd->latency.decode_inter_residual);
+        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, current_super_frame, 
+                mwd->latency.decode_intra_block, mwd->latency.decode_inter_block, mwd->latency.decode_inter_residual,
+                mwd->latency.interp_intra_block, mwd->latency.interp_inter_block, mwd->latency.interp_inter_residual);
         fputs(log, mwd->latency_log);
     }
 
