@@ -10,6 +10,8 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <math.h>
 
 #include "./vpx_config.h"
@@ -360,13 +362,17 @@ static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t
     dnn_profile->dnn_instance = snpe_alloc(mobinas_cfg->dnn_runtime);
 
     if (snpe_check_runtime(dnn_profile->dnn_instance)) {
+#ifdef __ANDROID_API__
         LOGE("Failed to check runtime");
+#endif
         fprintf(stderr, "%s: Failed to check runtime\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
 
     if (snpe_load_network(dnn_profile->dnn_instance, dnn_file)) {
+#ifdef __ANDROID_API__
         LOGE("Failed to load network");
+#endif
         fprintf(stderr, "%s: Failed to load network\n", __func__);
         return VPX_MOBINAS_ERROR;
     }
@@ -378,7 +384,9 @@ static vpx_codec_err_t load_mobinas_cache_profile(vpx_codec_alg_priv_t *ctx, mob
     mobinas_cache_profile_t *cache_profile = get_cache_profile(mobinas_cfg, resolution);
 
     if ((cache_profile->file = fopen(cache_profile_file, "rb")) == NULL) {
+#ifdef __ANDROID_API__
         LOGE("Failed to open a file");
+#endif
         fprintf(stderr, "%s: fail to open a file %s", __func__, cache_profile_file);
         return VPX_MOBINAS_ERROR;
     }
