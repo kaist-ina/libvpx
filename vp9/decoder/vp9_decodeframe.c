@@ -3585,23 +3585,29 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         case PROFILE_CACHE:
             cache_profile = get_cache_profile(cm->mobinas_cfg, cm->height);
 
+//            LOGE("video frame %d, offset %ld",cm->current_video_frame, cache_profile->offset);
+
             if (cm->frame_type == KEY_FRAME) {
-                //if first frame, reset cache profile
-                if(cm->current_video_frame % 8991 == 0){
+                //cache loopback
+                if(cm->current_video_frame != 0 && cm->current_video_frame % 8991 == 0){
+//                    LOGE("rewind");
                     cache_profile->offset = 0;
                     rewind(cache_profile->file);
-                }else{
-                    if (read_cache_profile_dummy_bits(cache_profile) == -1) {
-                        fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
-                        cm->mobinas_cfg->cache_policy = NO_CACHE;
-                        cm->apply_dnn = 0;
-                    }
+                    cache_profile->num_dummy_bits = 0;
+                }
+
+                if (read_cache_profile_dummy_bits(cache_profile) == -1) {
+//                    LOGE("dummy bits fail");
+                    fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                    cm->mobinas_cfg->cache_policy = NO_CACHE;
+                    cm->apply_dnn = 0;
                 }
             }
 
 
             if ((cm->apply_dnn = read_cache_profile(cache_profile)) == -1)
             {
+//                LOGE("read cache profile fail");
                 fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
                 cm->mobinas_cfg->cache_policy = NO_CACHE;
                 cm->apply_dnn = 0;
