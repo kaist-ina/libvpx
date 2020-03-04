@@ -20,6 +20,7 @@ typedef struct mobinas_latency_info {
 
     //interpolation
     double interp_intra_block;
+    double interp_inter_block;
     double interp_inter_residual;
 
     //dnn

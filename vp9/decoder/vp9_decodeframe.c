@@ -52,10 +52,10 @@
 #include <vpx/vpx_mobinas.h>
 #include <vpx/snpe/main.hpp>
 
-//Hyunho: for debuggin
+//Hyunho: for debugging
 #define DEBUG_LATENCY 1
-#define DEBUG_ADAPTIVE_CACHE 0
-#define DEBUG_RESIDUAL 0
+#define TURN_OFF_MV 0
+#define TURN_OFF_RESIDUAL 0
 #define BILLION  1E9
 #define CACHE_RESET_TRESHOLD 0
 
@@ -1074,7 +1074,13 @@ static void dec_build_sr_inter_predictors(
         //if (mv_q4.row > -16 && mv_q4.row < 0) mv_q4.row = 0;
         //if (mv_q4.col > -16 && mv_q4.col < 0) mv_q4.col = 0;
 
+#if TURN_OFF_MV
+        scaled_mv;
+        scaled_mv.row = 0;
+        scaled_mv.col = 0;
+#else
         scaled_mv = vp9_scale_mv_mobinas(&mv_q4, mi_x + x, mi_y + y, sf); //updated
+#endif
         //scaled_mv = vp9_scale_mv(&mv_q4, mi_x + x, mi_y + y, sf);
         xs = sf->x_step_q4;
         ys = sf->y_step_q4;
@@ -1610,14 +1616,22 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         /*******************Hyunho************************/
         mwd->metadata.num_interblocks++;
 
+        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE)
+        {
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE)
-        {
             //LR quarter-pixel interpolation
             dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, false);
+#if DEBUG_LATENCY
+        clock_gettime(CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        mwd->latency.decode_inter_block += diff;
+#endif
 
+#if DEBUG_LATENCY
+        clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
             //HR quarter-pixel interpolation (cache processing)
             if (!cm->apply_dnn)
             {
@@ -1625,16 +1639,16 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                 vp9_setup_res_planes(xd->plane, mwd->lr_resiudal, mi_row, mi_col);
                 dec_build_cache_inter_predictors_sb(pbi, xd, mi_row, mi_col, true);
             }
+#if DEBUG_LATENCY
+        clock_gettime(CLOCK_MONOTONIC, &finish_time);
+        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+        mwd->latency.interp_inter_block += diff;
+#endif
         }
         else
         {
             dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
         }
-#if DEBUG_LATENCY
-        clock_gettime(CLOCK_MONOTONIC, &finish_time);
-        diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-        mwd->latency.decode_inter_block += diff;
-#endif
         /*******************Hyunho************************/
         // Reconstruction
 #if DEBUG_LATENCY
@@ -2404,6 +2418,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 				* MI_BLOCK_SIZE >> lr_residual->subsampling_y };
 
 		//TODO (hyunho): decide whether to apply Y-channel or YCbCr-channels
+#if !TURN_OFF_RESIDUAL
 		for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
 			vpx_bilinear_interp_int16(lr_residual_buffers[plane],
 					lr_residual_strides[plane], sr_frame_buffers[plane],
@@ -2412,6 +2427,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 					get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile,
 							cm->scale));
 		}
+#endif
 
 		prev_block = inter_block;
 		inter_block = inter_block->next;
@@ -2721,12 +2737,14 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
                                                      >> lr_frame->subsampling_y};
 
         //for intra-block case, optimizing bilinear degrades performance notably
+#if !TURN_OFF_RESIDUAL
         for (plane = 0; plane < MAX_MB_PLANE; ++plane) {
             vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                       sr_frame_buffers[plane], sr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
                                       heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
         }
+#endif
         prev_block = intra_block;
         intra_block = intra_block->next;
         vpx_free(prev_block);
