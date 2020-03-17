@@ -846,13 +846,21 @@ static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_
     }
 
     if(pbi->common.frame_type == KEY_FRAME || pbi->common.intra_only) {
-        sprintf(log, "%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only);
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\tkey_frame\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only);
     }
     else {
-        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only,
-                pbi->common.metadata.reference_frames[0].current_video_frame, pbi->common.metadata.reference_frames[0].current_super_frame,
-                pbi->common.metadata.reference_frames[1].current_video_frame, pbi->common.metadata.reference_frames[1].current_super_frame,
-                pbi->common.metadata.reference_frames[2].current_video_frame, pbi->common.metadata.reference_frames[2].current_super_frame);
+        if (pbi->common.show_frame == 0) {
+            sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\talternative_reference_frame\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only,
+                    pbi->common.metadata.reference_frames[0].current_video_frame, pbi->common.metadata.reference_frames[0].current_super_frame,
+                    pbi->common.metadata.reference_frames[1].current_video_frame, pbi->common.metadata.reference_frames[1].current_super_frame,
+                    pbi->common.metadata.reference_frames[2].current_video_frame, pbi->common.metadata.reference_frames[2].current_super_frame);
+        }
+        else {
+            sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\tnormal_frame\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only,
+                    pbi->common.metadata.reference_frames[0].current_video_frame, pbi->common.metadata.reference_frames[0].current_super_frame,
+                    pbi->common.metadata.reference_frames[1].current_video_frame, pbi->common.metadata.reference_frames[1].current_super_frame,
+                    pbi->common.metadata.reference_frames[2].current_video_frame, pbi->common.metadata.reference_frames[2].current_super_frame);
+        }
     }
     fputs(log, pbi->common.metadata_log);
 }
