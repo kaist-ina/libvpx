@@ -30,6 +30,7 @@ std::unique_ptr<zdl::SNPE::SNPE> setBuilderOptions(std::unique_ptr<zdl::DlContai
 
     snpe = snpeBuilder.setOutputLayers({})
        .setRuntimeProcessorOrder(runtimeList)
+       .setPerformanceProfile(zdl::DlSystem::PerformanceProfile_t::HIGH_PERFORMANCE)
        .setUdlBundle(udlBundle)
        .setUseUserSuppliedBuffers(useUserSuppliedBuffers)
        .setPlatformConfig(platformConfig)
