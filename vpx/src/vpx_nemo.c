@@ -56,7 +56,7 @@ mobinas_cfg_t *init_mobinas_cfg() {
     //mode
     config->decode_mode = DECODE;
     config->dnn_mode = NO_DNN;
-    config->cache_policy = NO_CACHE;
+    config->cache_mode = NO_CACHE;
 
     //bilinear
     config->bilinear_profile = init_vp9_bilinear_profile();
@@ -78,11 +78,12 @@ mobinas_cfg_t *init_mobinas_cfg() {
     return config;
 }
 
+//TODO: replace multiple profiles by a single profile
 void remove_mobinas_cfg(mobinas_cfg_t *config) {
     if (config) {
         for (int i=0; i<5; i++) {
-            remove_mobinas_cache_profile(config->cache_profiles[i]);
             remove_mobinas_dnn_profile(config->dnn_profiles[i]);
+            remove_mobinas_cache_profile(config->cache_profiles[i]);
         }
         remove_vp9_bilinear_profile(config->bilinear_profile);
         vpx_free(config);
@@ -101,6 +102,7 @@ mobinas_dnn_profile_t *init_mobinas_dnn_profile(int width, int height, int scale
 
 void remove_mobinas_dnn_profile(mobinas_dnn_profile_t *profile) {
     if (profile) {
+        LOGE("remove a dnn profile");
         if (profile->dnn_instance) {
 #if CONFIG_SNPE
             snpe_free(profile->dnn_instance);
@@ -131,6 +133,7 @@ mobinas_cache_profile_t *init_mobinas_cache_profile() {
 
 void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile) {
     if (profile) {
+        LOGE("remove a cache profile");
         if (profile->file) fclose(profile->file);
         vpx_free(profile);
     }
@@ -514,6 +517,7 @@ void remove_bilinear_config(mobinas_bilinear_config_t *config) {
 
 void remove_vp9_bilinear_profile(vp9_bilinear_profile_t *profile) {
     if (profile != NULL) {
+        LOGE("remove a dnn profile");
         //scale x4
         remove_bilinear_config(&profile->config_TX_64X64_s4);
         //scale x3

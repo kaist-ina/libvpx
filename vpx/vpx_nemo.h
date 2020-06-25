@@ -9,27 +9,25 @@
 #include "./vpx_config.h"
 #include "vpx_scale/yv12config.h"
 
-typedef int (*mobinas_get_scale_fn_t) (int);
-
 typedef struct mobinas_latency_info {
     //decode
-    double decode_frame;
+    double decode;
     double decode_intra_block;
     double decode_inter_block;
     double decode_inter_residual;
 
-    //interpolation
+    //interpolation (interp)
+    double interp;
     double interp_intra_block;
     double interp_inter_block;
     double interp_inter_residual;
 
-    //dnn
-//    double check_runtime;
-//    double load_dnn;
-    double convert_rgb_to_yuv;
-    double execue_dnn;
-    double convert_yuv_to_rgb;
-    double convert_float_to_int;
+    //super-resolution (sr)
+    double sr;
+    double sr_convert_rgb_to_yuv;
+    double sr_execute_dnn;
+    double sr_convert_yuv_to_rgb;
+    double sr_convert_float_to_int;
 } mobinas_latency_info_t;
 
 typedef struct mobinas_frame_info {
@@ -39,7 +37,6 @@ typedef struct mobinas_frame_info {
 
 typedef struct mobinas_metadata_info {
     mobinas_frame_info_t reference_frames[3];
-
     int num_blocks;
     int num_intrablocks;
     int num_interblocks;
@@ -56,7 +53,7 @@ typedef enum{
     NO_CACHE,
     PROFILE_CACHE,
     KEY_FRAME_CACHE,
-} mobinas_cache_policy;
+} mobinas_cache_mode;
 
 typedef enum{
     NO_DNN,
@@ -83,7 +80,7 @@ typedef struct mobinas_bilinear_config{
     int *right_x_index;
 } mobinas_bilinear_config_t;
 
-//TODO: block size types are 25 (4,8,16,32,64 x 4,8,16,32,64)
+//TODO: Remove this
 typedef struct mobinas_bilinear_profile{
     //scale x4
     mobinas_bilinear_config_t config_TX_64X64_s4;
@@ -93,6 +90,7 @@ typedef struct mobinas_bilinear_profile{
     mobinas_bilinear_config_t config_TX_64X64_s2;
 } vp9_bilinear_profile_t;
 
+//TODO: remove this
 typedef struct mobinas_cache_reset_profile {
     FILE *file;
     int offset;
@@ -108,6 +106,8 @@ typedef struct mobinas_cache_profile {
     int num_dummy_bits;
 } mobinas_cache_profile_t;
 
+//TODO: remove target_width, target_height
+//TODO: remove dnn_profile
 typedef struct mobinas_dnn_profile{
     void *dnn_instance;
     int target_width;
@@ -144,47 +144,36 @@ typedef struct mobinas_worker_data {
 } mobinas_worker_data_t;
 
 
-/* TODO (streaming): Support for streaming
- * 1. offline DNN
- * - {log_dir}/frame.txt (which includes {chunk_index}/{resolution})
- * - 240p/{}/quality.txt, ...: log all super-resolutioned video quality
- * 2. online DNN
- * - save_frame: input_frame_dir, sr_frame_dir includes trace_name
- * - save_quality: (x) - not supported
- * - save_latency: log_dir includes trace_name
- * - sr_metadata: log_dir includes trace_name
- * - get_scale should be set properly
- */
-
+//TODO: change dnn_profiles, cache_profiles, bilinear_profile to use single element
+//TODO: add target_width, target_height, dnn
 typedef struct mobinas_cfg{
-    //directory, name
+    //direcetory
     char log_dir[PATH_MAX];
     char input_frame_dir[PATH_MAX];
     char sr_frame_dir[PATH_MAX];
-    char input_compare_frame_dir[PATH_MAX];
-    char sr_compare_frame_dir[PATH_MAX];
+    char input_reference_frame_dir[PATH_MAX];
+    char sr_reference_frame_dir[PATH_MAX];
     char sr_offline_frame_dir[PATH_MAX]; //OFFLINE_DNN (load images)
 
-    //log options
-    int save_frame; // rgb
+    //logging
+    int save_rgbframe; // rgb
     int save_yuvframe;
     int save_quality;
     int save_latency;
     int save_metadata;
     int filter_interval;
 
-    //decode
+    //mode
     mobinas_decode_mode decode_mode;
-
-    //bilinear
-    vp9_bilinear_profile_t *bilinear_profile;
-
-    //dnn, cache
-    mobinas_cache_policy cache_policy;
+    mobinas_cache_mode cache_mode;
     mobinas_dnn_mode dnn_mode;
     mobinas_dnn_runtime dnn_runtime;
+
+    //TODO: use a single profile
+    //profile
     mobinas_dnn_profile_t *dnn_profiles[5];
     mobinas_cache_profile_t *cache_profiles[5];
+    vp9_bilinear_profile_t *bilinear_profile;
 } mobinas_cfg_t;
 
 typedef struct rgb24_buffer_config{
@@ -214,6 +203,7 @@ void remove_mobinas_cache_profile(mobinas_cache_profile_t *profile);
 int read_cache_profile(mobinas_cache_profile_t *profile);
 int read_cache_profile_dummy_bits(mobinas_cache_profile_t *profile); 
 
+//TODO: remove this
 //cache reset (deprecated)
 void remove_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);
 int read_mobinas_cache_reset_profile(mobinas_cache_reset_profile_t *profile);
@@ -229,6 +219,7 @@ void set_mobinas_interp_block(struct mobinas_interp_block_list *L, int plane, in
 mobinas_worker_data_t *init_mobinas_worker(int num_threads, mobinas_cfg_t *mobinas_cfg);
 void remove_mobinas_worker(mobinas_worker_data_t *mwd, int num_threads);
 
+//TODO; refactor below functions
 //bilinear config
 vp9_bilinear_profile_t *init_vp9_bilinear_profile();
 mobinas_bilinear_config_t *get_vp9_bilinear_config(vp9_bilinear_profile_t *bilinear_profile, int scale);
@@ -253,6 +244,7 @@ int RGB24_realloc_frame_buffer(RGB24_BUFFER_CONFIG *rbf, int width, int height);
 int RGB24_free_frame_buffer(RGB24_BUFFER_CONFIG *rbf);
 double RGB24_calc_psnr(const RGB24_BUFFER_CONFIG *a, const RGB24_BUFFER_CONFIG *b);
 
+//TODO: remove this (get_dnn_profile, get_cache_profile)
 int default_scale_policy (int resolution);
 mobinas_dnn_profile_t *get_dnn_profile(mobinas_cfg_t *mobinas_cfg, int resolution);
 mobinas_cache_profile_t *get_cache_profile(mobinas_cfg_t *mobinas_cfg, int resolution);

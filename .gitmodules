@@ -1,3 +1,0 @@
-[submodule "third_party/snpe"]
-	path = third_party/snpe
-	url = https://github.com/kaist-ina/snpe.git
