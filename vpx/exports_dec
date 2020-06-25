@@ -7,11 +7,8 @@ text vpx_codec_register_put_frame_cb
 text vpx_codec_register_put_slice_cb
 text vpx_codec_set_frame_buffer_functions
 text vpx_mobinas_init
-text init_mobinas_cfg 
-text default_scale_policy
-text init_vp9_bilinear_profile
-text init_mobinas_cache_profile
-text vpx_load_mobinas_cfg
-text vpx_load_mobinas_dnn
-text vpx_load_mobinas_cache_profile
-text remove_mobinas_cfg
+text init_nemo_cfg
+text vpx_load_nemo_cfg
+text vpx_load_nemo_dnn
+text vpx_load_nemo_cache_profile
+text remove_nemo_cfg

@@ -11,7 +11,7 @@
 #ifndef VP9_COMMON_VP9_ONYXC_INT_H_
 #define VP9_COMMON_VP9_ONYXC_INT_H_
 
-#include <vpx/vpx_mobinas.h>
+#include <vpx/vpx_nemo.h>
 
 #include "./vpx_config.h"
 #include "vpx/internal/vpx_codec_internal.h"
@@ -120,25 +120,24 @@ typedef struct VP9Common {
 
     struct scale_factors sf;
 
-    /*******************Hyunho************************/
-    //General
+    /* NEMO: Variables for applying or caching DNN */
+    nemo_cfg_t *nemo_cfg;
     struct scale_factors sf_upsample_inter;
-    mobinas_cfg_t *mobinas_cfg;
     int scale;
     int apply_dnn;
 
-    mobinas_latency_info_t latency; //logging decoding end-to-end latency
-    mobinas_metadata_info_t metadata;
-
-    FILE *quality_log; // quality log
-    FILE *latency_log; // latency log
-    FILE *metadata_log; // metadata log
-
-    YV12_BUFFER_CONFIG *yv12_frame_0; // quality 
-    YV12_BUFFER_CONFIG *yv12_frame_1; //quality 
-    RGB24_BUFFER_CONFIG *rgb24_frame_0; // super-resolution, frame
-    RGB24_BUFFER_CONFIG *rgb24_frame_1; // super-resolution, frame
-    /*******************Hyunho************************/
+    /* NEMO: Variables for logging */
+    nemo_latency_t latency;
+    nemo_metdata_t metadata;
+    FILE *quality_log;
+    FILE *latency_log;
+    FILE *metadata_log;
+    YV12_BUFFER_CONFIG *yv12_input_frame;
+    YV12_BUFFER_CONFIG *yv12_reference_frame;
+    RGB24_BUFFER_CONFIG *rgb24_input_frame;
+    RGB24_BUFFER_CONFIG *rgb24_reference_frame;
+    RGB24_BUFFER_CONFIG *rgb24_input_tensor;
+    RGB24_BUFFER_CONFIG *rgb24_sr_tensor;
 
     YV12_BUFFER_CONFIG *frame_to_show;
     RefCntBuffer *prev_frame;

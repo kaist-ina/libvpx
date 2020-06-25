@@ -127,17 +127,18 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
 
     vpx_get_worker_interface()->init(&pbi->lf_worker);
 
-    /*******************Hyunho************************/
+    /* NEMO: initialize variables */
     pbi->mobinas_worker_data = NULL;
     cm->quality_log = NULL;
     cm->latency_log = NULL;
     cm->metadata_log = NULL;
-    cm->mobinas_cfg = NULL;
-    cm->yv12_frame_0 = NULL;
-    cm->yv12_frame_1 = NULL;
-    cm->rgb24_frame_0 = NULL;
-    cm->rgb24_frame_1 = NULL;
-    /*******************Hyunho************************/
+    cm->nemo_cfg = NULL;
+    cm->yv12_input_frame = NULL;
+    cm->yv12_reference_frame = NULL;
+    cm->rgb24_input_frame = NULL;
+    cm->rgb24_reference_frame = NULL;
+    cm->rgb24_input_tensor = NULL;
+    cm->rgb24_sr_tensor = NULL;
 
     return pbi;
 }
@@ -162,29 +163,28 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
         vp9_loop_filter_dealloc(&pbi->lf_row_sync);
     }
 
-    /*******************Hyunho************************/
-    //free frames
-    vpx_free_frame_buffer(pbi->common.yv12_frame_0);
-    vpx_free_frame_buffer(pbi->common.yv12_frame_1);
-    vpx_free(pbi->common.yv12_frame_0);
-    vpx_free(pbi->common.yv12_frame_1);
-    RGB24_free_frame_buffer(pbi->common.rgb24_frame_0);
-    RGB24_free_frame_buffer(pbi->common.rgb24_frame_1);
-    vpx_free(pbi->common.rgb24_frame_0);
-    vpx_free(pbi->common.rgb24_frame_1);
+    /* NEMO: free frames used for quality measurements */
+    vpx_free_frame_buffer(pbi->common.yv12_input_frame);
+    vpx_free_frame_buffer(pbi->common.yv12_reference_frame);
+    vpx_free(pbi->common.yv12_input_frame);
+    vpx_free(pbi->common.yv12_reference_frame);
+    RGB24_free_frame_buffer(pbi->common.rgb24_input_frame);
+    RGB24_free_frame_buffer(pbi->common.rgb24_reference_frame);
+    vpx_free(pbi->common.rgb24_input_frame);
+    vpx_free(pbi->common.rgb24_reference_frame);
+    RGB24_free_frame_buffer(pbi->common.rgb24_input_tensor);
+    RGB24_free_frame_buffer(pbi->common.rgb24_sr_tensor);
+    vpx_free(pbi->common.rgb24_input_tensor);
+    vpx_free(pbi->common.rgb24_sr_tensor);
 
-    //close logs
+    /* NEMO: close log files */
     if (pbi->common.quality_log != NULL) fclose(pbi->common.quality_log);
     if (pbi->common.latency_log != NULL) fclose(pbi->common.latency_log);
     if (pbi->common.metadata_log != NULL) fclose(pbi->common.metadata_log);
 
-    //free workers
+    /* NEMO: free workers */
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
-    remove_mobinas_worker(pbi->mobinas_worker_data, num_threads);
-
-    //free mobinas_cfg
-    remove_mobinas_cfg(pbi->common.mobinas_cfg);
-    /*******************Hyunho************************/
+    remove_nemo_worker(pbi->mobinas_worker_data, num_threads);
 
     vp9_remove_common(&pbi->common);
     vpx_free(pbi);
@@ -298,7 +298,7 @@ static void swap_frame_buffers(VP9Decoder *pbi) {
         cm->ref_frame_map[ref_index] = cm->next_ref_frame_map[ref_index];
     }
     pbi->hold_ref_buf = 0;
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
+    if (cm->nemo_cfg->decode_mode == DECODE_CACHE || cm->nemo_cfg->decode_mode == DECODE_SR) {
 //        cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not
         cm->frame_to_show = get_sr_frame_new_buffer(cm); //hyunho: cache mode or not
 //        cm->frame_to_show = get_frame_new_buffer(cm); //hyunho: cache mode or not

@@ -70,5 +70,5 @@ API_SRCS-$(CONFIG_SNPE) += snpe/udlExample.hpp
 API_SRCS-$(CONFIG_SNPE) += snpe/main.cpp
 API_SRCS-$(CONFIG_SNPE) += snpe/main.hpp
 
-API_SRCS-yes += vpx_mobinas.h
-API_SRCS-yes += src/vpx_mobinas.c
+API_SRCS-yes += vpx_nemo.h
+API_SRCS-yes += src/vpx_nemo.c

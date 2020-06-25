@@ -5,7 +5,7 @@ private:
     zdl::DlSystem::Runtime_t runtime;
     std::shared_ptr<zdl::SNPE::SNPE> snpe;
 public:
-    SNPE(mobinas_dnn_runtime);
+    SNPE(nemo_dnn_runtime);
     ~SNPE(void);
     int check_runtime();
     int init_network(const char *);
@@ -18,7 +18,7 @@ public:
 #ifdef __cplusplus
 extern "C" {
 #endif
-    void *snpe_alloc(mobinas_dnn_runtime);
+    void *snpe_alloc(nemo_dnn_runtime);
     void snpe_free(void *);
     int snpe_check_runtime(void *);
     int snpe_load_network(void *, const char *);

@@ -17,7 +17,7 @@ print <<EOF
 #include "vpx/vpx_integer.h"
 #include "vpx_dsp/vpx_dsp_common.h"
 #include "vpx_dsp/vpx_filter.h"
-#include "vpx/vpx_mobinas.h"
+#include "vpx/vpx_nemo.h"
 
 EOF
 }
@@ -38,10 +38,10 @@ if ($opts{arch} eq "x86_64") {
 # hyunho: Bilinear interpolation
 #
 add_proto qw/void vpx_bilinear_interp_uint8/, "const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                                                                int height, int scale, const mobinas_bilinear_config_t *config";
+                                                                                int height, int scale, const nemo_bilinear_coeff_t *config";
 specialize qw/vpx_bilinear_interp_uint8 neon/;
 add_proto qw/void vpx_bilinear_interp_int16/, "const int16_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
-                                                                                int height, int scale, const mobinas_bilinear_config_t *config";
+                                                                                int height, int scale, const nemo_bilinear_coeff_t *config";
 specialize qw/vpx_bilinear_interp_int16 neon/;
 
 #

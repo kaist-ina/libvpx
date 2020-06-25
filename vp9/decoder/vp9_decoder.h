@@ -38,7 +38,7 @@ typedef struct TileBuffer {
 
 typedef struct TileWorkerData {
     const uint8_t *data_end;
-    mobinas_worker_data_t *mobinas_worker_data;
+    nemo_worker_data_t *mobinas_worker_data;
     int buf_start, buf_end;  // pbi->tile_buffers to decode, inclusive
     vpx_reader bit_reader;
     FRAME_COUNTS counts;
@@ -79,7 +79,7 @@ typedef struct VP9Decoder {
   int hold_ref_buf;  // hold the reference buffer.
 
     /*******************Hyunho************************/
-    mobinas_worker_data_t *mobinas_worker_data;
+    nemo_worker_data_t *mobinas_worker_data;
     /*******************Hyunho************************/
 } VP9Decoder;
 

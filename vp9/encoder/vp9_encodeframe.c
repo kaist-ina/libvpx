@@ -4719,7 +4719,7 @@ static void encode_tiles(VP9_COMP *cpi) {
 static int input_fpmb_stats(FIRSTPASS_MB_STATS *firstpass_mb_stats,
                             VP9_COMMON *cm, uint8_t **this_frame_mb_stats) {
   uint8_t *mb_stats_in = firstpass_mb_stats->mb_stats_start +
-                         cm->current_video_frame * cm->MBs * sizeof(uint8_t);
+                         cm->video_frame_index * cm->MBs * sizeof(uint8_t);
 
   if (mb_stats_in > firstpass_mb_stats->mb_stats_end) return EOF;
 

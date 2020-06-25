@@ -23,7 +23,7 @@
 #include <algorithm>
 
 #include <vpx_mem/vpx_mem.h>
-#include <vpx/vpx_mobinas.h>
+#include <vpx/vpx_nemo.h>
 #include "CheckRuntime.hpp"
 #include "LoadContainer.hpp"
 #include "SetBuilderOptions.hpp"
@@ -66,7 +66,7 @@
 #define LOGF(...) __android_log_print(_FATAL,TAG,__VA_ARGS__)
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 
-SNPE::SNPE(mobinas_dnn_runtime runtime_mode)
+SNPE::SNPE(nemo_dnn_runtime runtime_mode)
 {
     {
         switch (runtime_mode) {
@@ -100,7 +100,7 @@ SNPE::SNPE(mobinas_dnn_runtime runtime_mode)
     fprintf(stdout, "SNPE: Allocate class\n");
 }
 
-void *snpe_alloc(mobinas_dnn_runtime runtime_mode) {
+void *snpe_alloc(nemo_dnn_runtime runtime_mode) {
     return static_cast<void *>(new SNPE(runtime_mode));
 }
 
@@ -159,7 +159,6 @@ int SNPE::init_network(const char *path){
         fprintf(stdout, "Failed to open a dlc file\n");
         return -1;
     }
-
 
     snpe = setBuilderOptions(container, runtime, runtimeList, udlBundle, useUserSuppliedBuffers, platformConfig, usingInitCaching);
     if(snpe == nullptr){

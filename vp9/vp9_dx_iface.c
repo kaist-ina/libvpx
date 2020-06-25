@@ -40,10 +40,13 @@
 #include <vpx_dsp_rtcd.h>
 
 #if CONFIG_SNPE
+
 #include "vpx/snpe/main.hpp"
+
 #endif
 
 #ifdef __ANDROID_API__
+
 #include <android/log.h>
 #include <sys/stat.h>
 
@@ -77,6 +80,33 @@
 #define FRACTION_SCALE (1 << FRACTION_BIT)
 #define BILLION  1E9
 #define LOG_MAX 1000
+
+static void _mkdir(const char *dir) {
+    char tmp[PATH_MAX];
+    char *p = NULL;
+    size_t len;
+
+    snprintf(tmp, sizeof(tmp), "%s", dir);
+    len = strlen(tmp);
+    if (tmp[len - 1] == '/')
+        tmp[len - 1] = 0;
+    for (p = tmp + 1; *p; p++)
+        if (*p == '/') {
+            *p = 0;
+            mkdir(tmp, S_IRWXU);
+            *p = '/';
+        }
+    mkdir(tmp, S_IRWXU);
+}
+
+static bool _exists(const char *dir) {
+    struct stat sb;
+
+    if (stat(dir, &sb) == 0 && S_ISDIR(sb.st_mode))
+        return true;
+    else
+        return false;
+}
 
 static vpx_codec_err_t decoder_init(vpx_codec_ctx_t *ctx,
                                     vpx_codec_priv_enc_mr_cfg_t *data) {
@@ -112,6 +142,9 @@ static vpx_codec_err_t decoder_destroy(vpx_codec_alg_priv_t *ctx) {
         vp9_free_ref_frame_buffers(ctx->buffer_pool);
         vp9_free_internal_frame_buffers(&ctx->buffer_pool->int_frame_buffers);
     }
+
+    /* NEMO: free nemo_cfg */
+    remove_nemo_cfg(ctx->nemo_cfg);
 
     vpx_free(ctx->buffer_pool);
     vpx_free(ctx);
@@ -269,7 +302,7 @@ static void init_buffer_callbacks(vpx_codec_alg_priv_t *ctx) {
         pool->cb_priv = &pool->int_frame_buffers;
     }
 
-    pool->mode = ctx->mobinas_cfg->decode_mode;
+    pool->mode = ctx->nemo_cfg->decode_mode;
 }
 
 static void set_default_ppflags(vp8_postproc_cfg_t *cfg) {
@@ -285,115 +318,97 @@ static void set_ppflags(const vpx_codec_alg_priv_t *ctx, vp9_ppflags_t *flags) {
     flags->noise_level = ctx->postproc_cfg.noise_level;
 }
 
-/* Validate MobiNAS configuration */
-/*
-static int is_valid_mobinas_cfg(mobinas_cfg_t *mobinas_cfg) {
-    if (mobinas_cfg == NULL)
-    {
-        fprintf(stderr, "%s: mobinas_cfg is NULL\n", __func__);
-        return -1;
-    }
+static vpx_codec_err_t load_nemo_cfg(vpx_codec_alg_priv_t *ctx, nemo_cfg_t *nemo_cfg) {
+    ctx->nemo_cfg = init_nemo_cfg();
+    memcpy(ctx->nemo_cfg, nemo_cfg, sizeof(nemo_cfg_t));
 
-    switch (mobinas_cfg->decode_mode)
-    {
-    case DECODE_SR:
-        //if (mobinas_cfg->get_scale == NULL)
-        //    mobinas_cfg->get_scale = default_scale_policy;
-
-        switch (mobinas_cfg->dnn_mode)
-        {
-        case NO_DNN:
-            fprintf(stderr, "%s: invalid dnn mode\n", __func__);
-            return -1;
-        case OFFLINE_DNN:
-            //TODO: check a dnn file is valid
-            break;
-        case ONLINE_DNN:
-            //TODO: check a dnn is valid
-            break;
-        }
-        break;
-    case DECODE_CACHE:
-        //if (mobinas_cfg->get_scale == NULL)
-        //    mobinas_cfg->get_scale = default_scale_policy;
-        //if (mobinas_cfg->bilinear_profile == NULL)
-        //    mobinas_cfg->bilinear_profile = init_vp9_bilinear_profile();
-
-        switch (mobinas_cfg->cache_policy)
-        {
-        case PROFILE_CACHE:
-            if (!mobinas_cfg->cache_profiles)
-            {
-                fprintf(stderr, "%s: cache_profile is NULL\n", __func__);
-                return -1;
+    /* NEMO: check whether frames are prepared correctely */
+    if (ctx->nemo_cfg->save_quality) {
+        if (ctx->nemo_cfg->decode_mode == DECODE) {
+            if (!_exists(ctx->nemo_cfg->input_reference_frame_dir)) {
+                fprintf(stderr, "%s: Input reference frame dir does not exists\n", __func__);
+                return VPX_NEMO_ERROR;
             }
-            break;
-        case KEY_FRAME_CACHE:
-            break;
-        case NO_CACHE:
-            break;
+        } else if (ctx->nemo_cfg->decode_mode == DECODE_SR ||
+                   ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+            if (!_exists(ctx->nemo_cfg->sr_reference_frame_dir)) {
+                fprintf(stderr, "%s: SR reference frame dir does not exists\n", __func__);
+                return VPX_NEMO_ERROR;
+            }
         }
-        break;
-    case DECODE:
-        if (mobinas_cfg->dnn_mode != NO_DNN) return -1;
-        if (mobinas_cfg->cache_policy != NO_CACHE) return -1;
-        break;
     }
-    return 0;
-}
-*/
+    if (ctx->nemo_cfg->dnn_mode == OFFLINE_DNN) {
+        if (!_exists(ctx->nemo_cfg->sr_offline_frame_dir)) {
+            fprintf(stderr, "%s: SR offline frame dir does not exists\n", __func__);
+            return VPX_NEMO_ERROR;
+        }
+    }
 
-//check whether mobinas_cfg is valid and runtime configuration
-static vpx_codec_err_t load_mobinas_cfg(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg) {
-    assert(mobinas_cfg != NULL);
-    ctx->mobinas_cfg = mobinas_cfg;
+    /* NEMO: create directories */
+    if (ctx->nemo_cfg->save_metadata || ctx->nemo_cfg->save_quality || ctx->nemo_cfg->save_latency) {
+        _mkdir(ctx->nemo_cfg->log_dir);
+    }
+    if (ctx->nemo_cfg->save_yuvframe || ctx->nemo_cfg->save_rgbframe) {
+        if (ctx->nemo_cfg->decode_mode == DECODE) {
+            _mkdir(ctx->nemo_cfg->input_frame_dir);
+        } else if (ctx->nemo_cfg->decode_mode == DECODE_SR ||
+                   ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+            _mkdir(ctx->nemo_cfg->sr_frame_dir);
+        }
+    }
+
     return VPX_CODEC_OK;
-    /*
-    if (is_valid_mobinas_cfg(mobinas_cfg)) {
-        fprintf(stderr, "%s: Invalid mobinas cfg config\n", __func__);
-        return VPX_MOBINAS_ERROR;
-    }
-    */
 }
 
-static vpx_codec_err_t load_mobinas_dnn(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char* dnn_file) {
-#if CONFIG_SNPE
-    mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(mobinas_cfg, resolution);
-    dnn_profile->dnn_instance = snpe_alloc(mobinas_cfg->dnn_runtime);
+static vpx_codec_err_t
+load_nemo_dnn(vpx_codec_alg_priv_t *ctx, int scale, const char *dnn_file) {
+    if (ctx->nemo_cfg == NULL) {
+        return VPX_NEMO_ERROR;
+    }
 
-    if (snpe_check_runtime(dnn_profile->dnn_instance)) {
+    ctx->nemo_cfg->dnn = init_nemo_dnn(scale);
+    ctx->nemo_cfg->bilinear_coeff = init_bilinear_coeff(64, 64, scale);
+
+#if CONFIG_SNPE
+    ctx->nemo_cfg->dnn->interpreter = snpe_alloc(ctx->nemo_cfg->dnn_runtime);
+    if (snpe_check_runtime(ctx->nemo_cfg->dnn->interpreter)) {
 #ifdef __ANDROID_API__
         LOGE("Failed to check runtime");
 #endif
         fprintf(stderr, "%s: Failed to check runtime\n", __func__);
-        return VPX_MOBINAS_ERROR;
+        return VPX_NEMO_ERROR;
     }
 
-    if (snpe_load_network(dnn_profile->dnn_instance, dnn_file)) {
+    if (snpe_load_network(ctx->nemo_cfg->dnn->interpreter, dnn_file)) {
 #ifdef __ANDROID_API__
-        LOGE("Failed to load network");
+        LOGE("Failed to load network: %s", dnn_file);
 #endif
         fprintf(stderr, "%s: Failed to load network\n", __func__);
-        return VPX_MOBINAS_ERROR;
+        return VPX_NEMO_ERROR;
     }
 #endif
     return VPX_CODEC_OK;
 }
 
-static vpx_codec_err_t load_mobinas_cache_profile(vpx_codec_alg_priv_t *ctx, mobinas_cfg_t *mobinas_cfg, int resolution, const char* cache_profile_file) {
-    mobinas_cache_profile_t *cache_profile = get_cache_profile(mobinas_cfg, resolution);
+static vpx_codec_err_t
+load_nemo_cache_profile(vpx_codec_alg_priv_t *ctx, const char *cache_profile_path) {
+    if (ctx->nemo_cfg == NULL) {
+        return VPX_NEMO_ERROR;
+    }
 
-    if ((cache_profile->file = fopen(cache_profile_file, "rb")) == NULL) {
+    ctx->nemo_cfg->cache_profile = init_nemo_cache_profile();
+
+    if ((ctx->nemo_cfg->cache_profile->file = fopen(cache_profile_path, "rb")) == NULL) {
 #ifdef __ANDROID_API__
         LOGE("Failed to open a file");
 #endif
-        fprintf(stderr, "%s: fail to open a file %s", __func__, cache_profile_file);
-        return VPX_MOBINAS_ERROR;
+        fprintf(stderr, "%s: fail to open a file %s", __func__, cache_profile_path);
+        return VPX_NEMO_ERROR;
     }
 
     struct stat buf;
-    fstat(fileno(cache_profile->file), &buf);
-    cache_profile->file_size = buf.st_size;
+    fstat(fileno(ctx->nemo_cfg->cache_profile->file), &buf);
+    ctx->nemo_cfg->cache_profile->file_size = buf.st_size;
 
     return VPX_CODEC_OK;
 }
@@ -401,6 +416,18 @@ static vpx_codec_err_t load_mobinas_cache_profile(vpx_codec_alg_priv_t *ctx, mob
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     char file_path[PATH_MAX] = {0};
+
+    /* NEMO: validate nemo_cfg */
+    if (ctx->nemo_cfg->decode_mode == DECODE_SR) {
+        if (ctx->nemo_cfg->dnn == NULL || ctx->nemo_cfg->bilinear_coeff == NULL) {
+            return VPX_NEMO_ERROR;
+        }
+    }
+    else if (ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+        if (ctx->nemo_cfg->cache_profile == NULL) {
+            return VPX_NEMO_ERROR;
+        }
+    }
 
     ctx->last_show_frame = -1;
     ctx->need_resync = 1;
@@ -424,51 +451,56 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 
     init_buffer_callbacks(ctx);
 
-    /*******************Hyunho************************/
-    if (ctx->mobinas_cfg == NULL) {
-        set_error_detail(ctx, "mobinas_cfg is not allocated");
-        return VPX_MOBINAS_ERROR;
+    /* NEMO: copy variables from ctx->nemo_cfg */
+    ctx->pbi->common.nemo_cfg = ctx->nemo_cfg;
+    ctx->pbi->common.buffer_pool->mode = ctx->nemo_cfg->decode_mode;
+    if (ctx->nemo_cfg->decode_mode == DECODE_SR || ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+        ctx->pbi->common.scale = ctx->nemo_cfg->dnn->scale;
     }
 
+    /* NEMO: initialize workers */
     const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
-    if ((ctx->pbi->mobinas_worker_data = init_mobinas_worker(num_threads, ctx->mobinas_cfg)) == NULL) {
-        set_error_detail(ctx, "Failed to allocate mobinas_worker_data");
-        return VPX_MOBINAS_ERROR;
+    if ((ctx->pbi->mobinas_worker_data = init_nemo_worker(num_threads, ctx->nemo_cfg)) ==
+        NULL) {
+        set_error_detail(ctx, "Failed to allocate nemo_worker_data");
+        return VPX_NEMO_ERROR;
     }
 
-    ctx->pbi->common.mobinas_cfg = ctx->mobinas_cfg;
-    ctx->pbi->common.buffer_pool->mode = ctx->mobinas_cfg->decode_mode;
+    if (ctx->nemo_cfg->decode_mode == DECODE_SR || ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+        ctx->pbi->common.rgb24_input_tensor = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+        ctx->pbi->common.rgb24_sr_tensor = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+    }
 
-    ctx->pbi->common.yv12_frame_0 = (YV12_BUFFER_CONFIG*) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-    ctx->pbi->common.yv12_frame_1 = (YV12_BUFFER_CONFIG*) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-    ctx->pbi->common.rgb24_frame_0 = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-    ctx->pbi->common.rgb24_frame_1 = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-
-    if (ctx->mobinas_cfg->save_quality) {
-        sprintf(file_path, "%s/quality.txt", ctx->mobinas_cfg->log_dir);
+    /* NEMO: open a quality log file, initialize frames used for quality measurements */
+    if (ctx->nemo_cfg->save_quality) {
+        sprintf(file_path, "%s/quality.txt", ctx->nemo_cfg->log_dir);
         if ((ctx->pbi->common.quality_log = fopen(file_path, "w")) == NULL) {
             fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
-            ctx->mobinas_cfg->save_quality = 0;
+            ctx->nemo_cfg->save_quality = 0;
         };
+        ctx->pbi->common.yv12_input_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+        ctx->pbi->common.yv12_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+        ctx->pbi->common.rgb24_input_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+        ctx->pbi->common.rgb24_reference_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
     }
 
-    if (ctx->mobinas_cfg->save_latency) {
-        sprintf(file_path, "%s/latency.txt", ctx->mobinas_cfg->log_dir);
+    /* NEMO: open a latency log file */
+    if (ctx->nemo_cfg->save_latency) {
+        sprintf(file_path, "%s/latency.txt", ctx->nemo_cfg->log_dir);
         if ((ctx->pbi->common.latency_log = fopen(file_path, "w")) == NULL) {
             fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
-            ctx->mobinas_cfg->save_latency = 0;
+            ctx->nemo_cfg->save_latency = 0;
         };
     }
 
-    if (ctx->mobinas_cfg->save_metadata) {
-        sprintf(file_path, "%s/metadata.txt", ctx->mobinas_cfg->log_dir);
+    /* NEMO: open a metadata log file */
+    if (ctx->nemo_cfg->save_metadata) {
+        sprintf(file_path, "%s/metadata.txt", ctx->nemo_cfg->log_dir);
         if ((ctx->pbi->common.metadata_log = fopen(file_path, "w")) == NULL) {
             fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
-            ctx->mobinas_cfg->save_metadata = 0;
+            ctx->nemo_cfg->save_metadata = 0;
         };
     }
-
-    /*******************Hyunho************************/
 
     return VPX_CODEC_OK;
 }
@@ -518,15 +550,15 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
     return VPX_CODEC_OK;
 }
 
-static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_dir, const char *file_name) {
-    char file_path[PATH_MAX] = { 0 };
+static void
+YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const char *file_name) {
+    char file_path[PATH_MAX] = {0};
     FILE *serialize_file = NULL;
 
     //y-channel
     sprintf(file_path, "%s/%s.y", save_dir, file_name);
     serialize_file = fopen(file_path, "wb");
-    if(serialize_file == NULL)
-    {
+    if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
         return;
     }
@@ -541,8 +573,7 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
     //u-channel
     sprintf(file_path, "%s/%s.u", save_dir, file_name);
     serialize_file = fopen(file_path, "wb");
-    if(serialize_file == NULL)
-    {
+    if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
         return;
     }
@@ -557,8 +588,7 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
     //v-channel
     sprintf(file_path, "%s/%s.v", save_dir, file_name);
     serialize_file = fopen(file_path, "wb");
-    if(serialize_file == NULL)
-    {
+    if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
         return;
     }
@@ -572,106 +602,115 @@ static void YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char* save_d
 }
 
 static void save_input_frame(VP9_COMMON *cm) {
-    char file_path[PATH_MAX] = { 0 };
+    char file_path[PATH_MAX] = {0};
 
     //file name
     if (cm->show_frame) {
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->input_frame_dir, cm->current_video_frame - 1);
-    }
-    else {
-        sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->input_frame_dir, cm->current_video_frame, cm->current_super_frame);
+        sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_frame_dir,
+                cm->current_video_frame - 1);
+    } else {
+        sprintf(file_path, "%s/%04d_%d.raw", cm->nemo_cfg->input_frame_dir,
+                cm->current_video_frame, cm->current_super_frame);
     }
 
     //YV12 to RGB
-    RGB24_realloc_frame_buffer(cm->rgb24_frame_0, cm->width, cm->height);
-    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_frame_0);
+    RGB24_realloc_frame_buffer(cm->rgb24_input_frame, cm->width, cm->height);
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_input_frame);
 
     //save
-    RGB24_save_frame_buffer(cm->rgb24_frame_0, file_path);
+    RGB24_save_frame_buffer(cm->rgb24_input_frame, file_path);
 }
 
 static void save_input_frame_yuv(VP9_COMMON *cm) {
-    char file_name[PATH_MAX] = { 0 };
+    char file_name[PATH_MAX] = {0};
     YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
 
     sprintf(file_name, "%04d", cm->current_video_frame - 1);
-    YV12_save_frame_buffer(frame, cm->mobinas_cfg->input_frame_dir, file_name);
+    YV12_save_frame_buffer(frame, cm->nemo_cfg->input_frame_dir, file_name);
 }
 
-static void save_sr_frame(VP9_COMMON *cm){
-    char file_path[PATH_MAX] = { 0 };
+static void save_sr_frame(VP9_COMMON *cm) {
+    char file_path[PATH_MAX] = {0};
 
     //file name
     if (cm->show_frame) {
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_frame_dir, cm->current_video_frame - 1);
-    }
-    else {
-        sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_frame_dir, cm->current_video_frame, cm->current_super_frame);
+        sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_frame_dir,
+                cm->current_video_frame - 1);
+    } else {
+        sprintf(file_path, "%s/%04d_%d.raw", cm->nemo_cfg->sr_frame_dir, cm->current_video_frame,
+                cm->current_super_frame);
     }
 
     //YV12 to RGB
-    RGB24_realloc_frame_buffer(cm->rgb24_frame_1, cm->width * cm->scale, cm->height * cm->scale);
-    YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->rgb24_frame_1);
+    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, cm->width * cm->scale, cm->height * cm->scale);
+    YV12_to_RGB24(get_sr_frame_new_buffer(cm), cm->rgb24_reference_frame);
 
     //save
-    RGB24_save_frame_buffer(cm->rgb24_frame_1, file_path);
+    RGB24_save_frame_buffer(cm->rgb24_reference_frame, file_path);
 }
 
 static void save_sr_frame_yuv(VP9_COMMON *cm) {
-    char file_name[PATH_MAX] = { 0 };
+    char file_name[PATH_MAX] = {0};
     YV12_BUFFER_CONFIG *frame = get_sr_frame_new_buffer(cm);
 
     sprintf(file_name, "%04d", cm->current_video_frame - 1);
-    YV12_save_frame_buffer(frame, cm->mobinas_cfg->sr_frame_dir, file_name);
+    YV12_save_frame_buffer(frame, cm->nemo_cfg->sr_frame_dir, file_name);
 }
 
-static void save_frame(VP9_COMMON *cm) {
-    switch (cm->mobinas_cfg->decode_mode) {
-    case DECODE:
-        save_input_frame(cm);
-        break;
-    case DECODE_SR:
-        //save_input_frame(cm); //overlapped with existing images
-        save_sr_frame(cm);
-        break;
-    case DECODE_CACHE:
-        //save_input_frame(cm); //overlapped with existing images
-        save_sr_frame(cm);
-        break;
+static void save_rgbframe(VP9_COMMON *cm) {
+    switch (cm->nemo_cfg->decode_mode) {
+        case DECODE:
+            save_input_frame(cm);
+            break;
+        case DECODE_SR:
+            //save_input_frame(cm); //overlapped with existing images
+            save_sr_frame(cm);
+            break;
+        case DECODE_CACHE:
+            //save_input_frame(cm); //overlapped with existing images
+            save_sr_frame(cm);
+            break;
     }
 }
 
 static void save_yuvframe(VP9_COMMON *cm) {
     if (cm->show_frame) {
-        if (cm->mobinas_cfg->filter_interval == 0 || (cm->current_video_frame - 1) % cm->mobinas_cfg->filter_interval == 0) {
-            switch (cm->mobinas_cfg->decode_mode) {
-            case DECODE:
-                save_input_frame_yuv(cm);
-                break;
-            case DECODE_SR:
-                save_sr_frame_yuv(cm);
-                break;
-            case DECODE_CACHE:
-                save_sr_frame_yuv(cm);
-                break;
+        if (cm->nemo_cfg->filter_interval == 0 ||
+            (cm->current_video_frame - 1) % cm->nemo_cfg->filter_interval == 0) {
+            switch (cm->nemo_cfg->decode_mode) {
+                case DECODE:
+                    save_input_frame_yuv(cm);
+                    break;
+                case DECODE_SR:
+                    save_sr_frame_yuv(cm);
+                    break;
+                case DECODE_CACHE:
+                    save_sr_frame_yuv(cm);
+                    break;
             }
         }
     }
 }
 
 static void save_input_quality(VP9_COMMON *cm) {
-        char file_path[PATH_MAX] = { 0 };
-        char log[LOG_MAX] = { 0 };
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
+    int width, height;
 
-        //width, height
-        mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
-        int width = dnn_profile->target_width;
-        int height = dnn_profile->target_height;
+    //TODO: validate cm->width, cm->height
+    //width, height
+    if (cm->nemo_cfg->target_height != 0 && cm->nemo_cfg->target_width != 0) {
+        width = cm->nemo_cfg->target_width;
+        height = cm->nemo_cfg->target_height;
+    } else {
+        width = cm->width;
+        height = cm->height;
+    }
 
-        //upscale a frame
-        YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
-        YV12_BUFFER_CONFIG *upscaled_frame = cm->yv12_frame_0;
-        vpx_realloc_frame_buffer(
+    //upscale a frame
+    YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *upscaled_frame = cm->yv12_input_frame;
+    vpx_realloc_frame_buffer(
             upscaled_frame, width, height,
             cm->subsampling_x,
             cm->subsampling_y,
@@ -680,19 +719,19 @@ static void save_input_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-        I420Scale(frame->y_buffer, frame->y_stride, 
-                    frame->u_buffer, frame->uv_stride,
-                    frame->v_buffer, frame->uv_stride,
-                    frame->y_crop_width, frame->y_crop_height,
-                    upscaled_frame->y_buffer, upscaled_frame->y_stride, 
-                    upscaled_frame->u_buffer, upscaled_frame->uv_stride,
-                    upscaled_frame->v_buffer, upscaled_frame->uv_stride,
-                    upscaled_frame->y_crop_width, upscaled_frame->y_crop_height,
-                    3);
+    I420Scale(frame->y_buffer, frame->y_stride,
+              frame->u_buffer, frame->uv_stride,
+              frame->v_buffer, frame->uv_stride,
+              frame->y_crop_width, frame->y_crop_height,
+              upscaled_frame->y_buffer, upscaled_frame->y_stride,
+              upscaled_frame->u_buffer, upscaled_frame->uv_stride,
+              upscaled_frame->v_buffer, upscaled_frame->uv_stride,
+              upscaled_frame->y_crop_width, upscaled_frame->y_crop_height,
+              3);
 
-        //load a reference frame & convert it into yv12
-        YV12_BUFFER_CONFIG *compare_frame = cm->yv12_frame_1;
-        vpx_realloc_frame_buffer(
+    //load a reference frame & convert it into yv12
+    YV12_BUFFER_CONFIG *compare_frame = cm->yv12_reference_frame;
+    vpx_realloc_frame_buffer(
             compare_frame, width, height,
             cm->subsampling_x,
             cm->subsampling_y,
@@ -701,39 +740,45 @@ static void save_input_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-        RGB24_realloc_frame_buffer(cm->rgb24_frame_1, width, height);
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->input_compare_frame_dir, cm->current_video_frame - 1);
-        RGB24_load_frame_buffer(cm->rgb24_frame_1, file_path);
-        RGB24_to_YV12(compare_frame, cm->rgb24_frame_1);
+    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
+    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_reference_frame_dir,
+            cm->current_video_frame - 1);
+    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
+    RGB24_to_YV12(compare_frame, cm->rgb24_reference_frame);
 
-        //calculate a pnsr value
-        PSNR_STATS psnr_stats;
-        vpx_calc_psnr(upscaled_frame, compare_frame, &psnr_stats);
-        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
-        fputs(log, cm->quality_log);
+    //calculate a pnsr value
+    PSNR_STATS psnr_stats;
+    vpx_calc_psnr(upscaled_frame, compare_frame, &psnr_stats);
+    sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
-        LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
-        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.2fdB\n", cm->video_frame_index - 1, psnr_stats.psnr[0]);
 #endif
 }
 
 static void save_sr_quality(VP9_COMMON *cm) {
-        char file_path[PATH_MAX] = { 0 };
-        char log[LOG_MAX] = { 0 };
+    char file_path[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
+    int width, height;
 
-        //width, height
-        mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
-        int width = dnn_profile->target_width;
-        int height = dnn_profile->target_height;
+    //width, height
+    if (cm->nemo_cfg->target_height != 0 && cm->nemo_cfg->target_width != 0) {
+        width = cm->nemo_cfg->target_width;
+        height = cm->nemo_cfg->target_height;
+    } else {
+        width = cm->width * cm->scale;
+        height = cm->height * cm->scale;
+    }
 
-        //upscale a frame
-        //YV12_BUFFER_CONFIG *sr_frame = get_frame_new_buffer(cm);
-        YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);
-        YV12_BUFFER_CONFIG *sr_upscaled_frame = cm->yv12_frame_0;
-        vpx_realloc_frame_buffer(
+    //upscale a frame
+    //YV12_BUFFER_CONFIG *sr_frame = get_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *sr_upscaled_frame = cm->yv12_input_frame;
+    vpx_realloc_frame_buffer(
             sr_upscaled_frame, width, height,
             cm->subsampling_x,
             cm->subsampling_y,
@@ -742,19 +787,19 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-        I420Scale(sr_frame->y_buffer, sr_frame->y_stride, 
-                    sr_frame->u_buffer, sr_frame->uv_stride,
-                    sr_frame->v_buffer, sr_frame->uv_stride,
-                    sr_frame->y_crop_width, sr_frame->y_crop_height,
-                    sr_upscaled_frame->y_buffer, sr_upscaled_frame->y_stride, 
-                    sr_upscaled_frame->u_buffer, sr_upscaled_frame->uv_stride,
-                    sr_upscaled_frame->v_buffer, sr_upscaled_frame->uv_stride,
-                    sr_upscaled_frame->y_crop_width, sr_upscaled_frame->y_crop_height,
-                    3);
+    I420Scale(sr_frame->y_buffer, sr_frame->y_stride,
+              sr_frame->u_buffer, sr_frame->uv_stride,
+              sr_frame->v_buffer, sr_frame->uv_stride,
+              sr_frame->y_crop_width, sr_frame->y_crop_height,
+              sr_upscaled_frame->y_buffer, sr_upscaled_frame->y_stride,
+              sr_upscaled_frame->u_buffer, sr_upscaled_frame->uv_stride,
+              sr_upscaled_frame->v_buffer, sr_upscaled_frame->uv_stride,
+              sr_upscaled_frame->y_crop_width, sr_upscaled_frame->y_crop_height,
+              3);
 
-        //load a reference frame & convert it into yv12
-        YV12_BUFFER_CONFIG *sr_compare_frame = cm->yv12_frame_1;
-        vpx_realloc_frame_buffer(
+    //load a reference frame & convert it into yv12
+    YV12_BUFFER_CONFIG *sr_compare_frame = cm->yv12_reference_frame;
+    vpx_realloc_frame_buffer(
             sr_compare_frame, width, height,
             cm->subsampling_x,
             cm->subsampling_y,
@@ -763,28 +808,28 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-        RGB24_realloc_frame_buffer(cm->rgb24_frame_1, width, height);
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_compare_frame_dir, cm->current_video_frame - 1);
-        RGB24_load_frame_buffer(cm->rgb24_frame_1, file_path);
-        RGB24_to_YV12(sr_compare_frame, cm->rgb24_frame_1);
+    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
+    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_reference_frame_dir,
+            cm->current_video_frame - 1);
+    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
+    RGB24_to_YV12(sr_compare_frame, cm->rgb24_reference_frame);
 
-        //calculate a pnsr value
-        PSNR_STATS psnr_stats;
-        vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats);
-        sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
-        fputs(log, cm->quality_log);
+    //calculate a pnsr value
+    PSNR_STATS psnr_stats;
+    vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats);
+    sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
-        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
-        LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-        printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.2fdB\n", cm->video_frame_index - 1, psnr_stats.psnr[0]);
 #endif
 }
 
 //Note: Current version loads/saves in RGB24, measure quality in RGB24
 static void save_quality(VP9_COMMON *cm) {
-    switch (cm->mobinas_cfg->decode_mode) {
+    switch (cm->nemo_cfg->decode_mode) {
         case DECODE:
             save_input_quality(cm);
             break;
@@ -799,67 +844,84 @@ static void save_quality(VP9_COMMON *cm) {
     }
 }
 
-static void save_latency(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
-{
+//TODO: add interp, sr
+static void save_latency(VP9Decoder *pbi, int video_frame_index, int super_frame_index) {
     int i;
     char log[LOG_MAX] = {0};
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (i = 0; i < num_threads; ++i) {
-        mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
-        //sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame,
-        //        current_super_frame, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
+        nemo_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
+        //sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", video_frame_index,
+        //        super_frame_index, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
         //        mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,  mwd->latency.decode_inter_residual);
-        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, current_super_frame, 
-                mwd->latency.decode_intra_block, mwd->latency.decode_inter_block, mwd->latency.decode_inter_residual,
-                mwd->latency.interp_intra_block, mwd->latency.interp_inter_block, mwd->latency.interp_inter_residual);
+        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", video_frame_index,
+                super_frame_index,
+                mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,
+                mwd->latency.decode_inter_residual,
+                mwd->latency.interp_intra_block, mwd->latency.interp_inter_block,
+                mwd->latency.interp_inter_residual);
         fputs(log, mwd->latency_log);
     }
 
     if (pbi->common.apply_dnn == 0) {
-        sprintf(log, "%d\t%d\t%.2f\n", current_video_frame, current_super_frame, pbi->common.latency.decode_frame);
-    }
-    else {
-        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", current_video_frame, current_super_frame, pbi->common.latency.decode_frame,
-                                            pbi->common.latency.convert_yuv_to_rgb, pbi->common.latency.execue_dnn,
-                                            pbi->common.latency.convert_float_to_int, pbi->common.latency.convert_rgb_to_yuv);
-#ifdef __ANDROID_API__
-        LOGI("%d, %d frame: %.2fmsec", current_video_frame, current_super_frame, pbi->common.latency.decode_frame);
-#else
-        fprintf(stderr, "%d, %d frmae: %.2fmsec", current_video_frame, current_super_frame, pbi->common.latency.decode_frame);
-#endif
+        sprintf(log, "%d\t%d\t%.2f\n", video_frame_index, super_frame_index,
+                pbi->common.latency.decode);
+    } else {
+        sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", video_frame_index,
+                super_frame_index, pbi->common.latency.decode,
+                pbi->common.latency.sr_convert_yuv_to_rgb, pbi->common.latency.sr_execute_dnn,
+                pbi->common.latency.sr_convert_float_to_int,
+                pbi->common.latency.sr_convert_rgb_to_yuv);
     }
     fputs(log, pbi->common.latency_log);
+
+#ifdef __ANDROID_API__
+    LOGI("%d, %d frame: %.2fmsec", video_frame_index, super_frame_index,
+         pbi->common.latency.decode);
+#endif
+    fprintf(stderr, "%d, %d frame: %.2fmsec", video_frame_index, super_frame_index, pbi->common.latency.decode);
+#endif
 }
 
-static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_super_frame)
-{
+static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_super_frame) {
     int i;
     char log[LOG_MAX] = {0};
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (i = 0; i < num_threads; ++i) {
-        mobinas_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
-		sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame,
-		        mwd->metadata.num_blocks, mwd->metadata.num_intrablocks, mwd->metadata.num_interblocks, mwd->metadata.num_noskip_interblocks);
-		fputs(log, mwd->metadata_log);
+        nemo_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame,
+                mwd->metadata.num_blocks, mwd->metadata.num_intrablocks,
+                mwd->metadata.num_interblocks, mwd->metadata.num_noskip_interblocks);
+        fputs(log, mwd->metadata_log);
     }
 
-    if(pbi->common.frame_type == KEY_FRAME || pbi->common.intra_only) {
-        sprintf(log, "%d\t%d\t%d\t%d\t%d\tkey_frame\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only);
-    }
-    else {
+    if (pbi->common.frame_type == KEY_FRAME || pbi->common.intra_only) {
+        sprintf(log, "%d\t%d\t%d\t%d\t%d\tkey_frame\n", current_video_frame, current_super_frame,
+                pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only);
+    } else {
         if (pbi->common.show_frame == 0) {
-            sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\talternative_reference_frame\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only,
-                    pbi->common.metadata.reference_frames[0].current_video_frame, pbi->common.metadata.reference_frames[0].current_super_frame,
-                    pbi->common.metadata.reference_frames[1].current_video_frame, pbi->common.metadata.reference_frames[1].current_super_frame,
-                    pbi->common.metadata.reference_frames[2].current_video_frame, pbi->common.metadata.reference_frames[2].current_super_frame);
-        }
-        else {
-            sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\tnormal_frame\n", current_video_frame, current_super_frame, pbi->common.apply_dnn, pbi->common.frame_type, pbi->common.intra_only,
-                    pbi->common.metadata.reference_frames[0].current_video_frame, pbi->common.metadata.reference_frames[0].current_super_frame,
-                    pbi->common.metadata.reference_frames[1].current_video_frame, pbi->common.metadata.reference_frames[1].current_super_frame,
-                    pbi->common.metadata.reference_frames[2].current_video_frame, pbi->common.metadata.reference_frames[2].current_super_frame);
+            sprintf(log,
+                    "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\talternative_reference_frame\n",
+                    current_video_frame, current_super_frame, pbi->common.apply_dnn,
+                    pbi->common.frame_type, pbi->common.intra_only,
+                    pbi->common.metadata.reference_frames[0].video_frame_index,
+                    pbi->common.metadata.reference_frames[0].super_frame_index,
+                    pbi->common.metadata.reference_frames[1].video_frame_index,
+                    pbi->common.metadata.reference_frames[1].super_frame_index,
+                    pbi->common.metadata.reference_frames[2].video_frame_index,
+                    pbi->common.metadata.reference_frames[2].super_frame_index);
+        } else {
+            sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\tnormal_frame\n",
+                    current_video_frame, current_super_frame, pbi->common.apply_dnn,
+                    pbi->common.frame_type, pbi->common.intra_only,
+                    pbi->common.metadata.reference_frames[0].video_frame_index,
+                    pbi->common.metadata.reference_frames[0].super_frame_index,
+                    pbi->common.metadata.reference_frames[1].video_frame_index,
+                    pbi->common.metadata.reference_frames[1].super_frame_index,
+                    pbi->common.metadata.reference_frames[2].video_frame_index,
+                    pbi->common.metadata.reference_frames[2].super_frame_index);
         }
     }
     fputs(log, pbi->common.metadata_log);
@@ -919,15 +981,16 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
-            clock_gettime( CLOCK_MONOTONIC, &start_time);
+            clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
             res = decode_one(ctx, &data_start_copy, frame_size, user_priv, deadline);
 
             if (res != VPX_CODEC_OK) return res;
 #if DEBUG_LATENCY
-            clock_gettime( CLOCK_MONOTONIC, &finish_time);
-            diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-            cm->latency.decode_frame += diff;
+            clock_gettime(CLOCK_MONOTONIC, &finish_time);
+            diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 +
+                   (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+            cm->latency.decode += diff;
 #endif
             data_start += frame_size;
 
@@ -935,10 +998,12 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             if (cm->show_frame == 0) current_video_frame = cm->current_video_frame;
             else current_video_frame = cm->current_video_frame - 1;
 
-            if (cm->mobinas_cfg->save_frame) save_frame(cm);
-            if (cm->mobinas_cfg->save_yuvframe) save_yuvframe(cm);
-            if (cm->mobinas_cfg->save_latency) save_latency(ctx->pbi, current_video_frame, cm->current_super_frame);
-            if (cm->mobinas_cfg->save_metadata) save_metadata(ctx->pbi, current_video_frame, cm->current_super_frame);
+            if (cm->nemo_cfg->save_rgbframe) save_rgbframe(cm);
+            if (cm->nemo_cfg->save_yuvframe) save_yuvframe(cm);
+            if (cm->nemo_cfg->save_latency)
+                save_latency(ctx->pbi, current_video_frame, cm->current_super_frame);
+            if (cm->nemo_cfg->save_metadata)
+                save_metadata(ctx->pbi, current_video_frame, cm->current_super_frame);
 
             cm->current_super_frame++;
             /*******************Hyunho************************/
@@ -949,16 +1014,18 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             const uint32_t frame_size = (uint32_t) (data_end - data_start);
 #if DEBUG_LATENCY
             memset(&cm->latency, 0, sizeof(cm->latency));
-            clock_gettime( CLOCK_MONOTONIC, &start_time);
+            clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-            const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv, deadline);
+            const vpx_codec_err_t res = decode_one(ctx, &data_start, frame_size, user_priv,
+                                                   deadline);
 
             if (res != VPX_CODEC_OK) return res;
 
 #if DEBUG_LATENCY
-            clock_gettime( CLOCK_MONOTONIC, &finish_time);
-            diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-            cm->latency.decode_frame += diff;
+            clock_gettime(CLOCK_MONOTONIC, &finish_time);
+            diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 +
+                   (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+            cm->latency.decode += diff;
 #endif
 
             // Account for suboptimal termination by the encoder.
@@ -971,18 +1038,19 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 
             /*******************Hyunho************************/
-            if (cm->mobinas_cfg->save_frame) save_frame(cm);
-            if (cm->mobinas_cfg->save_yuvframe) save_yuvframe(cm);
-            if (cm->mobinas_cfg->save_latency){
+            if (cm->nemo_cfg->save_rgbframe) save_rgbframe(cm);
+            if (cm->nemo_cfg->save_yuvframe) save_yuvframe(cm);
+            if (cm->nemo_cfg->save_latency) {
                 save_latency(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
             }
-            if (cm->mobinas_cfg->save_metadata) save_metadata(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
+            if (cm->nemo_cfg->save_metadata)
+                save_metadata(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
             /*******************Hyunho************************/
 
         }
     }
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->save_quality) save_quality(cm);
+    if (cm->nemo_cfg->save_quality) save_quality(cm);
     /*******************Hyunho************************/
     return res;
 }
@@ -1007,9 +1075,10 @@ static vpx_image_t *decoder_get_frame(vpx_codec_alg_priv_t *ctx,
             yuvconfig2image(&ctx->img, &sd, ctx->user_priv);
 
             /*** chanju ***/
-            if(ctx->mobinas_cfg->decode_mode==DECODE_CACHE || ctx->mobinas_cfg->decode_mode == DECODE_SR){
+            if (ctx->nemo_cfg->decode_mode == DECODE_CACHE ||
+                ctx->nemo_cfg->decode_mode == DECODE_SR) {
                 ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer.priv;
-            }else{
+            } else {
                 ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
             }
             /*** chanju ***/
@@ -1254,25 +1323,25 @@ static vpx_codec_err_t ctrl_set_spatial_layer_svc(vpx_codec_alg_priv_t *ctx,
 }
 
 static vpx_codec_ctrl_fn_map_t decoder_ctrl_maps[] = {
-        {VP8_COPY_REFERENCE,           ctrl_copy_reference},
+        {VP8_COPY_REFERENCE, ctrl_copy_reference},
 
         // Setters
-        {VP8_SET_REFERENCE,            ctrl_set_reference},
-        {VP8_SET_POSTPROC,             ctrl_set_postproc},
+        {VP8_SET_REFERENCE, ctrl_set_reference},
+        {VP8_SET_POSTPROC, ctrl_set_postproc},
         {VP9_INVERT_TILE_DECODE_ORDER, ctrl_set_invert_tile_order},
-        {VPXD_SET_DECRYPTOR,           ctrl_set_decryptor},
-        {VP9_SET_BYTE_ALIGNMENT,       ctrl_set_byte_alignment},
-        {VP9_SET_SKIP_LOOP_FILTER,     ctrl_set_skip_loop_filter},
+        {VPXD_SET_DECRYPTOR, ctrl_set_decryptor},
+        {VP9_SET_BYTE_ALIGNMENT, ctrl_set_byte_alignment},
+        {VP9_SET_SKIP_LOOP_FILTER, ctrl_set_skip_loop_filter},
         {VP9_DECODE_SVC_SPATIAL_LAYER, ctrl_set_spatial_layer_svc},
 
         // Getters
-        {VPXD_GET_LAST_QUANTIZER,      ctrl_get_quantizer},
-        {VP8D_GET_LAST_REF_UPDATES,    ctrl_get_last_ref_updates},
-        {VP8D_GET_FRAME_CORRUPTED,     ctrl_get_frame_corrupted},
-        {VP9_GET_REFERENCE,            ctrl_get_reference},
-        {VP9D_GET_DISPLAY_SIZE,        ctrl_get_render_size},
-        {VP9D_GET_BIT_DEPTH,           ctrl_get_bit_depth},
-        {VP9D_GET_FRAME_SIZE,          ctrl_get_frame_size},
+        {VPXD_GET_LAST_QUANTIZER, ctrl_get_quantizer},
+        {VP8D_GET_LAST_REF_UPDATES, ctrl_get_last_ref_updates},
+        {VP8D_GET_FRAME_CORRUPTED, ctrl_get_frame_corrupted},
+        {VP9_GET_REFERENCE, ctrl_get_reference},
+        {VP9D_GET_DISPLAY_SIZE, ctrl_get_render_size},
+        {VP9D_GET_BIT_DEPTH, ctrl_get_bit_depth},
+        {VP9D_GET_FRAME_SIZE, ctrl_get_frame_size},
 
         {-1, NULL},
 };
@@ -1312,8 +1381,8 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
                 NULL   // vpx_codec_enc_mr_get_mem_loc_fn_t
         },
         {
-            load_mobinas_cfg,
-            load_mobinas_dnn,
-            load_mobinas_cache_profile
+                load_nemo_cfg,
+                load_nemo_dnn,
+                load_nemo_cache_profile
         }
 };

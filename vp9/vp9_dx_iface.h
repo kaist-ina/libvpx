@@ -15,12 +15,11 @@
 
 typedef vpx_codec_stream_info_t vp9_stream_info_t;
 
-//TODO (chanju): declare SNPE variable inside this structure
 struct vpx_codec_alg_priv {
   vpx_codec_priv_t base;
   vpx_codec_dec_cfg_t cfg;
   vp9_stream_info_t si;
-  mobinas_cfg_t *mobinas_cfg;
+  nemo_cfg_t *nemo_cfg; // NEMO: New variable
   VP9Decoder *pbi;
   void *user_priv;
   int postproc_cfg_set;

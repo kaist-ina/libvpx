@@ -306,7 +306,7 @@ int vp9_post_proc_frame(struct VP9Common *cm, YV12_BUFFER_CONFIG *dest,
     return 0;
   }
 
-  if (cm->mobinas_cfg->decode_mode == DECODE_SR || cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+  if (cm->nemo_cfg->decode_mode == DECODE_SR || cm->nemo_cfg->decode_mode == DECODE_CACHE) {
     fprintf(stderr, "%s is not implemented for DECODE_SR, DECODE_CACHE");
     return -1;
   }
@@ -314,7 +314,7 @@ int vp9_post_proc_frame(struct VP9Common *cm, YV12_BUFFER_CONFIG *dest,
   vpx_clear_system_state();
 
   // Alloc memory for prev_mip in the first frame.
-  if (cm->current_video_frame == 1) {
+  if (cm->video_frame_index == 1) {
     ppstate->last_base_qindex = cm->base_qindex;
     ppstate->last_frame_valid = 1;
   }
@@ -376,7 +376,7 @@ int vp9_post_proc_frame(struct VP9Common *cm, YV12_BUFFER_CONFIG *dest,
     }
   }
 
-  if ((flags & VP9D_MFQE) && cm->current_video_frame >= 2 &&
+  if ((flags & VP9D_MFQE) && cm->video_frame_index >= 2 &&
       ppstate->last_frame_valid && cm->bit_depth == 8 &&
       ppstate->last_base_qindex <= last_q_thresh &&
       cm->base_qindex - ppstate->last_base_qindex >= q_diff_thresh) {

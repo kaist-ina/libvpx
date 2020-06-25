@@ -49,7 +49,7 @@
 #include <vpx_dsp/psnr.h>
 #include <vpx_dsp/vpx_constant.h>
 #include <vpx_dsp/vpx_copy.h>
-#include <vpx/vpx_mobinas.h>
+#include <vpx/vpx_nemo.h>
 #include <vpx/snpe/main.hpp>
 
 //Hyunho: for debugging
@@ -506,7 +506,7 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
     /*******************Hyunho************************/
     // TODO (hyunho): implement neon-based lr_resiudal decode & copy
     if (eob > 0) {
-        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+        if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
 #if !DEBUG_RESIDUAL
             if (!cm->apply_dnn) {
                 inverse_transform_block_inter_copy(
@@ -1411,7 +1411,7 @@ static void dec_build_cache_inter_predictors_sb(VP9Decoder *const pbi,
         BufferPool *const pool = pbi->common.buffer_pool;
         RefCntBuffer *const ref_frame_buf = &pool->frame_bufs[idx];
 
-        if (!vp9_is_valid_scale(sf) && pbi->common.mobinas_cfg->decode_mode !=
+        if (!vp9_is_valid_scale(sf) && pbi->common.nemo_cfg->decode_mode !=
                                        DECODE_CACHE) //TODO (hyunho): how to check valid scale in DECODE_CACHE mode?
             vpx_internal_error(xd->error_info, VPX_CODEC_UNSUP_BITSTREAM,
                                "Reference frame has invalid dimensions");
@@ -1542,7 +1542,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
     const int y_mis = VPXMIN(bh, cm->mi_rows - mi_row);
     vpx_reader *r = &twd->bit_reader;
     MACROBLOCKD *const xd = &twd->xd;
-    mobinas_worker_data_t *mwd = twd->mobinas_worker_data;
+    nemo_worker_data_t *mwd = twd->mobinas_worker_data;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
@@ -1598,12 +1598,13 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                                                         tx_size);
             /*******************Hyunho************************/
             //TODO (hyunho): handle if it is bigger than max block size
-            if (!cm->apply_dnn && cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+            if (!cm->apply_dnn && cm->nemo_cfg->decode_mode == DECODE_CACHE) {
                 if (plane == 0)
-                    create_mobinas_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
-                                                max_blocks_high);
+                    create_nemo_interp_block(mwd->intra_block_list, mi_col, mi_row, max_blocks_wide,
+                                             max_blocks_high);
                 else
-                    set_mobinas_interp_block(mwd->intra_block_list, plane, max_blocks_wide, max_blocks_high);\
+                    set_nemo_interp_block(mwd->intra_block_list, plane, max_blocks_wide,
+                                          max_blocks_high);\
             }
             /*******************Hyunho************************/
         }
@@ -1616,7 +1617,7 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
         /*******************Hyunho************************/
         mwd->metadata.num_interblocks++;
 
-        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE)
+        if (cm->nemo_cfg->decode_mode == DECODE_CACHE)
         {
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -1691,10 +1692,12 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                 if (!cm->apply_dnn)
                 {
                     if (plane == 0)
-                        create_mobinas_interp_block(mwd->inter_block_list, mi_col, mi_row, max_blocks_wide,
-                                                    max_blocks_high);
+                        create_nemo_interp_block(mwd->inter_block_list, mi_col, mi_row,
+                                                 max_blocks_wide,
+                                                 max_blocks_high);
                     else
-                        set_mobinas_interp_block(mwd->inter_block_list, plane, max_blocks_wide, max_blocks_high);
+                        set_nemo_interp_block(mwd->inter_block_list, plane, max_blocks_wide,
+                                              max_blocks_high);
                 }
             }
         }
@@ -2334,7 +2337,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 #endif
 	//setup frames
     VP9_COMMON *cm = &pbi->common;
-    mobinas_worker_data_t *mwd = pbi->mobinas_worker_data;
+    nemo_worker_data_t *mwd = pbi->mobinas_worker_data;
 	YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
 	YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);  //check: sr frame
 	YV12_BUFFER_CONFIG *lr_residual = mwd->lr_resiudal;
@@ -2353,8 +2356,8 @@ static void apply_bilinear(VP9Decoder *pbi) {
 	const int max_heights[MAX_MB_PLANE] = { lr_frame->y_crop_height, lr_frame->uv_crop_height, lr_frame->uv_crop_height };
 	const int max_widths[MAX_MB_PLANE] = { lr_frame->y_crop_width, lr_frame->uv_crop_width, lr_frame->uv_crop_width };
 
-	mobinas_interp_block_t *intra_block = mwd->intra_block_list->head;
-	mobinas_interp_block_t *prev_block = NULL;
+	nemo_interp_block_t *intra_block = mwd->intra_block_list->head;
+	nemo_interp_block_t *prev_block = NULL;
 
 #if DEBUG_LATENCY
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -2380,8 +2383,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 					lr_frame_strides[plane], sr_frame_buffers[plane],
 					sr_frame_strides[plane], x_offsets[plane], y_offsets[plane],
 					widths[plane], heights[plane], cm->scale,
-					get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile,
-							cm->scale));
+					cm->nemo_cfg->bilinear_coeff);
 		}
 		prev_block = intra_block;
 		intra_block = intra_block->next;
@@ -2397,7 +2399,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 	mwd->latency.interp_intra_block += diff;
 #endif
 
-	mobinas_interp_block_t *inter_block = mwd->inter_block_list->head;
+	nemo_interp_block_t *inter_block = mwd->inter_block_list->head;
 
 #if DEBUG_LATENCY
 	clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -2424,8 +2426,7 @@ static void apply_bilinear(VP9Decoder *pbi) {
 					lr_residual_strides[plane], sr_frame_buffers[plane],
 					sr_frame_strides[plane], x_offsets[plane], y_offsets[plane],
 					widths[plane], heights[plane], cm->scale,
-					get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile,
-							cm->scale));
+					cm->nemo_cfg->bilinear_coeff);
 		}
 #endif
 
@@ -2456,7 +2457,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     int tile_row, tile_col;
     int mi_row, mi_col;
     TileWorkerData *tile_data = NULL;
-    mobinas_worker_data_t *mwd = pbi->tile_worker_data->mobinas_worker_data;
+    nemo_worker_data_t *mwd = pbi->tile_worker_data->mobinas_worker_data;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
@@ -2474,7 +2475,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
             // Be sure to sync as we might be resuming after a failed frame decode.
@@ -2549,7 +2550,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
             }
 
             /*******************Hyunho************************/
-            if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+            if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
                 // Loopfilter one row.
                 if (cm->lf.filter_level && !cm->skip_loop_filter) {
                     const int lf_start = mi_row - MI_BLOCK_SIZE;
@@ -2598,7 +2599,7 @@ static const uint8_t *decode_tiles(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+    if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
         // Loopfilter remaining rows in the frame.
         if (cm->lf.filter_level && !cm->skip_loop_filter) {
             LFWorkerData *const lf_data = (LFWorkerData *) pbi->lf_worker.data1;
@@ -2632,7 +2633,7 @@ static int tile_worker_hook(void *arg1, void *arg2) {
     TileWorkerData *const tile_data = (TileWorkerData *) arg1;
     VP9Decoder *const pbi = (VP9Decoder *) arg2;
     VP9_COMMON *const cm = &pbi->common;
-    mobinas_worker_data_t *const mwd = tile_data->mobinas_worker_data;
+    nemo_worker_data_t *const mwd = tile_data->mobinas_worker_data;
 
     TileInfo *volatile tile = &tile_data->xd.tile;
     const int final_col = (1 << pbi->common.log2_tile_cols) - 1;
@@ -2684,14 +2685,14 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     TileWorkerData *const tile_data = (TileWorkerData *) arg1;
     VP9Decoder *const pbi = (VP9Decoder *) arg2;
     VP9_COMMON *cm = &pbi->common;
-    mobinas_worker_data_t *mwd = tile_data->mobinas_worker_data;
+    nemo_worker_data_t *mwd = tile_data->mobinas_worker_data;
     int plane;
 #if DEBUG_LATENCY
     struct timespec start_time, finish_time;
     double diff;
 #endif
 
-    assert (cm->mobinas_cfg->decode_mode == DECODE_CACHE);
+    assert (cm->nemo_cfg->decode_mode == DECODE_CACHE);
 
     YV12_BUFFER_CONFIG *lr_frame = get_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm); //check: sr frame
@@ -2718,8 +2719,8 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    mobinas_interp_block_t *intra_block = mwd->intra_block_list->head;
-    mobinas_interp_block_t *prev_block = NULL;
+    nemo_interp_block_t *intra_block = mwd->intra_block_list->head;
+    nemo_interp_block_t *prev_block = NULL;
     while (intra_block != NULL) {
         const int widths[MAX_MB_PLANE] = {intra_block->n4_w[0] * 4, intra_block->n4_w[1] * 4,
                                           intra_block->n4_w[2] * 4};
@@ -2742,7 +2743,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
             vpx_bilinear_interp_uint8(lr_frame_buffers[plane], lr_frame_strides[plane],
                                       sr_frame_buffers[plane], sr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
-                                      heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
+                                      heights[plane], cm->scale, cm->nemo_cfg->bilinear_coeff);
         }
 #endif
         prev_block = intra_block;
@@ -2758,7 +2759,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
     mwd->latency.interp_intra_block += diff;
 #endif
 
-    mobinas_interp_block_t *inter_block = mwd->inter_block_list->head;
+    nemo_interp_block_t *inter_block = mwd->inter_block_list->head;
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
@@ -2783,7 +2784,7 @@ static int mobinas_worker_hook(void *arg1, void *arg2) {
             vpx_bilinear_interp_int16(lr_residual_buffers[plane], lr_residual_strides[plane],
                                       sr_frame_buffers[plane], sr_frame_strides[plane],
                                       x_offsets[plane], y_offsets[plane], widths[plane],
-                                      heights[plane], cm->scale, get_vp9_bilinear_config(cm->mobinas_cfg->bilinear_profile, cm->scale));
+                                      heights[plane], cm->scale, cm->nemo_cfg->bilinear_coeff);
         }
 
         prev_block = inter_block;
@@ -3147,12 +3148,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             pbi->need_resync = 0;
         }
         /*******************Hyunho************************/
-        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
-            //cm->scale = cm->mobinas_cfg->get_scale(cm->height);
-            cm->scale = get_dnn_profile(cm->mobinas_cfg, cm->height)->scale;
-            if (cm->scale == -1) {
-                vpx_internal_error(&cm->error, VPX_MOBINAS_ERROR, "Failed to set cm->scale");
-            }
+        if (cm->nemo_cfg->decode_mode == DECODE_CACHE || cm->nemo_cfg->decode_mode == DECODE_SR) {
             setup_sr_frame_size(cm);
         }
         /*******************Hyunho************************/
@@ -3202,13 +3198,13 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                 ref_frame->buf_sr = &frame_bufs[idx].sr_buf;
                 cm->ref_frame_sign_bias[LAST_FRAME + i] = vpx_rb_read_bit(rb);
 
-                cm->metadata.reference_frames[i].current_video_frame = frame_bufs[idx].current_video_frame;
-                cm->metadata.reference_frames[i].current_super_frame = frame_bufs[idx].current_super_frame;
+                cm->metadata.reference_frames[i].video_frame_index = frame_bufs[idx].current_video_frame;
+                cm->metadata.reference_frames[i].super_frame_index = frame_bufs[idx].current_super_frame;
             }
 
             setup_frame_size_with_refs(cm, rb);
             /*******************Hyunho************************/
-            if (cm->mobinas_cfg->decode_mode == DECODE_CACHE || cm->mobinas_cfg->decode_mode == DECODE_SR) {
+            if (cm->nemo_cfg->decode_mode == DECODE_CACHE || cm->nemo_cfg->decode_mode == DECODE_SR) {
                 setup_sr_frame_size_with_refs(cm);
             }
             /*******************Hyunho************************/
@@ -3228,7 +3224,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                                            &ref_buf->sf, ref_buf->buf->y_crop_width,
                                            ref_buf->buf->y_crop_height, cm->width, cm->height);
                 /*******************Hyunho************************/
-                if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+                if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
                     vp9_setup_scale_factors_for_sr_frame(
                             &ref_buf->sf_sr, ref_buf->buf_sr->y_crop_width,
                             ref_buf->buf_sr->y_crop_height, cm->width, cm->height, false, false, cm->scale);
@@ -3304,7 +3300,7 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
                            "Invalid header size");
 
     /*******************Hyunho************************/
-    if (cm->mobinas_cfg->decode_mode == DECODE_CACHE)
+    if (cm->nemo_cfg->decode_mode == DECODE_CACHE)
     {
         const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
         vp9_setup_scale_factors_for_sr_frame(  //hyunho: scale factor for sr-cached frames
@@ -3436,19 +3432,19 @@ void apply_online_dnn_y(VP9_COMMON *const cm) {
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-    cm->latency.convert_float_to_int += diff;
+    cm->latency.sr_convert_float_to_int += diff;
 #endif
 }
 
 void apply_offline_dnn_rgb(VP9_COMMON *const cm) {
     char file_path[PATH_MAX] = {0};
     if (cm->show_frame)
-        sprintf(file_path, "%s/%04d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame);
+        sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_offline_frame_dir, cm->current_video_frame);
     else
-        sprintf(file_path, "%s/%04d_%d.raw", cm->mobinas_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
-    RGB24_realloc_frame_buffer(cm->rgb24_frame_1, cm->width * cm->scale, cm->height * cm->scale);
-    RGB24_load_frame_buffer(cm->rgb24_frame_1, file_path);
-    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_frame_1);
+        sprintf(file_path, "%s/%04d_%d.raw", cm->nemo_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
+    RGB24_realloc_frame_buffer(cm->rgb24_sr_tensor, cm->width * cm->scale, cm->height * cm->scale);
+    RGB24_load_frame_buffer(cm->rgb24_sr_tensor, file_path);
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_sr_tensor);
 }
 
 void apply_online_dnn_rgb(VP9_COMMON *const cm) {
@@ -3456,51 +3452,48 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
     struct timespec start_time, finish_time;
     double diff;
 #endif
-
 #if CONFIG_SNPE
-    RGB24_realloc_frame_buffer(cm->rgb24_frame_0, cm->width, cm->height);
-    RGB24_realloc_frame_buffer(cm->rgb24_frame_1, cm->width * cm->scale, cm->height * cm->scale);
+    RGB24_realloc_frame_buffer(cm->rgb24_input_tensor, cm->width, cm->height);
+    RGB24_realloc_frame_buffer(cm->rgb24_sr_tensor, cm->width * cm->scale, cm->height * cm->scale);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_frame_0);
-#if DEBUG_LATENCY
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_input_tensor);
+//#if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-    cm->latency.convert_yuv_to_rgb += diff;
-#endif
-#if DEBUG_LATENCY
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-#endif
-    //snpe_execute_byte(cm->mobinas_cfg->dnn_class, cm->rgb24_frame_0->buffer_alloc, cm->rgb24_frame_1->buffer_alloc_float, 3 * cm->height * cm->width);
-    snpe_execute_byte(get_dnn_profile(cm->mobinas_cfg, cm->height)->dnn_instance, cm->rgb24_frame_0->buffer_alloc, cm->rgb24_frame_1->buffer_alloc_float, 3 * cm->height * cm->width);
-#if DEBUG_LATENCY
-    clock_gettime(CLOCK_MONOTONIC, &finish_time);
-    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
-           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-    cm->latency.execue_dnn += diff;
+    cm->latency.sr_convert_yuv_to_rgb += diff;
 #endif
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    RGB24_float_to_uint8(cm->rgb24_frame_1);
+    snpe_execute_byte(cm->nemo_cfg->dnn->interpreter, cm->rgb24_input_tensor->buffer_alloc, cm->rgb24_sr_tensor->buffer_alloc_float, 3 * cm->height * cm->width);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-    cm->latency.convert_float_to_int += diff;
+    cm->latency.sr_execute_dnn += diff;
 #endif
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_frame_1);
+    RGB24_float_to_uint8(cm->rgb24_sr_tensor);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
-    cm->latency.convert_rgb_to_yuv += diff;
+    cm->latency.sr_convert_float_to_int += diff;
 #endif
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_sr_tensor);
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
+           + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    cm->latency.sr_convert_rgb_to_yuv += diff;
 #endif
 }
 
@@ -3571,9 +3564,9 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         CHECK_MEM_ERROR(cm, pbi->tile_worker_data, vpx_memalign(32, twd_size));
         pbi->total_tiles = tile_rows * tile_cols;
 
-        /*******************Hyunho************************/ //init as 0
+        /*******************Hyunho************************/
         for (i = 0; i < num_tile_workers; i++) {
-            pbi->tile_worker_data[i].mobinas_worker_data = &pbi->mobinas_worker_data[0];
+            pbi->tile_worker_data[i].mobinas_worker_data = &pbi->mobinas_worker_data[0]; //init as 0
         }
         /*******************Hyunho************************/
     }
@@ -3583,30 +3576,32 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
 
     //worker
     for (i = 0; i < num_threads; i++) {
-        if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) {
+        if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
             memset(pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->mobinas_worker_data[i].lr_resiudal->buffer_alloc_sz);
         }
-        memset(&pbi->mobinas_worker_data[i].latency, 0, sizeof(mobinas_latency_info_t));
-        memset(&pbi->mobinas_worker_data[i].metadata, 0, sizeof(mobinas_metadata_info_t));
+        memset(&pbi->mobinas_worker_data[i].latency, 0, sizeof(nemo_latency_t));
+        memset(&pbi->mobinas_worker_data[i].metadata, 0, sizeof(nemo_metdata_t));
     }
 
     //dnn
-    mobinas_cache_profile_t *cache_profile;
+    nemo_cache_profile_t *cache_profile;
 
-    switch(cm->mobinas_cfg->decode_mode) {
+    switch(cm->nemo_cfg->decode_mode) {
     case DECODE_SR:
         cm->apply_dnn = 1;
         break;
     case DECODE_CACHE:
-            switch (cm->mobinas_cfg->cache_policy)
+            switch (cm->nemo_cfg->cache_mode)
         {
         case PROFILE_CACHE:
-            cache_profile = get_cache_profile(cm->mobinas_cfg, cm->height);
+            cache_profile = cm->nemo_cfg->cache_profile;
 
-//            LOGE("video frame %d, offset %ld",cm->current_video_frame, cache_profile->offset);
+//            LOGE("video frame %d, offset %ld",cm->video_frame_index, cache_profile->offset);
 
             if (cm->frame_type == KEY_FRAME) {
                 //cache loopback
+                //TODO: why 8991? check when working on Exoplayer
+                //TODO: read file size and check whether offset is equal to file size
                 if(cm->current_video_frame != 0 && cm->current_video_frame % 8991 == 0){
 //                    LOGE("rewind");
                     cache_profile->offset = 0;
@@ -3617,7 +3612,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                 if (read_cache_profile_dummy_bits(cache_profile) == -1) {
 //                    LOGE("dummy bits fail");
                     fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
-                    cm->mobinas_cfg->cache_policy = NO_CACHE;
+                    cm->nemo_cfg->cache_mode = NO_CACHE;
                     cm->apply_dnn = 0;
                 }
             }
@@ -3627,7 +3622,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             {
 //                LOGE("read cache profile fail");
                 fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
-                cm->mobinas_cfg->cache_policy = NO_CACHE;
+                cm->nemo_cfg->cache_mode = NO_CACHE;
                 cm->apply_dnn = 0;
             }
             break;
@@ -3644,7 +3639,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         break;
     }
     /*******************Hyunho************************/
-
+    //TODO: measure interp
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
         // Multi-threaded tile decoder
         *p_data_end = decode_tiles_mt(pbi, data + first_partition_size, data_end);
@@ -3656,36 +3651,27 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                                          0, 0, pbi->tile_workers, pbi->num_tile_workers,
                                          &pbi->lf_row_sync);
             }
-            if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) apply_bilinear_mt(pbi);
+            if (cm->nemo_cfg->decode_mode == DECODE_CACHE) apply_bilinear_mt(pbi);
         } else {
             vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
                                "Decode failed. Frame data is corrupted.");
         }
     } else {
         *p_data_end = decode_tiles(pbi, data + first_partition_size, data_end);
-    	if (cm->mobinas_cfg->decode_mode == DECODE_CACHE) apply_bilinear(pbi);
+    	if (cm->nemo_cfg->decode_mode == DECODE_CACHE) apply_bilinear(pbi);
     }
 
     /*******************Hyunho************************/
     if(cm->apply_dnn) {
-        char file_path[PATH_MAX];
-        mobinas_dnn_profile_t *dnn_profile = get_dnn_profile(cm->mobinas_cfg, cm->height);
-
-        if (dnn_profile == NULL){
-            fprintf(stdout, "DNN is not loaded for %dp\n", cm->height);
-            //TODO: apply_bilinear interpolation
-        }
-        else {
-            switch (cm->mobinas_cfg->dnn_mode) {
-                case ONLINE_DNN:
-                    apply_online_dnn_rgb(cm);
-                    break;
-                case OFFLINE_DNN:
-                    apply_offline_dnn_rgb(cm);
-                    break;
-                case NO_DNN:
-                    break;
-            }
+        switch (cm->nemo_cfg->dnn_mode) {
+            case ONLINE_DNN:
+                apply_online_dnn_rgb(cm);
+                break;
+            case OFFLINE_DNN:
+                apply_offline_dnn_rgb(cm);
+                break;
+            case NO_DNN:
+                break;
         }
     }
     /*******************Hyunho************************/

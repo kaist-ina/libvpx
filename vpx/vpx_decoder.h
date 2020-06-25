@@ -33,7 +33,7 @@ extern "C" {
 #include <math.h>
 #include "./vpx_codec.h"
 #include "./vpx_frame_buffer.h"
-#include "vpx_mobinas.h"
+#include "vpx_nemo.h"
 
 /*!\brief Current ABI version number
  *
@@ -363,12 +363,12 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
 /*!@} - end defgroup decoder*/
 
-vpx_codec_err_t vpx_load_mobinas_cfg(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
+vpx_codec_err_t vpx_load_nemo_cfg(vpx_codec_ctx_t *ctx, nemo_cfg_t *mobinas_cfg);
 
-//vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg);
-vpx_codec_err_t vpx_load_mobinas_dnn(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg, int, const char*);
+//vpx_codec_err_t vpx_load_nemo_dnn(vpx_codec_ctx_t *ctx, nemo_cfg_t *nemo_cfg);
+vpx_codec_err_t vpx_load_nemo_dnn(vpx_codec_ctx_t *ctx, int, const char *);
 
-vpx_codec_err_t vpx_load_mobinas_cache_profile(vpx_codec_ctx_t *ctx, mobinas_cfg_t *mobinas_cfg, int, const char*);
+vpx_codec_err_t vpx_load_nemo_cache_profile(vpx_codec_ctx_t *ctx, const char *);
 
 #ifdef __cplusplus
 }
