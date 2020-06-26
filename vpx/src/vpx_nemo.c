@@ -325,6 +325,7 @@ void set_nemo_interp_block(nemo_interp_block_list_t *L, int plane, int n4_w, int
 
 int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf) {
 #ifdef __ANDROID_API__
+//    return RGB24_float_to_uint8_c(rbf);
     return RGB24_float_to_uint8_neon(rbf);
 #else
     return RGB24_float_to_uint8_c(rbf);
@@ -342,7 +343,6 @@ int RGB24_float_to_uint8_neon(RGB24_BUFFER_CONFIG *rbf) {
     uint8_t *dst = rbf->buffer_alloc;
 
     int w, h;
-    LOGD("height: %d, width: %d", rbf->height, rbf->width);
 
     const float init[4] = {0.5, 0.5, 0.5, 0.5};
     float32x4_t c0 = vld1q_f32(init);
@@ -401,6 +401,7 @@ int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
     int result = RAWToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
                                  ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
                                  ybf->y_crop_width, ybf->y_crop_height);
+
     return result;
 }
 

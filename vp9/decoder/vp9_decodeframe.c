@@ -3478,6 +3478,7 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
+//    RGB24_float_to_uint8(cm->rgb24_sr_tensor);
     RGB24_float_to_uint8(cm->rgb24_sr_tensor);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
