@@ -648,7 +648,7 @@ static void save_input_rgbframe(VP9_COMMON *cm) {
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(scaled_rgb_frame, width, height);
-    YV12_to_RGB24(scaled_yuv_frame, scaled_rgb_frame);
+    YV12_to_RGB24(scaled_yuv_frame, scaled_rgb_frame, cm->color_space, cm->color_range);
 
     //save
     RGB24_save_frame_buffer(scaled_rgb_frame, file_path);
@@ -743,7 +743,7 @@ static void save_sr_rgbframe(VP9_COMMON *cm) {
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(scaled_rgb_frame, width, height);
-    YV12_to_RGB24(scaled_yuv_frame, scaled_rgb_frame);
+    YV12_to_RGB24(scaled_yuv_frame, scaled_rgb_frame, cm->color_space, cm->color_range);
 
     //save
     RGB24_save_frame_buffer(cm->rgb24_sr_tensor, file_path); //TODO: modify
@@ -878,7 +878,7 @@ static void save_input_quality(VP9_COMMON *cm) {
     sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_reference_frame_dir,
             cm->current_video_frame - 1);
     RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
-    RGB24_to_YV12(compare_frame, cm->rgb24_reference_frame);
+    RGB24_to_YV12(compare_frame, cm->rgb24_reference_frame, cm->color_space, cm->color_range);
 
     //calculate a pnsr value
     PSNR_STATS psnr_stats;
@@ -945,7 +945,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
     sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_reference_frame_dir,
             cm->current_video_frame - 1);
     RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
-    RGB24_to_YV12(sr_compare_frame, cm->rgb24_reference_frame);
+    RGB24_to_YV12(sr_compare_frame, cm->rgb24_reference_frame, cm->color_space, cm->color_range);
 
     //calculate a pnsr value
     PSNR_STATS psnr_stats;
@@ -1185,9 +1185,6 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
     /*******************Hyunho************************/
     if (cm->nemo_cfg->save_quality) save_quality(cm);
     /*******************Hyunho************************/
-
-
-    LOGD("color_space: %d, color_range: %d", cm->color_space, cm->color_range);
 
     return res;
 }

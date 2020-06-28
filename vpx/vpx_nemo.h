@@ -203,8 +203,8 @@ nemo_worker_data_t *init_nemo_worker(int num_threads, nemo_cfg_t *nemo_cfg);
 void remove_nemo_worker(nemo_worker_data_t *mwd, int num_threads);
 
 int RGB24_float_to_uint8(RGB24_BUFFER_CONFIG *rbf);
-int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
-int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf);
+int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf, vpx_color_space_t, vpx_color_range_t);
+int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf, vpx_color_space_t, vpx_color_range_t);
 
 int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);
 int RGB24_load_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path);

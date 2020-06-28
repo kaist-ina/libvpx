@@ -46,9 +46,6 @@
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 #endif
 
-#define BUFFER_UNIT_LEN 1000
-#define FRACTION_BIT (5)
-#define FRACTION_SCALE (1 << FRACTION_BIT)
 
 nemo_cfg_t *init_nemo_cfg() {
     nemo_cfg_t *config = (nemo_cfg_t *) vpx_calloc(1, sizeof(nemo_cfg_t));
@@ -267,7 +264,7 @@ nemo_bilinear_coeff_t * init_bilinear_coeff(int width, int height, int scale) {
         coeff->left_x_index[x] = MAX(floor(in_x), 0);
         coeff->right_x_index[x] = MIN(ceil(in_x), width - 1);
         coeff->x_lerp[x] = in_x - floor(in_x);
-        coeff->x_lerp_fixed[x] = coeff->x_lerp[x] * FRACTION_SCALE;
+        coeff->x_lerp_fixed[x] = coeff->x_lerp[x] * 32;
     }
 
     for (y = 0; y < height * scale; ++y) {
@@ -275,7 +272,7 @@ nemo_bilinear_coeff_t * init_bilinear_coeff(int width, int height, int scale) {
         coeff->top_y_index[y] = MAX(floor(in_y), 0);
         coeff->bottom_y_index[y] = MIN(ceil(in_y), height - 1);
         coeff->y_lerp[y] = in_y - floor(in_y);
-        coeff->y_lerp_fixed[y] = coeff->y_lerp[y] * FRACTION_SCALE;
+        coeff->y_lerp_fixed[y] = coeff->y_lerp[y] * 32;
     }
 
     return coeff;
@@ -394,25 +391,393 @@ int RGB24_float_to_uint8_c(RGB24_BUFFER_CONFIG *rbf) {
     return 0;
 }
 
-int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
-    if(ybf == NULL || rbf == NULL) {
-        return -1;
-    }
-    int result = RAWToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
-                                 ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
-                                 ybf->y_crop_width, ybf->y_crop_height);
+/* Fixed-point operation */
+#define BUFFER_UNIT_LEN 1000
+static const int FRACTION_BIT = 8;
+static const int FRACTION_SCALE = (1 << FRACTION_BIT);
+static const int DELTA = (1 << (FRACTION_BIT - 1));
 
-    return result;
+/* Matric coefficients: RGB to YUV */
+static const float RY_FLOAT = 0.183;
+static const float GY_FLOAT = 0.614;
+static const float BY_FLOAT = 0.062;
+static const float RU_FLOAT = 0.101;
+static const float GU_FLOAT = 0.339;
+static const float BU_FLOAT = 0.439;
+static const float RV_FLOAT = 0.439;
+static const float GV_FLOAT = 0.399;
+static const float BV_FLOAT = 0.040;
+
+static const int RY_INT = (RY_FLOAT * FRACTION_SCALE + 0.5);
+static const int GY_INT = (GY_FLOAT * FRACTION_SCALE + 0.5);
+static const int BY_INT = (BY_FLOAT * FRACTION_SCALE + 0.5);
+static const int RU_INT = (RU_FLOAT * FRACTION_SCALE + 0.5);
+static const int GU_INT = (GU_FLOAT * FRACTION_SCALE + 0.5);
+static const int BU_INT = (BU_FLOAT * FRACTION_SCALE + 0.5);
+static const int RV_INT = (RV_FLOAT * FRACTION_SCALE + 0.5);
+static const int GV_INT = (GV_FLOAT * FRACTION_SCALE + 0.5);
+static const int BV_INT = (BV_FLOAT * FRACTION_SCALE + 0.5);
+
+/* Matric coefficients: YUV to RGB */
+static const float YR_FLOAT = 1.164;
+static const float UR_FLOAT = 0;
+static const float VR_FLOAT = 1.793;
+static const float YG_FLOAT = 1.164;
+static const float UG_FLOAT = 0.213;
+static const float VG_FLOAT = 0.533;
+static const float YB_FLOAT = 1.164;
+static const float UB_FLOAT = 2.112;
+static const float VB_FLOAT = 0;
+
+static const int Y_SHIFT = 16;
+static const int U_SHIFT = 128;
+static const int V_SHIFT = 128;
+
+//naive c implementation
+int RGB24_to_YV12_bt701_ver1(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    uint8_t r, g, b;
+    int i, j;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < width; j++) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2);
+
+            *(ybf->y_buffer + i * ybf->y_stride + j) = (uint8_t) clamp(round((RY_FLOAT * r + GY_FLOAT * g + BY_FLOAT * b) + Y_SHIFT), 0, 255);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = (uint8_t) clamp(round((-RU_FLOAT * r - GU_FLOAT * g + BU_FLOAT * b) + U_SHIFT), 0, 255);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x)) = (uint8_t) clamp(round((RV_FLOAT * r - GV_FLOAT * g - BV_FLOAT * b) + V_SHIFT), 0, 255);
+        }
+    }
+
+    return 0;
 }
 
-int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+//optimization: y, uv separate for loop
+int RGB24_to_YV12_bt701_ver2(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    uint8_t r, g, b;
+    uint8_t r1, g1, b1;
+    uint8_t r2, g2, b2;
+    uint8_t r3, g3, b3;
+
+    int i, j;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < (width >> 2); j++) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 2);
+            r1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 1) * 3);
+            g1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 1) * 3 + 1);
+            b1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 1) * 3 + 2);
+            r2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 2) * 3);
+            g2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 2) * 3 + 1);
+            b2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 2) * 3 + 2);
+            r3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 3) * 3);
+            g3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 3) * 3 + 1);
+            b3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 3) * 3 + 2);
+
+            *(ybf->y_buffer + i * ybf->y_stride + 4 * j) = (uint8_t) round((RY_FLOAT * r + GY_FLOAT * g + BY_FLOAT * b) + Y_SHIFT);
+            *(ybf->y_buffer + i * ybf->y_stride + (4 * j + 1)) = (uint8_t) round((RY_FLOAT * r1 + GY_FLOAT * g1 + BY_FLOAT * b1) + Y_SHIFT);
+            *(ybf->y_buffer + i * ybf->y_stride + (4 * j + 2)) = (uint8_t) round((RY_FLOAT * r2 + GY_FLOAT * g2 + BY_FLOAT * b2) + Y_SHIFT);
+            *(ybf->y_buffer + i * ybf->y_stride + (4 * j + 3)) = (uint8_t) round((RY_FLOAT * r3 + GY_FLOAT * g3 + BY_FLOAT * b3) + Y_SHIFT);
+        }
+    }
+
+    int i_step = 1 << ybf->subsampling_y;
+    int j_step = 1 << ybf->subsampling_x;
+    int unroll_index1 = 1 * (1 << ybf->subsampling_x);
+    int unroll_index2 = 2 * (1 << ybf->subsampling_x);
+    int unroll_index3 = 3 * (1 << ybf->subsampling_x);
+    for (i = 0; i < height ; i = i + i_step) {
+        for (j = 0; j < (width >> 2); j = j + j_step) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 2);
+            r1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3);
+            g1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3 + 1);
+            b1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3 + 2);
+            r2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3);
+            g2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3 + 1);
+            b2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3 + 2);
+            r3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3);
+            g3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3 + 1);
+            b3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3 + 2);
+
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + ((4 * j) >> ybf->subsampling_x)) = (uint8_t) round((-RU_FLOAT * r - GU_FLOAT * g + BU_FLOAT * b) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index1) >> ybf->subsampling_x)) = (uint8_t) round((-RU_FLOAT * r1 - GU_FLOAT * g1 + BU_FLOAT * b1) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index2) >> ybf->subsampling_x)) = (uint8_t) round((-RU_FLOAT * r2 - GU_FLOAT * g2 + BU_FLOAT * b2) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index3) >> ybf->subsampling_x)) = (uint8_t) round((-RU_FLOAT * r3 - GU_FLOAT * g3 + BU_FLOAT * b3) + U_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + ((4 * j) >> ybf->subsampling_x)) = (uint8_t) round((RV_FLOAT * r - GV_FLOAT * g - BV_FLOAT * b) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index1) >> ybf->subsampling_x)) = (uint8_t) round((RV_FLOAT * r1 - GV_FLOAT * g1 - BV_FLOAT * b1) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index2) >> ybf->subsampling_x)) = (uint8_t) round((RV_FLOAT * r2 - GV_FLOAT * g2 - BV_FLOAT * b2) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index3) >> ybf->subsampling_x)) = (uint8_t) round((RV_FLOAT * r3 - GV_FLOAT * g3 - BV_FLOAT * b3) + V_SHIFT);
+        }
+    }
+
+    return 0;
+}
+
+//optimization: fixed-point operation
+int RGB24_to_YV12_bt701_ver3(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    uint8_t r, g, b;
+    uint8_t r1, g1, b1;
+    uint8_t r2, g2, b2;
+    uint8_t r3, g3, b3;
+
+    int i, j;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < (width >> 2); j++) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 2);
+            r1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 1) * 3);
+            g1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 1) * 3 + 1);
+            b1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 1) * 3 + 2);
+            r2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 2) * 3);
+            g2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 2) * 3 + 1);
+            b2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 2) * 3 + 2);
+            r3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 3) * 3);
+            g3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 3) * 3 + 1);
+            b3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + 3) * 3 + 2);
+
+            *(ybf->y_buffer + i * ybf->y_stride + 4 * j) = (uint8_t) (((RY_INT * r + GY_INT * g + BY_INT * b + DELTA) >> FRACTION_BIT) + Y_SHIFT);
+            *(ybf->y_buffer + i * ybf->y_stride + (4 * j + 1)) = (uint8_t) (((RY_INT * r1 + GY_INT * g1 + BY_INT * b1 + DELTA) >> FRACTION_BIT) +
+                                                                            Y_SHIFT);
+            *(ybf->y_buffer + i * ybf->y_stride + (4 * j + 2)) = (uint8_t) (((RY_INT * r2 + GY_INT * g2 + BY_INT * b2 + DELTA) >> FRACTION_BIT) +
+                                                                            Y_SHIFT);
+            *(ybf->y_buffer + i * ybf->y_stride + (4 * j + 3)) = (uint8_t) (((RY_INT * r3 + GY_INT * g3 + BY_INT * b3 + DELTA) >> FRACTION_BIT) +
+                                                                            Y_SHIFT);
+        }
+    }
+
+    int i_step = 1 << ybf->subsampling_y;
+    int j_step = 1 << ybf->subsampling_x;
+    int unroll_index1 = 1 * (1 << ybf->subsampling_x);
+    int unroll_index2 = 2 * (1 << ybf->subsampling_x);
+    int unroll_index3 = 3 * (1 << ybf->subsampling_x);
+    for (i = 0; i < height; i = i + i_step) {
+        for (j = 0; j < (width >> 2); j = j + j_step) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 2);
+            r1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3);
+            g1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3 + 1);
+            b1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3 + 2);
+            r2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3);
+            g2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3 + 1);
+            b2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3 + 2);
+            r3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3);
+            g3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3 + 1);
+            b3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3 + 2);
+
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + ((4 * j) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r - GU_INT * g + BU_INT * b + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index1) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r1 - GU_INT * g1 + BU_INT * b1 + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index2) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r2 - GU_INT * g2 + BU_INT * b2 + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index3) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r3 - GU_INT * g3 + BU_INT * b3 + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + ((4 * j) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r - GV_INT * g - BV_INT * b + DELTA) >> FRACTION_BIT) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index1) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r1 - GV_INT * g1 - BV_INT * b1 + DELTA) >> FRACTION_BIT) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index2) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r2 - GV_INT * g2 - BV_INT * b2 + DELTA) >> FRACTION_BIT) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index3) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r3 - GV_INT * g3 - BV_INT * b3 + DELTA) >> FRACTION_BIT) + V_SHIFT);
+        }
+    }
+
+    return 0;
+}
+
+//optimization: neon optimization
+int RGB24_to_YV12_bt701_ver4(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    uint8_t r, g, b;
+    uint8_t r1, g1, b1;
+    uint8_t r2, g2, b2;
+    uint8_t r3, g3, b3;
+    uint8x8_t ry_coeff = vdup_n_u8(RY_INT);
+    uint8x8_t gy_coeff = vdup_n_u8(GY_INT);
+    uint8x8_t by_coeff = vdup_n_u8(BY_INT);
+    uint8x8_t ru_coeff = vdup_n_u8(RU_INT);
+    uint8x8_t gu_coeff = vdup_n_u8(GU_INT);
+    uint8x8_t bu_coeff = vdup_n_u8(BU_INT);
+    uint8x8_t rv_coeff = vdup_n_u8(RV_INT);
+    uint8x8_t gv_coeff = vdup_n_u8(GV_INT);
+    uint8x8_t bv_coeff = vdup_n_u8(BV_INT);
+    uint8x8_t y_offset = vdup_n_u8(Y_SHIFT);
+    uint8x8_t u_offset = vdup_n_u8(U_SHIFT);
+    uint8x8_t v_offset = vdup_n_u8(V_SHIFT);
+    uint16x8_t delta = vdupq_n_u16(DELTA);
+    uint8x8x3_t rgb, rgb1, rgb2, rgb3;
+    uint16x8_t y_tmp, y_tmp1, y_tmp2, y_tmp3;
+    uint8x8_t y_dst, y_dst1, y_dst2, y_dst3;
+    uint16x8_t u_tmp, u_tmp1, u_tmp2, u_tmp3;
+    uint8x8_t u_dst, u_dst1, u_dst2, u_dst3;
+    uint16x8_t v_tmp, v_tmp1, v_tmp2, v_tmp3;
+    uint8x8_t v_dst, v_dst1, v_dst2, v_dst3;
+
+//    uint8_t debug_uint8[8];
+//    uint16_t debug_uint16[8];
+
+    int i, j;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+    for (i = 0; i < height; i++) {
+          for (j = 0; j <= width - 32 ; j += 32) {
+            rgb = vld3_u8(rbf->buffer_alloc + i * rbf->stride + j * 3);
+            rgb1 = vld3_u8(rbf->buffer_alloc + i * rbf->stride + (j + 8) * 3);
+            rgb2 = vld3_u8(rbf->buffer_alloc + i * rbf->stride + (j + 16) * 3);
+            rgb3 = vld3_u8(rbf->buffer_alloc + i * rbf->stride + (j + 24) * 3);
+
+            y_tmp = vmlal_u8(y_tmp, ry_coeff, rgb.val[0]);
+            y_tmp1 = vmlal_u8(y_tmp1, ry_coeff, rgb1.val[0]);
+            y_tmp2 = vmlal_u8(y_tmp2, ry_coeff, rgb2.val[0]);
+            y_tmp3 = vmlal_u8(y_tmp3, ry_coeff, rgb3.val[0]);
+
+            y_tmp = vmlal_u8(y_tmp, gy_coeff, rgb.val[1]);
+            y_tmp1 = vmlal_u8(y_tmp1, gy_coeff, rgb1.val[1]);
+            y_tmp2 = vmlal_u8(y_tmp2, gy_coeff, rgb2.val[1]);
+            y_tmp3 = vmlal_u8(y_tmp3, gy_coeff, rgb3.val[1]);
+
+            y_tmp = vmlal_u8(y_tmp, by_coeff, rgb.val[2]);
+            y_tmp1 = vmlal_u8(y_tmp1, by_coeff, rgb1.val[2]);
+            y_tmp2 = vmlal_u8(y_tmp2, by_coeff, rgb2.val[2]);
+            y_tmp3 = vmlal_u8(y_tmp3, by_coeff, rgb3.val[2]);
+
+            y_tmp = vrshrq_n_u16(y_tmp, 8);
+            y_tmp1 = vrshrq_n_u16(y_tmp1, 8);
+            y_tmp2 = vrshrq_n_u16(y_tmp2, 8);
+            y_tmp3 = vrshrq_n_u16(y_tmp3, 8);
+
+            y_dst = vmovn_u16(y_tmp);
+            y_dst1 = vmovn_u16(y_tmp1);
+            y_dst2 = vmovn_u16(y_tmp2);
+            y_dst3 = vmovn_u16(y_tmp3);
+
+            y_dst = vadd_u8(y_dst, y_offset);
+            y_dst1 = vadd_u8(y_dst1, y_offset);
+            y_dst2 = vadd_u8(y_dst2, y_offset);
+            y_dst3 = vadd_u8(y_dst3, y_offset);
+
+            vst1_u8(ybf->y_buffer + i * ybf->y_stride + j, y_dst);
+            vst1_u8(ybf->y_buffer + i * ybf->y_stride + j + 8, y_dst1);
+            vst1_u8(ybf->y_buffer + i * ybf->y_stride + j + 16, y_dst2);
+            vst1_u8(ybf->y_buffer + i * ybf->y_stride + j + 24, y_dst3);
+        }
+
+        for (; j < width; j++) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2);
+            *(ybf->y_buffer + i * ybf->y_stride + j) = (uint8_t) (((RY_INT * r + GY_INT * g + BY_INT * b + DELTA) >> FRACTION_BIT) + Y_SHIFT);
+        }
+    }
+
+
+    int i_step = 1 << ybf->subsampling_y;
+    int j_step = 1 << ybf->subsampling_x;
+    int unroll_index1 = 1 * (1 << ybf->subsampling_x);
+    int unroll_index2 = 2 * (1 << ybf->subsampling_x);
+    int unroll_index3 = 3 * (1 << ybf->subsampling_x);
+    for (i = 0; i < height; i = i + i_step) {
+        for (j = 0; j < (width >> 2); j = j + j_step) {
+            r = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3);
+            g = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 1);
+            b = *(rbf->buffer_alloc + i * rbf->stride + 4 * j * 3 + 2);
+            r1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3);
+            g1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3 + 1);
+            b1 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index1) * 3 + 2);
+            r2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3);
+            g2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3 + 1);
+            b2 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index2) * 3 + 2);
+            r3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3);
+            g3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3 + 1);
+            b3 = *(rbf->buffer_alloc + i * rbf->stride + (4 * j + unroll_index3) * 3 + 2);
+
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + ((4 * j) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r - GU_INT * g + BU_INT * b + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index1) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r1 - GU_INT * g1 + BU_INT * b1 + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index2) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r2 - GU_INT * g2 + BU_INT * b2 + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index3) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((-RU_INT * r3 - GU_INT * g3 + BU_INT * b3 + DELTA) >> FRACTION_BIT) + U_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + ((4 * j) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r - GV_INT * g - BV_INT * b + DELTA) >> FRACTION_BIT) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index1) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r1 - GV_INT * g1 - BV_INT * b1 + DELTA) >> FRACTION_BIT) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index2) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r2 - GV_INT * g2 - BV_INT * b2 + DELTA) >> FRACTION_BIT) + V_SHIFT);
+            *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (((4 * j) + unroll_index3) >> ybf->subsampling_x)) = (uint8_t) (
+                    ((RV_INT * r3 - GV_INT * g3 - BV_INT * b3 + DELTA) >> FRACTION_BIT) + V_SHIFT);
+        }
+    }
+
+    return 0;
+}
+
+int RGB24_to_YV12(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf, vpx_color_space_t color_space, vpx_color_range_t color_range) {
     if(ybf == NULL || rbf == NULL) {
         return -1;
     }
-    int result = I420ToRAW(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
-                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
-                             ybf->y_crop_width, ybf->y_crop_height);
-    return result;
+//    int result = RAWToI420(rbf->buffer_alloc, rbf->stride, ybf->y_buffer, ybf->y_stride,
+//                                 ybf->u_buffer, ybf->uv_stride, ybf->v_buffer, ybf->uv_stride,
+//                                 ybf->y_crop_width, ybf->y_crop_height);
+//
+//    return result;
+
+    return RGB24_to_YV12_bt701_ver4(ybf, rbf);
+}
+
+int YV12_to_RGB24(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf, vpx_color_space_t color_space, vpx_color_range_t color_range) {
+    if(ybf == NULL || rbf == NULL) {
+        return -1;
+    }
+//    int result = I420ToRAW(ybf->y_buffer, ybf->y_stride, ybf->u_buffer, ybf->uv_stride,
+//                             ybf->v_buffer, ybf->uv_stride, rbf->buffer_alloc, rbf->stride,
+//                             ybf->y_crop_width, ybf->y_crop_height);
+//    return result;
+
+    return YV12_to_RGB24_bt701_ver1(ybf, rbf);
+}
+
+int YV12_to_RGB24_bt701_ver1(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+    uint8_t y, u, v;
+    int i, j;
+    const int height = ybf->y_crop_height;
+    const int width = ybf->y_crop_width;
+
+    for (i = 0; i < height; i++) {
+        for (j = 0; j < width; j++) {
+            y = *(ybf->y_buffer + i * ybf->y_stride + j);
+            u = *(ybf->u_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x));
+            v = *(ybf->v_buffer + (i >> ybf->subsampling_y) * ybf->uv_stride + (j >> ybf->subsampling_x));
+
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3) =  (uint8_t) clamp(round(YR_FLOAT * (y-Y_SHIFT) + VR_FLOAT * (v - V_SHIFT)), 0, 255); // R value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 1) =  (uint8_t) clamp(round(YG_FLOAT * (y-Y_SHIFT) - UG_FLOAT * (u - U_SHIFT) - VG_FLOAT * (v - V_SHIFT)), 0, 255); // G value
+            *(rbf->buffer_alloc + i * rbf->stride + j * 3 + 2) =  (uint8_t) clamp(round(YB_FLOAT * (y-Y_SHIFT) + UB_FLOAT * (u - U_SHIFT)), 0, 255); // B value
+        }
+    }
+
+    return 0;
+}
+
+int YV12_to_RGB24_bt701_ver2(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+}
+
+int YV12_to_RGB24_bt701_ver3(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
+}
+
+int YV12_to_RGB24_bt701_ver4(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
 }
 
 int RGB24_save_frame_buffer(RGB24_BUFFER_CONFIG *rbf, char *file_path) {

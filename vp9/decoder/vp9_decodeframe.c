@@ -3444,7 +3444,7 @@ void apply_offline_dnn_rgb(VP9_COMMON *const cm) {
         sprintf(file_path, "%s/%04d_%d.raw", cm->nemo_cfg->sr_offline_frame_dir, cm->current_video_frame, cm->current_super_frame);
     RGB24_realloc_frame_buffer(cm->rgb24_sr_tensor, cm->width * cm->scale, cm->height * cm->scale);
     RGB24_load_frame_buffer(cm->rgb24_sr_tensor, file_path);
-    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_sr_tensor);
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_sr_tensor, cm->color_space, cm->color_range);
 }
 
 void apply_online_dnn_rgb(VP9_COMMON *const cm) {
@@ -3458,7 +3458,7 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_input_tensor);
+    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_input_tensor, cm->color_space, cm->color_range);
 //#if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
@@ -3489,12 +3489,13 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_sr_tensor);
+    RGB24_to_YV12(get_sr_frame_new_buffer(cm), cm->rgb24_sr_tensor, cm->color_space, cm->color_range);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     cm->latency.sr_convert_rgb_to_yuv += diff;
+    LOGD("sr_convert_rgb_to_yuv: %f", diff);
 #endif
 }
 
