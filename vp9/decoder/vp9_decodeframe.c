@@ -47,8 +47,6 @@
 
 #include <vpx_util/vpx_write_yuv_frame.h>
 #include <vpx_dsp/psnr.h>
-#include <vpx_dsp/vpx_constant.h>
-#include <vpx_dsp/vpx_copy.h>
 #include <vpx/vpx_nemo.h>
 #include <vpx/snpe/main.hpp>
 
@@ -503,11 +501,9 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
     const int eob = vp9_decode_block_tokens(twd, plane, sc, col, row, tx_size,
                                             mi->segment_id);
 
-    /*******************Hyunho************************/
-    // TODO (hyunho): implement neon-based lr_resiudal decode & copy
+    /* NEMO: copy residual to res.buf to apply bilinear interpolation */
     if (eob > 0) {
         if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
-#if !DEBUG_RESIDUAL
             if (!cm->apply_dnn) {
                 inverse_transform_block_inter_copy(
                                     xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
@@ -519,60 +515,12 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
                         xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
                         pd->dst.stride, eob);
             }
-#else
-            inverse_transform_block_inter_copy(
-                    xd, plane, tx_size, &pd->debug.buf[4 * row * pd->dst.stride + 4 * col],
-                    pd->debug.stride, &pd->res.buf[4 * row * pd->res.stride + 4 * col], //hyunho: int16
-                    pd->res.stride, eob);
-
-            switch (tx_size) {
-                case TX_4X4:
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 4, 4, 1);
-                    vpx_copy_and_add_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col],
-                                       pd->res.stride,
-                                       &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
-                                       pd->dst.stride,
-                                       4, 4);
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 4, 4, 1);
-                    break;
-                case TX_8X8:
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 8, 8, 1);
-                    vpx_copy_and_add_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col],
-                                       pd->res.stride,
-                                       &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
-                                       pd->dst.stride,
-                                       8, 8);
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 8, 8, 1);
-                    break;
-                case TX_16X16:
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 16, 16, 1);
-                    vpx_copy_and_add_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col],
-                                       pd->res.stride,
-                                       &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
-                                       pd->dst.stride,
-                                       16, 16);
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 16, 16, 1);
-                    break;
-                case TX_32X32:
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 32, 32, 1);
-                    vpx_copy_and_add_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col],
-                                       pd->res.stride,
-                                       &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
-                                       pd->dst.stride,
-                                       32, 32);
-//                    vpx_flip_c(&pd->res.buf[4 * row * pd->res.stride + 4 * col], pd->res.stride, 0, 0, 32, 32, 1);
-                    break;
-                default:
-                    assert(0 && "Invalid transform size");
-            }
-#endif
         } else {
             inverse_transform_block_inter(
                     xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
                     pd->dst.stride, eob);
         }
     }
-    /*******************Hyunho************************/
 
     return eob;
 }
@@ -3458,12 +3406,13 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
-    YV12_to_RGB24(get_frame_new_buffer(cm), cm->rgb24_input_tensor, cm->color_space, cm->color_range);
+    YV12_to_RGB24(cm->rgb24_input_tensor, get_frame_new_buffer(cm), cm->color_space, cm->color_range);
 //#if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     cm->latency.sr_convert_yuv_to_rgb += diff;
+    LOGD("sr_convert_yuv_to_rgb: %f", diff);
 #endif
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -3485,6 +3434,7 @@ void apply_online_dnn_rgb(VP9_COMMON *const cm) {
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
     cm->latency.sr_convert_float_to_int += diff;
+    LOGD("sr_convert_float_to_int: %f", diff);
 #endif
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);

@@ -648,7 +648,7 @@ static void save_input_rgbframe(VP9_COMMON *cm) {
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(scaled_rgb_frame, width, height);
-    YV12_to_RGB24(scaled_yuv_frame, scaled_rgb_frame, cm->color_space, cm->color_range);
+    YV12_to_RGB24(scaled_rgb_frame, scaled_yuv_frame, cm->color_space, cm->color_range);
 
     //save
     RGB24_save_frame_buffer(scaled_rgb_frame, file_path);
@@ -743,7 +743,7 @@ static void save_sr_rgbframe(VP9_COMMON *cm) {
 
     //YV12 to RGB
     RGB24_realloc_frame_buffer(scaled_rgb_frame, width, height);
-    YV12_to_RGB24(scaled_yuv_frame, scaled_rgb_frame, cm->color_space, cm->color_range);
+    YV12_to_RGB24( scaled_rgb_frame, scaled_yuv_frame, cm->color_space, cm->color_range);
 
     //save
     RGB24_save_frame_buffer(cm->rgb24_sr_tensor, file_path); //TODO: modify
