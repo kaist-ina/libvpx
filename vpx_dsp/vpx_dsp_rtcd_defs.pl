@@ -49,7 +49,6 @@ add_proto qw/int RGB24_to_YV12/, "YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *
 specialize qw/RGB24_to_YV12 neon/;
 
 add_proto qw/int YV12_to_RGB24/, "RGB24_BUFFER_CONFIG *rbf, YV12_BUFFER_CONFIG *ybf, vpx_color_space_t color_space, vpx_color_range_t color_range";
-specialize qw/YV12_to_RGB24 neon/;
 
 add_proto qw/int RGB24_float_to_uint8/, "RGB24_BUFFER_CONFIG *rbf";
 specialize qw/RGB24_float_to_uint8 neon/;
