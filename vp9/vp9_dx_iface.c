@@ -73,11 +73,7 @@
 
 #define VP9_CAP_POSTPROC (CONFIG_VP9_POSTPROC ? VPX_CODEC_CAP_POSTPROC : 0)
 
-//hyunho
 #define DEBUG_LATENCY 1
-#define DEBUG_LR  0
-#define FRACTION_BIT (5)
-#define FRACTION_SCALE (1 << FRACTION_BIT)
 #define BILLION  1E9
 #define LOG_MAX 1000
 
@@ -423,7 +419,7 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             return VPX_NEMO_ERROR;
         }
     }
-    else if (ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+    else if (ctx->nemo_cfg->decode_mode == DECODE_CACHE && ctx->nemo_cfg->cache_mode == PROFILE_CACHE) {
         if (ctx->nemo_cfg->cache_profile == NULL) {
             return VPX_NEMO_ERROR;
         }
@@ -460,16 +456,19 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
 
     /* NEMO: initialize workers */
     const int num_threads = (ctx->pbi->max_threads > 1) ? ctx->pbi->max_threads : 1;
-    if ((ctx->pbi->mobinas_worker_data = init_nemo_worker(num_threads, ctx->nemo_cfg)) ==
+    if ((ctx->pbi->nemo_worker_data = init_nemo_worker(num_threads, ctx->nemo_cfg)) ==
         NULL) {
         set_error_detail(ctx, "Failed to allocate nemo_worker_data");
         return VPX_NEMO_ERROR;
     }
 
-    if (ctx->nemo_cfg->decode_mode == DECODE_SR || ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
-        ctx->pbi->common.rgb24_input_tensor = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-        ctx->pbi->common.rgb24_sr_tensor = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-    }
+    /* NEMO: initialize frames/tensors */
+    ctx->pbi->common.rgb24_input_tensor = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+    ctx->pbi->common.rgb24_sr_tensor = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+    ctx->pbi->common.yv12_input_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    ctx->pbi->common.yv12_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
+    ctx->pbi->common.rgb24_input_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
+    ctx->pbi->common.rgb24_reference_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
 
     /* NEMO: open a quality log file, initialize frames used for quality measurements */
     if (ctx->nemo_cfg->save_quality) {
@@ -478,13 +477,6 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
             ctx->nemo_cfg->save_quality = 0;
         };
-    }
-
-    if (ctx->nemo_cfg->save_quality || ctx->nemo_cfg->save_rgbframe || ctx->nemo_cfg->save_yuvframe) {
-        ctx->pbi->common.yv12_input_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-        ctx->pbi->common.yv12_reference_frame = (YV12_BUFFER_CONFIG *) vpx_calloc(1, sizeof(YV12_BUFFER_CONFIG));
-        ctx->pbi->common.rgb24_input_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
-        ctx->pbi->common.rgb24_reference_frame = (RGB24_BUFFER_CONFIG *) vpx_calloc(1, sizeof(RGB24_BUFFER_CONFIG));
     }
 
     /* NEMO: open a latency log file */
@@ -558,7 +550,7 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
     char file_path[PATH_MAX] = {0};
     FILE *serialize_file = NULL;
 
-    //y-channel
+    //save a y-channel image
     serialize_file = fopen(file_path, "wb");
     if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
@@ -568,11 +560,12 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
     int h = frame->y_crop_height;
     do {
         fwrite(src, sizeof(uint8_t), frame->y_crop_width, serialize_file);
+
         src += frame->y_stride;
     } while (--h);
     fclose(serialize_file);
 
-    //u-channel
+    //save a u-channel image
     sprintf(file_path, "%s/%s.u", save_dir, file_name);
     serialize_file = fopen(file_path, "wb");
     if (serialize_file == NULL) {
@@ -587,7 +580,7 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
     } while (--h);
     fclose(serialize_file);
 
-    //v-channel
+    //save a v-channel image
     sprintf(file_path, "%s/%s.v", save_dir, file_name);
     serialize_file = fopen(file_path, "wb");
     if (serialize_file == NULL) {
@@ -614,7 +607,6 @@ static void save_input_rgbframe(VP9_COMMON *cm) {
         height = cm->height;
     }
 
-    //file name
     if (cm->show_frame) {
         sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_frame_dir,
                 cm->current_video_frame - 1);
@@ -623,7 +615,7 @@ static void save_input_rgbframe(VP9_COMMON *cm) {
                 cm->current_video_frame, cm->current_super_frame);
     }
 
-    //upscale a yuv_frame
+    //up-scale a yuv frame
     YV12_BUFFER_CONFIG *yuv_frame = get_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *scaled_yuv_frame = cm->yv12_input_frame;
     YV12_BUFFER_CONFIG *scaled_rgb_frame = cm->rgb24_input_frame;
@@ -646,11 +638,11 @@ static void save_input_rgbframe(VP9_COMMON *cm) {
               scaled_yuv_frame->y_crop_width, scaled_yuv_frame->y_crop_height,
               3);
 
-    //YV12 to RGB
+    //convert a yuv frame to a rgb frame
     RGB24_realloc_frame_buffer(scaled_rgb_frame, width, height);
     YV12_to_RGB24(scaled_rgb_frame, scaled_yuv_frame, cm->color_space, cm->color_range);
 
-    //save
+    //save a rgb frame
     RGB24_save_frame_buffer(scaled_rgb_frame, file_path);
 }
 
@@ -665,14 +657,13 @@ static void save_input_yuvframe(VP9_COMMON *cm) {
         height = cm->height;
     }
 
-    //file name
     if (cm->show_frame) {
         sprintf(file_name, "%04d", cm->current_video_frame - 1);
     } else {
         sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
     }
 
-    //upscale a yuv_frame
+    //up-scale a yuv frame
     YV12_BUFFER_CONFIG *yuv_frame = get_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *scaled_yuv_frame = cm->yv12_input_frame;
     vpx_realloc_frame_buffer(
@@ -694,6 +685,7 @@ static void save_input_yuvframe(VP9_COMMON *cm) {
               scaled_yuv_frame->y_crop_width, scaled_yuv_frame->y_crop_height,
               3);
 
+    //save a yuv frame
     sprintf(file_name, "%04d", cm->current_video_frame - 1);
     YV12_save_frame_buffer(scaled_yuv_frame, cm->nemo_cfg->input_frame_dir, file_name);
 }
@@ -709,7 +701,6 @@ static void save_sr_rgbframe(VP9_COMMON *cm) {
         height = cm->height;
     }
 
-    //file name
     if (cm->show_frame) {
         sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_frame_dir,
                 cm->current_video_frame - 1);
@@ -718,7 +709,7 @@ static void save_sr_rgbframe(VP9_COMMON *cm) {
                 cm->current_super_frame);
     }
 
-    //upscale a yuv_frame
+    //up-scale a yuv frame
     YV12_BUFFER_CONFIG *yuv_frame = get_sr_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *scaled_yuv_frame = cm->yv12_reference_frame;
     YV12_BUFFER_CONFIG *scaled_rgb_frame = cm->rgb24_reference_frame;
@@ -741,12 +732,12 @@ static void save_sr_rgbframe(VP9_COMMON *cm) {
               scaled_yuv_frame->y_crop_width, scaled_yuv_frame->y_crop_height,
               3);
 
-    //YV12 to RGB
+    //convert a yuv frame into a rgb frame
     RGB24_realloc_frame_buffer(scaled_rgb_frame, width, height);
     YV12_to_RGB24( scaled_rgb_frame, scaled_yuv_frame, cm->color_space, cm->color_range);
 
-    //save
-    RGB24_save_frame_buffer(cm->rgb24_sr_tensor, file_path); //TODO: modify
+    //save a rgb frame
+    RGB24_save_frame_buffer(scaled_rgb_frame, file_path);
 }
 
 static void save_sr_yuv_frame(VP9_COMMON *cm) {
@@ -760,14 +751,13 @@ static void save_sr_yuv_frame(VP9_COMMON *cm) {
         height = cm->height;
     }
 
-    //file name
     if (cm->show_frame) {
         sprintf(file_name, "%04d", cm->current_video_frame - 1);
     } else {
         sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
     }
 
-    //upscale a yuv_frame
+    //up-scale a yuv frame
     YV12_BUFFER_CONFIG *yuv_frame = get_sr_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *scaled_yuv_frame = cm->yv12_reference_frame;
     vpx_realloc_frame_buffer(
@@ -789,6 +779,7 @@ static void save_sr_yuv_frame(VP9_COMMON *cm) {
               scaled_yuv_frame->y_crop_width, scaled_yuv_frame->y_crop_height,
               3);
 
+    //save a yuv frame
     YV12_save_frame_buffer(scaled_yuv_frame, cm->nemo_cfg->sr_frame_dir, file_name);
 }
 
@@ -798,11 +789,9 @@ static void save_rgbframe(VP9_COMMON *cm) {
             save_input_rgbframe(cm);
             break;
         case DECODE_SR:
-            save_input_rgbframe(cm); //overlapped with existing images
             save_sr_rgbframe(cm);
             break;
         case DECODE_CACHE:
-            //save_input_rgbframe(cm); //overlapped with existing images
             save_sr_rgbframe(cm);
             break;
     }
@@ -832,7 +821,6 @@ static void save_input_quality(VP9_COMMON *cm) {
     char log[LOG_MAX] = {0};
     int width, height;
 
-    //width, height
     if (cm->nemo_cfg->target_height != 0 && cm->nemo_cfg->target_width != 0) {
         width = cm->nemo_cfg->target_width;
         height = cm->nemo_cfg->target_height;
@@ -841,7 +829,7 @@ static void save_input_quality(VP9_COMMON *cm) {
         height = cm->height;
     }
 
-    //upscale a frame
+    //up-scale a yuv frame
     YV12_BUFFER_CONFIG *frame = get_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *upscaled_frame = cm->yv12_input_frame;
     vpx_realloc_frame_buffer(
@@ -863,7 +851,13 @@ static void save_input_quality(VP9_COMMON *cm) {
               upscaled_frame->y_crop_width, upscaled_frame->y_crop_height,
               3);
 
-    //load a reference frame & convert it into yv12
+    //load a rgb frame
+    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
+    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_reference_frame_dir,
+            cm->current_video_frame - 1);
+    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
+
+    //convert a rgb frame into a yuv frame
     YV12_BUFFER_CONFIG *compare_frame = cm->yv12_reference_frame;
     vpx_realloc_frame_buffer(
             compare_frame, width, height,
@@ -874,13 +868,9 @@ static void save_input_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
-    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_reference_frame_dir,
-            cm->current_video_frame - 1);
-    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
     RGB24_to_YV12(compare_frame, cm->rgb24_reference_frame, cm->color_space, cm->color_range);
 
-    //calculate a pnsr value
+    //calculate PSNR
     PSNR_STATS psnr_stats;
     vpx_calc_psnr(upscaled_frame, compare_frame, &psnr_stats);
     sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
@@ -898,7 +888,6 @@ static void save_sr_quality(VP9_COMMON *cm) {
     char log[LOG_MAX] = {0};
     int width, height;
 
-    //width, height
     if (cm->nemo_cfg->target_height != 0 && cm->nemo_cfg->target_width != 0) {
         width = cm->nemo_cfg->target_width;
         height = cm->nemo_cfg->target_height;
@@ -907,8 +896,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
         height = cm->height * cm->scale;
     }
 
-    //upscale a frame
-//    YV12_BUFFER_CONFIG *sr_frame = get_frame_new_buffer(cm);
+    //upscale a yuv frame
     YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);
     YV12_BUFFER_CONFIG *sr_upscaled_frame = cm->yv12_input_frame;
     vpx_realloc_frame_buffer(
@@ -930,7 +918,13 @@ static void save_sr_quality(VP9_COMMON *cm) {
               sr_upscaled_frame->y_crop_width, sr_upscaled_frame->y_crop_height,
               3);
 
-    //load a reference frame & convert it into yv12
+    //load a rgb frame
+    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
+    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_reference_frame_dir,
+            cm->current_video_frame - 1);
+    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
+
+    //convert a yuv frame into a rgb frame
     YV12_BUFFER_CONFIG *sr_compare_frame = cm->yv12_reference_frame;
     vpx_realloc_frame_buffer(
             sr_compare_frame, width, height,
@@ -941,13 +935,9 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
-    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_reference_frame_dir,
-            cm->current_video_frame - 1);
-    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
     RGB24_to_YV12(sr_compare_frame, cm->rgb24_reference_frame, cm->color_space, cm->color_range);
 
-    //calculate a pnsr value
+    //calculate PSNR
     PSNR_STATS psnr_stats;
     vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats);
     sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
@@ -960,18 +950,15 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #endif
 }
 
-//Note: Current version loads/saves in RGB24, measure quality in RGB24
 static void save_quality(VP9_COMMON *cm) {
     switch (cm->nemo_cfg->decode_mode) {
         case DECODE:
             save_input_quality(cm);
             break;
         case DECODE_SR:
-//            save_input_quality(cm);
             save_sr_quality(cm);
             break;
         case DECODE_CACHE:
-            //save_input_quality(cm);
             save_sr_quality(cm);
             break;
     }
@@ -984,7 +971,7 @@ static void save_latency(VP9Decoder *pbi, int video_frame_index, int super_frame
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (i = 0; i < num_threads; ++i) {
-        nemo_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
+        nemo_worker_data_t *mwd = &pbi->nemo_worker_data[i];
         //sprintf(log, "%d\t%d\t%.2f\t%.2f\t%.2f\t%.2f\t%.2f\n", video_frame_index,
         //        super_frame_index, mwd->latency.interp_intra_block, mwd->latency.interp_inter_residual,
         //        mwd->latency.decode_intra_block, mwd->latency.decode_inter_block,  mwd->latency.decode_inter_residual);
@@ -1012,7 +999,7 @@ static void save_latency(VP9Decoder *pbi, int video_frame_index, int super_frame
 #ifdef __ANDROID_API__
     LOGI("%d, %d frame: %.2fmsec", video_frame_index, super_frame_index,
          pbi->common.latency.decode);
-#elif
+#else
     fprintf(stderr, "%d, %d frame: %.2fmsec", video_frame_index, super_frame_index, pbi->common.latency.decode);
 #endif
 }
@@ -1023,7 +1010,7 @@ static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
     for (i = 0; i < num_threads; ++i) {
-        nemo_worker_data_t *mwd = &pbi->mobinas_worker_data[i];
+        nemo_worker_data_t *mwd = &pbi->nemo_worker_data[i];
         sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame,
                 mwd->metadata.num_blocks, mwd->metadata.num_intrablocks,
                 mwd->metadata.num_interblocks, mwd->metadata.num_noskip_interblocks);
@@ -1127,19 +1114,16 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
 #endif
             data_start += frame_size;
 
-            /*******************Hyunho************************/
+            /* NEMO: Save logs */
             if (cm->show_frame == 0) current_video_frame = cm->current_video_frame;
             else current_video_frame = cm->current_video_frame - 1;
-
             if (cm->nemo_cfg->save_rgbframe) save_rgbframe(cm);
             if (cm->nemo_cfg->save_yuvframe) save_yuvframe(cm);
             if (cm->nemo_cfg->save_latency)
                 save_latency(ctx->pbi, current_video_frame, cm->current_super_frame);
             if (cm->nemo_cfg->save_metadata)
                 save_metadata(ctx->pbi, current_video_frame, cm->current_super_frame);
-
             cm->current_super_frame++;
-            /*******************Hyunho************************/
         }
     } else {
         while (data_start < data_end) {
@@ -1170,7 +1154,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                 ++data_start;
             }
 
-            /*******************Hyunho************************/
+            /* NEMO: save logs */
             if (cm->nemo_cfg->save_rgbframe) save_rgbframe(cm);
             if (cm->nemo_cfg->save_yuvframe) save_yuvframe(cm);
             if (cm->nemo_cfg->save_latency) {
@@ -1178,13 +1162,12 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
             if (cm->nemo_cfg->save_metadata)
                 save_metadata(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
-            /*******************Hyunho************************/
 
         }
     }
-    /*******************Hyunho************************/
+    /* NEMO: Save logs */
     if (cm->nemo_cfg->save_quality) save_quality(cm);
-    /*******************Hyunho************************/
+
 
     return res;
 }
@@ -1208,15 +1191,13 @@ static vpx_image_t *decoder_get_frame(vpx_codec_alg_priv_t *ctx,
             if (ctx->need_resync) return NULL;
             yuvconfig2image(&ctx->img, &sd, ctx->user_priv);
 
-            /*** chanju ***/
+            /* NEMO: return a priv depending on decode_mode */
             if (ctx->nemo_cfg->decode_mode == DECODE_CACHE ||
                 ctx->nemo_cfg->decode_mode == DECODE_SR) {
                 ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_sr_frame_buffer.priv;
             } else {
                 ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
             }
-            /*** chanju ***/
-//            ctx->img.fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
             img = &ctx->img;
             return img;
         }

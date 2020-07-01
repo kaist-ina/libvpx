@@ -41,7 +41,7 @@ struct scale_factors {
 };
 
 MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf);
-MV32 vp9_scale_mv_mobinas(const MV *mv, int x, int y, const struct scale_factors *sf);
+MV32 vp9_scale_nemo_mv(const MV *mv, int x, int y, const struct scale_factors *sf);
 
 #if CONFIG_VP9_HIGHBITDEPTH
 void vp9_setup_scale_factors_for_frame(struct scale_factors *sf, int other_w,

@@ -75,11 +75,11 @@ typedef struct {
     vpx_codec_frame_buffer_t raw_frame_buffer;
     vpx_codec_frame_buffer_t raw_sr_frame_buffer;
     YV12_BUFFER_CONFIG buf;
-    /*******************Hyunho************************/
+
+    /* NEMO: new variables */
     YV12_BUFFER_CONFIG sr_buf;
     int current_video_frame;
     int current_super_frame;
-    /*******************Hyunho************************/
 } RefCntBuffer;
 
 typedef struct BufferPool {

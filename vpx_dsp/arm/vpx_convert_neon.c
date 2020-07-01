@@ -273,8 +273,7 @@ int RGB24_to_YV12_neon(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf, vpx_co
         return -1;
     }
 
-//    if (color_space == VPX_CS_BT_709 && color_range == VPX_CR_STUDIO_RANGE) {
-    if (1) {
+    if (color_space == VPX_CS_BT_709 && color_range == VPX_CR_STUDIO_RANGE) {
         RGB24_to_YV12_bt701_neon(ybf, rbf);
     }
     else {
@@ -289,8 +288,7 @@ int YV12_to_RGB24_neon(RGB24_BUFFER_CONFIG *rbf, YV12_BUFFER_CONFIG *ybf, vpx_co
         return -1;
     }
 
-//    if (color_space == VPX_CS_BT_709 && color_range == VPX_CR_STUDIO_RANGE) {
-    if (1) {
+    if (color_space == VPX_CS_BT_709 && color_range == VPX_CR_STUDIO_RANGE) {
         YV12_to_RGB24_bt701_neon(rbf, ybf);
     }
     else {

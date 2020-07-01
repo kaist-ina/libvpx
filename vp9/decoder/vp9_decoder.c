@@ -128,7 +128,7 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     vpx_get_worker_interface()->init(&pbi->lf_worker);
 
     /* NEMO: initialize variables */
-    pbi->mobinas_worker_data = NULL;
+    pbi->nemo_worker_data = NULL;
     cm->quality_log = NULL;
     cm->latency_log = NULL;
     cm->metadata_log = NULL;
@@ -184,7 +184,7 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
 
     /* NEMO: free workers */
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
-    remove_nemo_worker(pbi->mobinas_worker_data, num_threads);
+    remove_nemo_worker(pbi->nemo_worker_data, num_threads);
 
     vp9_remove_common(&pbi->common);
     vpx_free(pbi);

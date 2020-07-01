@@ -123,19 +123,19 @@ struct macroblockd_plane {
   int subsampling_x;
   int subsampling_y;
   struct buf_2d dst;
-  /*******************Hyunho************************/
-  struct buf_2d sr; //used for generating super-resolutioned cached frame
-  struct buf_2d residual; //used for resizing lr_resiudal frame
-  struct buf_2d input; //DEBUG_RESIZE
-  struct buf_2d compare;
-  struct buf_2d reference;
-  struct buf_2d debug;
-  struct residual_2d res;
-  /*******************Hyunho************************/
   struct buf_2d pre[2];
   ENTROPY_CONTEXT *above_context;
   ENTROPY_CONTEXT *left_context;
   int16_t seg_dequant[MAX_SEGMENTS][2];
+
+  /* NEMO: new variables */
+    struct buf_2d sr; //used for generating super-resolutioned cached frame
+    struct buf_2d residual; //used for resizing lr_resiudal frame
+    struct buf_2d input;
+    struct buf_2d compare;
+    struct buf_2d reference;
+    struct buf_2d debug;
+    struct residual_2d res;
 
   // number of 4x4s in current block
   uint16_t n4_w, n4_h;

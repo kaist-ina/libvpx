@@ -38,7 +38,7 @@ typedef struct TileBuffer {
 
 typedef struct TileWorkerData {
     const uint8_t *data_end;
-    nemo_worker_data_t *mobinas_worker_data;
+    nemo_worker_data_t *nemo_worker_data;
     int buf_start, buf_end;  // pbi->tile_buffers to decode, inclusive
     vpx_reader bit_reader;
     FRAME_COUNTS counts;
@@ -78,9 +78,7 @@ typedef struct VP9Decoder {
   int need_resync;   // wait for key/intra-only frame.
   int hold_ref_buf;  // hold the reference buffer.
 
-    /*******************Hyunho************************/
-    nemo_worker_data_t *mobinas_worker_data;
-    /*******************Hyunho************************/
+    nemo_worker_data_t *nemo_worker_data; // NEMO
 } VP9Decoder;
 
 int vp9_receive_compressed_data(struct VP9Decoder *pbi, size_t size,

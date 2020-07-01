@@ -127,11 +127,9 @@ void vp9_idct4x4_add(const tran_low_t *input, uint8_t *dest, int stride,
 void vp9_idct4x4_copy_add(const tran_low_t *input, uint8_t *dest, int stride, int16_t *residual, int res_stride,
                           int eob) {
   if (eob > 1)
-//      vpx_idct4x4_16_add(input, dest, stride);
       vpx_idct4x4_16_copy_add(input, dest, stride, residual, res_stride);
   else
       vpx_idct4x4_1_copy_add(input, dest, stride, residual, res_stride);
-//    vpx_idct4x4_1_add(input, dest, stride);
 
 }
 

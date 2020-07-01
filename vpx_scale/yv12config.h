@@ -49,13 +49,11 @@ typedef struct yv12_buffer_config {
   uint8_t *v_buffer;
   uint8_t *alpha_buffer;
 
-  /*******************Hyunho************************/
+  /* NEMO: buffer for residual */
   int16_t *y_residual;
   int16_t *u_residual;
   int16_t *v_residual;
   int16_t *alpha_residual;
-  int16_t *residual_alloc;
-  /*******************Hyunho************************/
 
   uint8_t *buffer_alloc;
   int buffer_alloc_sz;
@@ -108,16 +106,6 @@ int vpx_realloc_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int height,
 
 int vpx_free_frame_buffer(YV12_BUFFER_CONFIG *ybf);
 
-/*******************Hyunho************************/
-int vpx_serialize_save(char *file_path, YV12_BUFFER_CONFIG *s);
-
-int vpx_deserialize_copy(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
-
-int vpx_deserialize_load(YV12_BUFFER_CONFIG *s, char *file_path, int width, int height, int subsampling_x, int subsampling_y, int byte_alignment);
-
-int vpx_compare_frames(YV12_BUFFER_CONFIG *s, YV12_BUFFER_CONFIG *s_);
-
-void vpx_reset_frames(YV12_BUFFER_CONFIG *s);
 
 // Updates the yv12 buffer config with the frame buffer. |byte_alignment| must
 // be a power of 2, from 32 to 1024. 0 sets legacy alignment. If cb is not
@@ -135,7 +123,6 @@ int vpx_realloc_scaled_frame_buffer(YV12_BUFFER_CONFIG *ybf, int width, int crop
                                     int border, int byte_alignment,
                                     vpx_codec_frame_buffer_t *fb,
                                     vpx_get_frame_buffer_cb_fn_t cb, void *cb_priv);
-/*******************Hyunho************************/
 
 #ifdef __cplusplus
 }

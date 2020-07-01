@@ -43,19 +43,19 @@ MV32 vp9_scale_mv(const MV *mv, int x, int y, const struct scale_factors *sf) {
     return res;
 }
 
-static INLINE int scaled_x_mobinas(int val, const struct scale_factors *sf) {
+static INLINE int scaled_x_nemo(int val, const struct scale_factors *sf) {
     return (int) ((int64_t) val * sf->scale >> REF_SCALE_SHIFT);
 }
 
-static INLINE int scaled_y_mobinas(int val, const struct scale_factors *sf) {
+static INLINE int scaled_y_nemo(int val, const struct scale_factors *sf) {
     return (int) ((int64_t) val * sf->scale >> REF_SCALE_SHIFT);
 }
 
-MV32 vp9_scale_mv_mobinas(const MV *mv, int x, int y, const struct scale_factors *sf) {
-    const int x_off_q4 = scaled_x_mobinas(x << SUBPEL_BITS, sf) & SUBPEL_MASK;
-    const int y_off_q4 = scaled_y_mobinas(y << SUBPEL_BITS, sf) & SUBPEL_MASK;
-    const MV32 res = {scaled_y_mobinas(mv->row, sf) + y_off_q4,
-                      scaled_x_mobinas(mv->col, sf) + x_off_q4};
+MV32 vp9_scale_nemo_mv(const MV *mv, int x, int y, const struct scale_factors *sf) {
+    const int x_off_q4 = scaled_x_nemo(x << SUBPEL_BITS, sf) & SUBPEL_MASK;
+    const int y_off_q4 = scaled_y_nemo(y << SUBPEL_BITS, sf) & SUBPEL_MASK;
+    const MV32 res = {scaled_y_nemo(mv->row, sf) + y_off_q4,
+                      scaled_x_nemo(mv->col, sf) + x_off_q4};
     return res;
 }
 

@@ -363,9 +363,8 @@ vpx_codec_err_t vpx_codec_set_frame_buffer_functions(
 
 /*!@} - end defgroup decoder*/
 
-vpx_codec_err_t vpx_load_nemo_cfg(vpx_codec_ctx_t *ctx, nemo_cfg_t *mobinas_cfg);
+vpx_codec_err_t vpx_load_nemo_cfg(vpx_codec_ctx_t *ctx, nemo_cfg_t *nemo_cfg);
 
-//vpx_codec_err_t vpx_load_nemo_dnn(vpx_codec_ctx_t *ctx, nemo_cfg_t *nemo_cfg);
 vpx_codec_err_t vpx_load_nemo_dnn(vpx_codec_ctx_t *ctx, int, const char *);
 
 vpx_codec_err_t vpx_load_nemo_cache_profile(vpx_codec_ctx_t *ctx, const char *);
