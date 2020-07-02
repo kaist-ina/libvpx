@@ -3269,7 +3269,7 @@ void vp9_rc_get_second_pass_params(VP9_COMP *cpi) {
       FILE *fpfile;
       fpfile = fopen("arf.stt", "a");
       ++arf_count;
-      fprintf(fpfile, "%10d %10ld %10d %10d %10ld\n", cm->video_frame_index,
+      fprintf(fpfile, "%10d %10ld %10d %10d %10ld\n", cm->current_video_frame,
               rc->frames_till_gf_update_due, rc->kf_boost, arf_count,
               rc->gfu_boost);
 

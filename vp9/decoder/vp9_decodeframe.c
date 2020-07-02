@@ -3188,14 +3188,13 @@ void upscale_frame_by_online_dnn(VP9_COMMON *const cm) {
     struct timespec start_time, finish_time;
     double diff;
 #endif
-#if CONFIG_SNPE
     RGB24_realloc_frame_buffer(cm->rgb24_input_tensor, cm->width, cm->height);
     RGB24_realloc_frame_buffer(cm->rgb24_sr_tensor, cm->width * cm->scale, cm->height * cm->scale);
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
     YV12_to_RGB24(cm->rgb24_input_tensor, get_frame_new_buffer(cm), cm->color_space, cm->color_range);
-//#if DEBUG_LATENCY
+#if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000
            + (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
@@ -3204,8 +3203,10 @@ void upscale_frame_by_online_dnn(VP9_COMMON *const cm) {
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 #endif
+#if CONFIG_SNPE
     snpe_execute_byte(cm->nemo_cfg->dnn->interpreter, cm->rgb24_input_tensor->buffer_alloc, cm->rgb24_sr_tensor->buffer_alloc_float,
                       3 * cm->height * cm->width);
+#endif
 #if DEBUG_LATENCY
     clock_gettime(CLOCK_MONOTONIC, &finish_time);
     diff = (finish_time.tv_sec - start_time.tv_sec) * 1000

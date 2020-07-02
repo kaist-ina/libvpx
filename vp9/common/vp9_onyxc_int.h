@@ -138,6 +138,7 @@ typedef struct VP9Common {
     RGB24_BUFFER_CONFIG *rgb24_reference_frame;
     RGB24_BUFFER_CONFIG *rgb24_input_tensor;
     RGB24_BUFFER_CONFIG *rgb24_sr_tensor;
+    unsigned int current_super_frame;
 
     YV12_BUFFER_CONFIG *frame_to_show;
     RefCntBuffer *prev_frame;
@@ -256,8 +257,6 @@ typedef struct VP9Common {
     FRAME_CONTEXT *frame_contexts;  // FRAME_CONTEXTS
     unsigned int frame_context_idx; /* Context to use/update */
     FRAME_COUNTS counts;
-
-    unsigned int current_super_frame; //hyunho: index for frames inside a single super-frame
 
     unsigned int current_video_frame;
     BITSTREAM_PROFILE profile;

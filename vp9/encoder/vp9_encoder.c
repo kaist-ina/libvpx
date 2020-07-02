@@ -3146,7 +3146,7 @@ static void full_to_model_counts(vp9_coeff_count_model *model_count,
 #if 0 && CONFIG_INTERNAL_STATS
 static void output_frame_level_debug_stats(VP9_COMP *cpi) {
   VP9_COMMON *const cm = &cpi->common;
-  FILE *const f = fopen("tmp.stt", cm->video_frame_index ? "a" : "w");
+  FILE *const f = fopen("tmp.stt", cm->current_video_frame ? "a" : "w");
   int64_t recon_err;
 
   vpx_clear_system_state();
@@ -3183,7 +3183,7 @@ static void output_frame_level_debug_stats(VP9_COMP *cpi) {
     dc_quant_devisor = 4.0;
 #endif
 
-    if (!cm->video_frame_index) {
+    if (!cm->current_video_frame) {
       fprintf(f, "frame, width, height, last ts, last end ts, "
           "source_alt_ref_pending, source_alt_ref_active, "
           "this_frame_target, projected_frame_size, "
@@ -3378,7 +3378,7 @@ static void set_frame_size(VP9_COMP *cpi) {
 
 #if !CONFIG_REALTIME_ONLY
   if (oxcf->pass == 2 && oxcf->rc_mode == VPX_VBR &&
-      ((oxcf->resize_mode == RESIZE_FIXED && cm->video_frame_index == 0) ||
+      ((oxcf->resize_mode == RESIZE_FIXED && cm->current_video_frame == 0) ||
        (oxcf->resize_mode == RESIZE_DYNAMIC && cpi->resize_pending))) {
     calculate_coded_size(cpi, &oxcf->scaled_frame_width,
                          &oxcf->scaled_frame_height);

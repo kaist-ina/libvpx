@@ -879,7 +879,7 @@ static void save_input_quality(VP9_COMMON *cm) {
 #ifdef __ANDROID_API__
     LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-    printf("output,%d frame: %.2fdB\n", cm->video_frame_index - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 
@@ -946,7 +946,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #ifdef __ANDROID_API__
     LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-    printf("output,%d frame: %.2fdB\n", cm->video_frame_index - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 

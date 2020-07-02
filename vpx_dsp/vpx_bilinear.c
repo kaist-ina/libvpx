@@ -6,15 +6,12 @@
 #include <math.h>
 #include <assert.h>
 #include "./vpx_dsp_rtcd.h"
+#include "./vpx_bilinear.h"
 #include "vpx_dsp/vpx_dsp_common.h"
 #include "vp9/common/vp9_onyxc_int.h"
 
-
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
-#define FRACTION_BIT (5)
-#define FRACTION_SCALE (1 << FRACTION_BIT)
-static const int16_t delta = (1 << (FRACTION_BIT - 1));
 
 static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_stride, int16_t *dst,  ptrdiff_t dst_stride, int width, int height, int scale, const nemo_bilinear_coeff_t *config){
     int x, y;
@@ -36,8 +33,8 @@ static void vpx_bilinear_interp_horiz_uint8_c(const uint8_t *src, ptrdiff_t src_
             const int16_t left_1 = src[y * src_stride + left_x_index_1];
             const int16_t right_1 = src[y * src_stride + right_x_index_1];
 
-            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT);
-            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta) >> FRACTION_BIT);
+            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
+            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 
             dst[y * dst_stride + x] = result_0;
             dst[y * dst_stride + (x + 1)] = result_1;
@@ -65,8 +62,8 @@ static void vpx_bilinear_interp_horiz_int16_c(const int16_t *src, ptrdiff_t src_
             const int16_t left_1 = src[y * src_stride + left_x_index_1];
             const int16_t right_1 = src[y * src_stride + right_x_index_1];
 
-            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT);
-            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta) >> FRACTION_BIT);
+            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
+            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 
             dst[y * dst_stride + x] = result_0;
             dst[y * dst_stride + (x + 1)] = result_1;
@@ -89,8 +86,8 @@ static void vpx_bilinear_interp_vert_uint8_c(const int16_t *src, ptrdiff_t src_s
             const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
             const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
 
-            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
-            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
+            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 
             dst[y * dst_stride + x] = result_0;
             dst[y * dst_stride + (x + 1)] = result_1;
@@ -113,8 +110,8 @@ static void vpx_bilinear_interp_vert_int16_c(const int16_t *src, ptrdiff_t src_s
             const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
             const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
 
-            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
-            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
+            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 
             dst[y * dst_stride + x] = clip_pixel(dst[y * dst_stride + x] + result_0);
             dst[y * dst_stride + (x + 1)] = clip_pixel(dst[y * dst_stride + (x + 1)] + result_1);

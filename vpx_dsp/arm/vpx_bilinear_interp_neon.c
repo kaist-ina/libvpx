@@ -7,16 +7,13 @@
 #include <memory.h>
 #include <sys/param.h>
 
+#include "../vpx_bilinear.h"
 #include "./vpx_config.h"
 #include "./vpx_dsp_rtcd.h"
 #include "vpx/vpx_integer.h"
 #include "vpx_ports/mem.h"
 #include "../../vp9/common/vp9_onyxc_int.h"
 #include "../vpx_dsp_common.h"
-
-#define FRACTION_BIT (5)
-#define FRACTION_SCALE (1 << FRACTION_BIT)
-static const int16_t delta = (1 << (FRACTION_BIT - 1));
 
 #define TAG "vpx_bilinear_interp_neon.c"
 #define _UNKNOWN   0
@@ -28,9 +25,6 @@ static const int16_t delta = (1 << (FRACTION_BIT - 1));
 #define _ERROR    6
 #define _FATAL    7
 #define _SILENT       8
-
-//TODO: here, neon optimization slows down the performance for scale x4, but maybe faster in x3, x4 which requires a manual test
-//TODO: replace MIN operations
 
 static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_stride,
                                               int16_t *dst, ptrdiff_t dst_stride, int width,
@@ -62,8 +56,8 @@ static void vpx_bilinear_interp_horiz_c_uint8(const uint8_t *src, ptrdiff_t src_
             const int16_t left_1 = src[y * src_stride + left_x_index_1];
             const int16_t right_1 = src[y * src_stride + right_x_index_1];
 
-            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT); //fixed-point
-            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta) >> FRACTION_BIT); //fixed-point
+            const int16_t result_0 = left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT); //fixed-point
+            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT); //fixed-point
 
             dst[y * dst_stride + x] = result_0;
             dst[y * dst_stride + (x + 1)] = result_1;
@@ -102,9 +96,9 @@ static void vpx_bilinear_interp_horiz_c_int16(const int16_t *src, ptrdiff_t src_
             const int16_t right_1 = src[y * src_stride + right_x_index_1];
 
             const int16_t result_0 =
-                    left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + delta) >> FRACTION_BIT); //fixed-point
-            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + delta)
-                    >> FRACTION_BIT); //fixed-point
+                    left_0 + (((right_0 - left_0) * x_lerp_fixed_0 + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT); //fixed-point
+            const int16_t result_1 = left_1 + (((right_1 - left_1) * x_lerp_fixed_1 + BILINEAR_DELTA)
+                    >> BILINEAR_FRACTION_BIT); //fixed-point
 
             dst[y * dst_stride + x] = result_0;
             dst[y * dst_stride + (x + 1)] = result_1;
@@ -142,7 +136,7 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
             //b. interpolate pixels
             qT_01234567_0 = vsubq_s16(qS1_01234567_0, qS0_01234567_0);
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
-            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, BILINEAR_FRACTION_BIT);
 
             //c. save pixels
             vst1_u8(&dst[y * dst_stride + x], vmovn_u16(vreinterpretq_u16_s16(qT_01234567_0)));
@@ -158,8 +152,8 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
             const int16_t top_1 = src[top_y_index * src_stride + (x + 1)];
             const int16_t bottom_1 = src[bottom_y_index * src_stride + (x + 1)];
 
-            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
-            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
+            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 
             dst[y * dst_stride + x] = clip_pixel(result_0);
             dst[y * dst_stride + (x + 1)] = clip_pixel(result_1);
@@ -183,8 +177,8 @@ vpx_bilinear_interp_vert_neon_w8_uint8(const int16_t *src, ptrdiff_t src_stride,
 //
 //            const int16_t result_0 = top_0 + ((bottom_0 - top_0) * y_lerp);
 //            const int16_t result_1 = top_1 + ((bottom_1 - top_1) * y_lerp);
-////            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
-////            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+////            const int16_t result_0 = top_0 + (((bottom_0 - top_0) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
+////            const int16_t result_1 = top_1 + (((bottom_1 - top_1) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 //
 //            dst[y * dst_stride + x] = clip_pixel(result_0);
 //            dst[y * dst_stride + (x + 1)] = clip_pixel(result_1);
@@ -225,8 +219,8 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
             qT_01234567_1 = vsubq_s16(qS1_01234567_1, qS0_01234567_1);
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
             qT_01234567_1 = vmulq_s16(qT_01234567_1, y_lerp_fixed_v);
-            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
-            qT_01234567_1 = vrsraq_n_s16(qS0_01234567_1, qT_01234567_1, FRACTION_BIT);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, BILINEAR_FRACTION_BIT);
+            qT_01234567_1 = vrsraq_n_s16(qS0_01234567_1, qT_01234567_1, BILINEAR_FRACTION_BIT);
 
             //c. save pixels
             vst1_u8(&dst[y * dst_stride + x], vmovn_u16(vreinterpretq_u16_s16(qT_01234567_0)));
@@ -245,7 +239,7 @@ vpx_bilinear_interp_vert_neon_w16_uint8(const int16_t *src, ptrdiff_t src_stride
             //b. interpolate pixels
             qT_01234567_0 = vsubq_s16(qS1_01234567_0, qS0_01234567_0);
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
-            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, BILINEAR_FRACTION_BIT);
 
             //c. save pixels
             vst1_u8(&dst[y * dst_stride + x], vmovn_u16(vreinterpretq_u16_s16(qT_01234567_0)));
@@ -284,7 +278,7 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
             //b. interpolate pixels
             qT_01234567_0 = vsubq_s16(qS1_01234567_0, qS0_01234567_0);
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
-            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, BILINEAR_FRACTION_BIT);
 
             //c. load & add destination pixels
             //d. clip pixels
@@ -310,9 +304,9 @@ vpx_bilinear_interp_vert_neon_w8_int16(const int16_t *src, ptrdiff_t src_stride,
 
             //b. interpolate pixels
             const int16_t result_0 =
-                    top_0 + (((bottom_0 - top_0) * y_lerp_fixed + delta) >> FRACTION_BIT);
+                    top_0 + (((bottom_0 - top_0) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
             const int16_t result_1 =
-                    top_1 + (((bottom_1 - top_1) * y_lerp_fixed + delta) >> FRACTION_BIT);
+                    top_1 + (((bottom_1 - top_1) * y_lerp_fixed + BILINEAR_DELTA) >> BILINEAR_FRACTION_BIT);
 
             //c. load & add destination pixels
             //d. clip pixels
@@ -356,8 +350,8 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
             qT_01234567_1 = vsubq_s16(qS1_01234567_1, qS0_01234567_1);
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
             qT_01234567_1 = vmulq_s16(qT_01234567_1, y_lerp_fixed_v);
-            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
-            qT_01234567_1 = vrsraq_n_s16(qS0_01234567_1, qT_01234567_1, FRACTION_BIT);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, BILINEAR_FRACTION_BIT);
+            qT_01234567_1 = vrsraq_n_s16(qS0_01234567_1, qT_01234567_1, BILINEAR_FRACTION_BIT);
 
             //c. load & add destination pixels
             //d. clip pixels
@@ -387,7 +381,7 @@ vpx_bilinear_interp_vert_neon_w16_int16(const int16_t *src, ptrdiff_t src_stride
             //b. interpolate pixels
             qT_01234567_0 = vsubq_s16(qS1_01234567_0, qS0_01234567_0);
             qT_01234567_0 = vmulq_s16(qT_01234567_0, y_lerp_fixed_v);
-            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, FRACTION_BIT);
+            qT_01234567_0 = vrsraq_n_s16(qS0_01234567_0, qT_01234567_0, BILINEAR_FRACTION_BIT);
 
             //c. load & add destination pixels
             //d. clip pixels

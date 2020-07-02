@@ -3479,7 +3479,7 @@ static void encode_frame_to_data_rate(VP8_COMP *cpi, size_t *size,
      * Update stats used for GF selection
      */
     {
-        cpi->one_pass_frame_index = cm->video_frame_index % MAX_LAG_BUFFERS;
+        cpi->one_pass_frame_index = cm->current_video_frame % MAX_LAG_BUFFERS;
 
         cpi->one_pass_frame_stats[cpi->one_pass_frame_index ].frames_so_far = 0;
         cpi->one_pass_frame_stats[cpi->one_pass_frame_index ].frame_intra_error = 0.0;
@@ -4383,7 +4383,7 @@ static void encode_frame_to_data_rate(VP8_COMP *cpi, size_t *size,
 #if 0
     {
         FILE *f = fopen("gfactive.stt", "a");
-        fprintf(f, "%8d %8d %8d %8d %8d\n", cm->video_frame_index, (100 * cpi->gf_active_count) / (cpi->common.mb_rows * cpi->common.mb_cols), cpi->this_iiratio, cpi->next_iiratio, cm->refresh_golden_frame);
+        fprintf(f, "%8d %8d %8d %8d %8d\n", cm->current_video_frame, (100 * cpi->gf_active_count) / (cpi->common.mb_rows * cpi->common.mb_cols), cpi->this_iiratio, cpi->next_iiratio, cm->refresh_golden_frame);
         fclose(f);
     }
 #endif
@@ -4788,7 +4788,7 @@ static void encode_frame_to_data_rate(VP8_COMP *cpi, size_t *size,
     {
         char filename[512];
         FILE *recon_file;
-        sprintf(filename, "enc%04d.yuv", (int) cm->video_frame_index);
+        sprintf(filename, "enc%04d.yuv", (int) cm->current_video_frame);
         recon_file = fopen(filename, "wb");
         fwrite(cm->yv12_fb[cm->lst_fb_idx].buffer_alloc,
                cm->yv12_fb[cm->lst_fb_idx].frame_size, 1, recon_file);
