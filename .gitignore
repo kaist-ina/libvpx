@@ -64,6 +64,8 @@
 /vpx_version.h
 /vpxdec
 /vpxdec_nemo
+/vpxdec_nemo_ver1
+/vpxdec_nemo_ver2
 /vpxdec_no_mv
 /vpxdec_no_residual
 /vpxdec_no_mv_residual

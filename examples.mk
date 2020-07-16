@@ -60,27 +60,50 @@ ifeq ($(CONFIG_WEBM_IO),yes)
   INC_PATH-yes += $(SRC_PATH_BARE)/third_party/libwebm
 endif
 
-# NEMO decoder
-UTILS-$(CONFIG_DECODERS)    += vpxdec_nemo.c
-vpxdec_nemo.SRCS                 += md5_utils.c md5_utils.h
-vpxdec_nemo.SRCS                 += vpx_ports/mem_ops.h
-vpxdec_nemo.SRCS                 += vpx_ports/mem_ops_aligned.h
-vpxdec_nemo.SRCS                 += vpx_ports/msvc.h
-vpxdec_nemo.SRCS                 += vpx_ports/vpx_timer.h
-vpxdec_nemo.SRCS                 += vpx/vpx_integer.h
-vpxdec_nemo.SRCS                 += args.c args.h
-vpxdec_nemo.SRCS                 += ivfdec.c ivfdec.h
-vpxdec_nemo.SRCS                 += tools_common.c tools_common.h
-vpxdec_nemo.SRCS                 += y4menc.c y4menc.h
+# NEMO decoder version 1 
+UTILS-$(CONFIG_DECODERS)    += vpxdec_nemo_ver1.c
+vpxdec_nemo_ver1.SRCS                 += md5_utils.c md5_utils.h
+vpxdec_nemo_ver1.SRCS                 += vpx_ports/mem_ops.h
+vpxdec_nemo_ver1.SRCS                 += vpx_ports/mem_ops_aligned.h
+vpxdec_nemo_ver1.SRCS                 += vpx_ports/msvc.h
+vpxdec_nemo_ver1.SRCS                 += vpx_ports/vpx_timer.h
+vpxdec_nemo_ver1.SRCS                 += vpx/vpx_integer.h
+vpxdec_nemo_ver1.SRCS                 += args.c args.h
+vpxdec_nemo_ver1.SRCS                 += ivfdec.c ivfdec.h
+vpxdec_nemo_ver1.SRCS                 += tools_common.c tools_common.h
+vpxdec_nemo_ver1.SRCS                 += y4menc.c y4menc.h
 ifeq ($(CONFIG_LIBYUV),yes)
-  vpxdec_nemo.SRCS                 += $(LIBYUV_SRCS)
+  vpxdec_nemo_ver1.SRCS                 += $(LIBYUV_SRCS)
   $(BUILD_PFX)third_party/libyuv/%.cc.o: CXXFLAGS += -Wno-unused-parameter
 endif
 ifeq ($(CONFIG_WEBM_IO),yes)
-  vpxdec_nemo.SRCS                 += $(LIBWEBM_COMMON_SRCS)
-  vpxdec_nemo.SRCS                 += $(LIBWEBM_MUXER_SRCS)
-  vpxdec_nemo.SRCS                 += $(LIBWEBM_PARSER_SRCS)
-  vpxdec_nemo.SRCS                 += webmdec.cc webmdec.h
+  vpxdec_nemo_ver1.SRCS                 += $(LIBWEBM_COMMON_SRCS)
+  vpxdec_nemo_ver1.SRCS                 += $(LIBWEBM_MUXER_SRCS)
+  vpxdec_nemo_ver1.SRCS                 += $(LIBWEBM_PARSER_SRCS)
+  vpxdec_nemo_ver1.SRCS                 += webmdec.cc webmdec.h
+endif
+
+# NEMO decoder version 2
+UTILS-$(CONFIG_DECODERS)    += vpxdec_nemo_ver2.c
+vpxdec_nemo_ver2.SRCS                 += md5_utils.c md5_utils.h
+vpxdec_nemo_ver2.SRCS                 += vpx_ports/mem_ops.h
+vpxdec_nemo_ver2.SRCS                 += vpx_ports/mem_ops_aligned.h
+vpxdec_nemo_ver2.SRCS                 += vpx_ports/msvc.h
+vpxdec_nemo_ver2.SRCS                 += vpx_ports/vpx_timer.h
+vpxdec_nemo_ver2.SRCS                 += vpx/vpx_integer.h
+vpxdec_nemo_ver2.SRCS                 += args.c args.h
+vpxdec_nemo_ver2.SRCS                 += ivfdec.c ivfdec.h
+vpxdec_nemo_ver2.SRCS                 += tools_common.c tools_common.h
+vpxdec_nemo_ver2.SRCS                 += y4menc.c y4menc.h
+ifeq ($(CONFIG_LIBYUV),yes)
+  vpxdec_nemo_ver2.SRCS                 += $(LIBYUV_SRCS)
+  $(BUILD_PFX)third_party/libyuv/%.cc.o: CXXFLAGS += -Wno-unused-parameter
+endif
+ifeq ($(CONFIG_WEBM_IO),yes)
+  vpxdec_nemo_ver2.SRCS                 += $(LIBWEBM_COMMON_SRCS)
+  vpxdec_nemo_ver2.SRCS                 += $(LIBWEBM_MUXER_SRCS)
+  vpxdec_nemo_ver2.SRCS                 += $(LIBWEBM_PARSER_SRCS)
+  vpxdec_nemo_ver2.SRCS                 += webmdec.cc webmdec.h
 endif
 
 # List of examples to build. UTILS are tools meant for distribution
