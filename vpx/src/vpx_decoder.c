@@ -203,10 +203,10 @@ vpx_codec_err_t vpx_load_nemo_dnn(vpx_codec_ctx_t *ctx, int scale, const char *d
   return SAVE_STATUS(ctx, res);
 }
 
-vpx_codec_err_t vpx_load_nemo_cache_profile(vpx_codec_ctx_t *ctx, const char *cache_profile_path){
+vpx_codec_err_t vpx_load_nemo_cache_profile(vpx_codec_ctx_t *ctx, int scale, const char *cache_profile_path){
   vpx_codec_err_t res;
 
-  res = ctx->iface->nemo.load_cache_profile(get_alg_priv(ctx), cache_profile_path);
+  res = ctx->iface->nemo.load_cache_profile(get_alg_priv(ctx), scale, cache_profile_path);
 
   return SAVE_STATUS(ctx, res);
 }

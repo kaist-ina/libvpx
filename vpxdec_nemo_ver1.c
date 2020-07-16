@@ -1162,7 +1162,7 @@ static int main_loop(int argc, const char **argv_)
     }
     /* NEMO: Load a cache profile */
     if (nemo_cfg->cache_mode == PROFILE_CACHE){
-        if(vpx_load_nemo_cache_profile(&decoder, cache_profile_path)){
+        if(vpx_load_nemo_cache_profile(&decoder, scale, cache_profile_path)){
             warn("Failed to load a cache profile: %s\n", vpx_codec_error(&decoder));
             goto fail;
         }

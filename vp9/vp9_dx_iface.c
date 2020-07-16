@@ -363,36 +363,39 @@ load_nemo_dnn(vpx_codec_alg_priv_t *ctx, int scale, const char *dnn_file) {
     }
 
     ctx->nemo_cfg->dnn = init_nemo_dnn(scale);
-    ctx->nemo_cfg->bilinear_coeff = init_bilinear_coeff(64, 64, scale);
 
+    if (dnn_file != NULL) {
 #if CONFIG_SNPE
-    ctx->nemo_cfg->dnn->interpreter = snpe_alloc(ctx->nemo_cfg->dnn_runtime);
-    if (snpe_check_runtime(ctx->nemo_cfg->dnn->interpreter)) {
+        ctx->nemo_cfg->dnn->interpreter = snpe_alloc(ctx->nemo_cfg->dnn_runtime);
+        if (snpe_check_runtime(ctx->nemo_cfg->dnn->interpreter)) {
 #ifdef __ANDROID_API__
-        LOGE("Failed to check runtime");
+            LOGE("Failed to check runtime");
 #endif
-        fprintf(stderr, "%s: Failed to check runtime\n", __func__);
-        return VPX_NEMO_ERROR;
+            fprintf(stderr, "%s: Failed to check runtime\n", __func__);
+            return VPX_NEMO_ERROR;
+        }
+
+        if (snpe_load_network(ctx->nemo_cfg->dnn->interpreter, dnn_file)) {
+#ifdef __ANDROID_API__
+            LOGE("Failed to load network: %s", dnn_file);
+#endif
+            fprintf(stderr, "%s: Failed to load network\n", __func__);
+            return VPX_NEMO_ERROR;
+        }
+#endif
     }
 
-    if (snpe_load_network(ctx->nemo_cfg->dnn->interpreter, dnn_file)) {
-#ifdef __ANDROID_API__
-        LOGE("Failed to load network: %s", dnn_file);
-#endif
-        fprintf(stderr, "%s: Failed to load network\n", __func__);
-        return VPX_NEMO_ERROR;
-    }
-#endif
     return VPX_CODEC_OK;
 }
 
 static vpx_codec_err_t
-load_nemo_cache_profile(vpx_codec_alg_priv_t *ctx, const char *cache_profile_path) {
+load_nemo_cache_profile(vpx_codec_alg_priv_t *ctx, int scale, const char *cache_profile_path) {
     if (ctx->nemo_cfg == NULL) {
         return VPX_NEMO_ERROR;
     }
 
     ctx->nemo_cfg->cache_profile = init_nemo_cache_profile();
+    ctx->nemo_cfg->bilinear_coeff = init_bilinear_coeff(64, 64, scale);
 
     if ((ctx->nemo_cfg->cache_profile->file = fopen(cache_profile_path, "rb")) == NULL) {
 #ifdef __ANDROID_API__
@@ -414,8 +417,13 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     char file_path[PATH_MAX] = {0};
 
     /* NEMO: validate nemo_cfg */
-    if (ctx->nemo_cfg->decode_mode == DECODE_SR) {
-        if (ctx->nemo_cfg->dnn == NULL || ctx->nemo_cfg->bilinear_coeff == NULL) {
+    if (ctx->nemo_cfg->decode_mode == DECODE_SR && ctx->nemo_cfg->dnn_mode == ONLINE_DNN) {
+        if (ctx->nemo_cfg->dnn == NULL) {
+            return VPX_NEMO_ERROR;
+        }
+    }
+    else if (ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
+        if (ctx->nemo_cfg->bilinear_coeff == NULL) {
             return VPX_NEMO_ERROR;
         }
     }

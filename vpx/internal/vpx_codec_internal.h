@@ -3,8 +3,7 @@
  *
  *  Use of this source code is governed by a BSD-style license
  *  that can be found in the LICENSE file in the root of the source
- *  tree. An additional intellectual property rights grant can be found
- *  in the file PATENTS.  All contributing project authors may
+ *  tree. An additional intellectual property rights grant can be found *  in the file PATENTS.  All contributing project authors may
  *  be found in the AUTHORS file in the root of the source tree.
  */
 
@@ -275,7 +274,7 @@ typedef vpx_codec_err_t (*nemo_load_dnn_fn_t)(
         vpx_codec_alg_priv_t *ctx, int scale, const char *dnn_path);
 
 typedef vpx_codec_err_t (*nemo_load_cache_profile_fn_t)(
-        vpx_codec_alg_priv_t *ctx, const char *cache_profile_path);
+        vpx_codec_alg_priv_t *ctx, int scale, const char *cache_profile_path);
 
 /*!\brief usage configuration mapping
  *

@@ -1093,14 +1093,21 @@ static int main_loop(int argc, const char **argv_)
             goto fail;
         }
     }
-    /* NEMO: Load a cache profile */
-    if (nemo_cfg->cache_mode == PROFILE_CACHE){
-        if(vpx_load_nemo_cache_profile(&decoder, cache_profile_path)){
-            warn("Failed to load a cache profile: %s\n", vpx_codec_error(&decoder));
+    if (nemo_cfg->dnn_mode == OFFLINE_DNN && (nemo_cfg->dnn_mode == DECODE_SR || nemo_cfg->dnn_mode == DECODE_CACHE)) {
+        if(vpx_load_nemo_dnn(&decoder, dnn_scale, NULL)){
+            warn("Failed to load a DNN: %s\n", vpx_codec_error(&decoder));
             goto fail;
         }
     }
 
+    /* NEMO: Load a cache profile */
+    if (nemo_cfg->cache_mode == PROFILE_CACHE){
+        if(vpx_load_nemo_cache_profile(&decoder, dnn_scale, cache_profile_path)){
+            warn("Failed to load a cache profile: %s\n", vpx_codec_error(&decoder));
+            goto fail;
+        }
+    }
+    
     /* Decode file */
     while (frame_avail || got_data)
     {
