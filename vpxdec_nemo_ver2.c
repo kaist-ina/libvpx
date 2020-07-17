@@ -132,6 +132,8 @@ static const arg_def_t dnnmodearg =
         ARG_DEF(NULL, "dnn-mode", 1, "DNN mode");
 static const arg_def_t cachemodearg =
         ARG_DEF(NULL, "cache-mode", 1, "Cache mode");
+static const arg_def_t cacheprofilenamearg =
+        ARG_DEF(NULL, "cache-profile-name", 1, "Cache profile name");
 static const arg_def_t savergbframedarg =
         ARG_DEF(NULL, "save-rgbframe", 0, "Save RGB frames");
 static const arg_def_t saveyuvframearg=
@@ -155,7 +157,7 @@ static const arg_def_t *all_args[] =
 #endif
     &svcdecodingarg, &framestatsarg,
     &datasetdirarg, &inputvideonamearg, &referencevideonamearg,
-    &outputwidtharg, &outputheightarg, &dnnscalearg, &dnnnamearg, &decodemodearg, &dnnmodearg, &cachemodearg,
+    &outputwidtharg, &outputheightarg, &dnnscalearg, &dnnnamearg, &decodemodearg, &dnnmodearg, &cachemodearg, &cacheprofilenamearg,
     &savergbframedarg, &savequalityarg, &savelatencyarg, &saveyuvframearg,
     &postfixarg, &dnnruntimearg, NULL};
 #if CONFIG_VP8_DECODER
@@ -611,34 +613,62 @@ static void append_postfix_to_string(char *str, const char *postfix) {
 }
 
 static void setup_directory(nemo_cfg_t *nemo_cfg, const char *dataset_dir, const char *input_video_name, const char *reference_video_name,
-                                const char *dnn_name, const char *postfix) {
-    if (nemo_cfg->decode_mode == DECODE) {
-        sprintf(nemo_cfg->log_dir, "%s/log/%s", dataset_dir, input_video_name);
-        sprintf(nemo_cfg->input_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
-        append_postfix_to_string(nemo_cfg->log_dir, postfix);
-        append_postfix_to_string(nemo_cfg->input_frame_dir, postfix);
+                                const char *dnn_name, const char *cache_profile_name, const char *postfix) {
+    switch(nemo_cfg->decode_mode) {
+        case DECODE:
+            sprintf(nemo_cfg->log_dir, "%s/log/%s", dataset_dir, input_video_name);
+            sprintf(nemo_cfg->input_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
+            append_postfix_to_string(nemo_cfg->log_dir, postfix);
+            append_postfix_to_string(nemo_cfg->input_frame_dir, postfix);
 
-        if (nemo_cfg->save_quality) {
-            sprintf(nemo_cfg->input_reference_frame_dir, "%s/image/%s", dataset_dir, reference_video_name);
-            append_postfix_to_string(nemo_cfg->input_reference_frame_dir, postfix);
-        }
-    }
-    else if (nemo_cfg->decode_mode == DECODE_SR || nemo_cfg->decode_mode == DECODE_CACHE) {
-        sprintf(nemo_cfg->log_dir, "%s/log/%s/%s", dataset_dir, input_video_name, dnn_name);
-        sprintf(nemo_cfg->input_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
-        sprintf(nemo_cfg->sr_frame_dir, "%s/image/%s/%s", dataset_dir, input_video_name, dnn_name);
-        sprintf(nemo_cfg->sr_offline_frame_dir, "%s/image/%s/%s", dataset_dir, input_video_name, dnn_name);
-        append_postfix_to_string(nemo_cfg->log_dir, postfix);
-        append_postfix_to_string(nemo_cfg->input_frame_dir, postfix);
-        append_postfix_to_string(nemo_cfg->sr_frame_dir, postfix);
-        append_postfix_to_string(nemo_cfg->sr_offline_frame_dir, postfix);
+            if (nemo_cfg->save_quality) {
+                sprintf(nemo_cfg->input_reference_frame_dir, "%s/image/%s", dataset_dir, reference_video_name);
+                append_postfix_to_string(nemo_cfg->input_reference_frame_dir, postfix);
+            }
+            break;
+        case DECODE_SR:
+            sprintf(nemo_cfg->log_dir, "%s/log/%s/%s", dataset_dir, input_video_name, dnn_name);
+            sprintf(nemo_cfg->input_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
+            sprintf(nemo_cfg->sr_frame_dir, "%s/image/%s/%s", dataset_dir, input_video_name, dnn_name);
+            sprintf(nemo_cfg->sr_offline_frame_dir, "%s/image/%s/%s", dataset_dir, input_video_name, dnn_name);
+            append_postfix_to_string(nemo_cfg->log_dir, postfix);
+            append_postfix_to_string(nemo_cfg->input_frame_dir, postfix);
+            append_postfix_to_string(nemo_cfg->sr_frame_dir, postfix);
+            append_postfix_to_string(nemo_cfg->sr_offline_frame_dir, postfix);
 
-        if (nemo_cfg->save_quality) {
-            sprintf(nemo_cfg->input_reference_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
-            sprintf(nemo_cfg->sr_reference_frame_dir, "%s/image/%s", dataset_dir, reference_video_name);
-            append_postfix_to_string(nemo_cfg->input_reference_frame_dir, postfix);
-            append_postfix_to_string(nemo_cfg->sr_reference_frame_dir, postfix);
-        }
+            if (nemo_cfg->save_quality) {
+                sprintf(nemo_cfg->input_reference_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
+                sprintf(nemo_cfg->sr_reference_frame_dir, "%s/image/%s", dataset_dir, reference_video_name);
+                append_postfix_to_string(nemo_cfg->input_reference_frame_dir, postfix);
+                append_postfix_to_string(nemo_cfg->sr_reference_frame_dir, postfix);
+            }
+            break;
+        case DECODE_CACHE:
+            sprintf(nemo_cfg->log_dir, "%s/log/%s/%s", dataset_dir, input_video_name, dnn_name);
+            sprintf(nemo_cfg->input_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
+            sprintf(nemo_cfg->sr_frame_dir, "%s/image/%s/%s", dataset_dir, input_video_name, dnn_name);
+            sprintf(nemo_cfg->sr_offline_frame_dir, "%s/image/%s/%s", dataset_dir, input_video_name, dnn_name);
+            append_postfix_to_string(nemo_cfg->log_dir, postfix);
+            append_postfix_to_string(nemo_cfg->input_frame_dir, postfix);
+            append_postfix_to_string(nemo_cfg->sr_frame_dir, postfix);
+            append_postfix_to_string(nemo_cfg->sr_offline_frame_dir, postfix);
+
+            if (cache_profile_name != NULL) {
+                append_postfix_to_string(nemo_cfg->log_dir, cache_profile_name);
+                append_postfix_to_string(nemo_cfg->sr_frame_dir, cache_profile_name);
+            }
+            else {
+                append_postfix_to_string(nemo_cfg->log_dir, "FAST");
+                append_postfix_to_string(nemo_cfg->sr_frame_dir, "FAST");
+            }
+
+            if (nemo_cfg->save_quality) {
+                sprintf(nemo_cfg->input_reference_frame_dir, "%s/image/%s", dataset_dir, input_video_name);
+                sprintf(nemo_cfg->sr_reference_frame_dir, "%s/image/%s", dataset_dir, reference_video_name);
+                append_postfix_to_string(nemo_cfg->input_reference_frame_dir, postfix);
+                append_postfix_to_string(nemo_cfg->sr_reference_frame_dir, postfix);
+            }
+            break;
     }
 }
 
@@ -780,9 +810,10 @@ static int main_loop(int argc, const char **argv_)
     const char *input_video_name = NULL;
     const char *reference_video_name = NULL;
     const char *dnn_name = NULL;
-    const char *cache_profile_path = NULL;
+    const char *cache_profile_name = NULL;
     char video_path[PATH_MAX];
     char dnn_path[PATH_MAX];
+    char cache_profile_path[PATH_MAX];
     int dnn_scale = 0;
     const char *postfix = NULL;
 
@@ -918,6 +949,8 @@ static int main_loop(int argc, const char **argv_)
             set_dnn_mode(&nemo_cfg->dnn_mode, arg.val);
         else if (arg_match(&arg, &cachemodearg, argi))
             set_cache_mode(&nemo_cfg->cache_mode, arg.val);
+        else if (arg_match(&arg, &cacheprofilenamearg, argi))
+            cache_profile_name = arg.val;
         else if (arg_match(&arg, &savergbframedarg, argi))
             nemo_cfg->save_rgbframe = 1;
         else if (arg_match(&arg, &savequalityarg, argi))
@@ -942,10 +975,13 @@ static int main_loop(int argc, const char **argv_)
             die("Error: Unrecognized option %s\n", *argi);
 
     /* NEMO: setup */
-    setup_directory(nemo_cfg, dataset_dir, input_video_name, reference_video_name, dnn_name, postfix);
+    setup_directory(nemo_cfg, dataset_dir, input_video_name, reference_video_name, dnn_name, cache_profile_name, postfix);
     sprintf(video_path, "%s/video/%s", dataset_dir, input_video_name);
     if (nemo_cfg->decode_mode == DECODE_SR || nemo_cfg->decode_mode == DECODE_CACHE) {
-        sprintf(dnn_path, "%s/checkpoint/%s/%s.dlc", dataset_dir, input_video_name, dnn_name);
+        sprintf(dnn_path, "%s/checkpoint/%s/%s", dataset_dir, input_video_name, dnn_name);
+    }
+    if (nemo_cfg->decode_mode == DECODE_CACHE && nemo_cfg->cache_mode == PROFILE_CACHE) {
+        sprintf(cache_profile_path, "%s/profile/%s/%s/%s/%s", dataset_dir, input_video_name, dnn_name, postfix, cache_profile_name);
     }
 
     /* Open a video file */

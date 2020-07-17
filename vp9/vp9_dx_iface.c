@@ -328,7 +328,7 @@ static vpx_codec_err_t load_nemo_cfg(vpx_codec_alg_priv_t *ctx, nemo_cfg_t *nemo
         } else if (ctx->nemo_cfg->decode_mode == DECODE_SR ||
                    ctx->nemo_cfg->decode_mode == DECODE_CACHE) {
             if (!_exists(ctx->nemo_cfg->sr_reference_frame_dir)) {
-                fprintf(stderr, "%s: SR reference frame dir does not exists\n", __func__);
+                fprintf(stderr, "%s: SR reference frame dir does not exists: %s\n", __func__, ctx->nemo_cfg->sr_reference_frame_dir);
                 return VPX_NEMO_ERROR;
             }
         }

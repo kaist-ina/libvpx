@@ -3327,11 +3327,13 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                     if (cm->frame_type == KEY_FRAME) {
                         //cache loopback
                         //TODO: read file size and check whether offset is equal to file size (8991 cannot be applied to all videos)
+                        /*
                         if (cm->current_video_frame != 0 && cm->current_video_frame % 8991 == 0) {
                             cache_profile->offset = 0;
                             rewind(cache_profile->file);
                             cache_profile->num_dummy_bits = 0;
                         }
+                        */
 
                         if (read_cache_profile_dummy_bits(cache_profile) == -1) {
                             fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
