@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <math.h>
+#include <time.h>
 #include "vpx_dsp/vpx_convert.h"
 #include "./vpx_dsp_rtcd.h"
 #include "vpx/vpx_nemo.h"
@@ -12,6 +13,9 @@
 #include "vpx_convert.h"
 #include "../vpx_scale/yv12config.h"
 #include "../vpx/vpx_nemo.h"
+
+#define DEBUG_LATENCY 0
+#define BILLION  1E9
 
 //naive c implementation
 //int RGB24_to_YV12_bt701_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf) {
@@ -251,12 +255,23 @@ int RGB24_to_YV12_c(YV12_BUFFER_CONFIG *ybf, RGB24_BUFFER_CONFIG *rbf, vpx_color
         return -1;
     }
 
+#if DEBUG_LATENCY
+    struct timespec start_time, finish_time;
+    double diff;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+#endif
     if (color_space == VPX_CS_BT_709 && color_range == VPX_CR_STUDIO_RANGE) {
         RGB24_to_YV12_bt701_c(ybf, rbf);
     }
     else {
         return -1;
     }
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 +
+           (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    printf("rgb24_to_yv12: %f", diff);
+#endif
 
     return 0;
 }
@@ -266,12 +281,23 @@ int YV12_to_RGB24_c(RGB24_BUFFER_CONFIG *rbf, YV12_BUFFER_CONFIG *ybf, vpx_color
         return -1;
     }
 
+#if DEBUG_LATENCY
+    struct timespec start_time, finish_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    double diff;
+#endif
     if (color_space == VPX_CS_BT_709 && color_range == VPX_CR_STUDIO_RANGE) {
         YV12_to_RGB24_bt701_c(rbf, ybf);
     }
     else {
         return -1;
     }
+#if DEBUG_LATENCY
+    clock_gettime(CLOCK_MONOTONIC, &finish_time);
+    diff = (finish_time.tv_sec - start_time.tv_sec) * 1000 +
+           (finish_time.tv_nsec - start_time.tv_nsec) / BILLION * 1000.0;
+    printf("yv12_to_rgb24: %f", diff);
+#endif
 
     return 0;
 }

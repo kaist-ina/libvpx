@@ -553,16 +553,17 @@ static vpx_codec_err_t decode_one(vpx_codec_alg_priv_t *ctx,
     return VPX_CODEC_OK;
 }
 
-static void
+static int 
 YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const char *file_name) {
     char file_path[PATH_MAX] = {0};
     FILE *serialize_file = NULL;
 
     //save a y-channel image
+    sprintf(file_path, "%s/%s.y", save_dir, file_name);
     serialize_file = fopen(file_path, "wb");
     if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
-        return;
+        return -1;
     }
     uint8_t *src = frame->y_buffer;
     int h = frame->y_crop_height;
@@ -578,7 +579,7 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
     serialize_file = fopen(file_path, "wb");
     if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
-        return;
+        return -1;
     }
     src = frame->u_buffer;
     h = frame->uv_crop_height;
@@ -593,7 +594,7 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
     serialize_file = fopen(file_path, "wb");
     if (serialize_file == NULL) {
         fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
-        return;
+        return -1;
     }
     src = frame->v_buffer;
     h = frame->uv_crop_height;
@@ -602,6 +603,63 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
         src += frame->uv_stride;
     } while (--h);
     fclose(serialize_file);
+
+    return 0;
+}
+
+static int 
+YV12_load_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const char *file_name) {
+    char file_path[PATH_MAX] = {0};
+    FILE *serialize_file = NULL;
+
+    printf("y_crop_height: %d, uv_crop_height: %d\n", frame->y_crop_height, frame->uv_crop_height);
+
+    //save a y-channel image
+    sprintf(file_path, "%s/%s.y", save_dir, file_name);
+    serialize_file = fopen(file_path, "rb");
+    if (serialize_file == NULL) {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    uint8_t *src = frame->y_buffer;
+    int h = frame->y_crop_height;
+    do {
+        fread(src, sizeof(uint8_t), frame->y_crop_width, serialize_file);
+        src += frame->y_stride;
+    } while (--h);
+    fclose(serialize_file);
+
+    //save a u-channel image
+    sprintf(file_path, "%s/%s.u", save_dir, file_name);
+    serialize_file = fopen(file_path, "rb");
+    if (serialize_file == NULL) {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    src = frame->u_buffer;
+    h = frame->uv_crop_height;
+    do {
+        fread(src, sizeof(uint8_t), frame->uv_crop_width, serialize_file);
+        src += frame->uv_stride;
+    } while (--h);
+    fclose(serialize_file);
+
+    //save a v-channel image
+    sprintf(file_path, "%s/%s.v", save_dir, file_name);
+    serialize_file = fopen(file_path, "rb");
+    if (serialize_file == NULL) {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    src = frame->v_buffer;
+    h = frame->uv_crop_height;
+    do {
+        fread(src, sizeof(uint8_t), frame->uv_crop_width, serialize_file);
+        src += frame->uv_stride;
+    } while (--h);
+    fclose(serialize_file);
+
+    return 0;
 }
 
 static void save_input_rgbframe(VP9_COMMON *cm) {
@@ -694,7 +752,6 @@ static void save_input_yuvframe(VP9_COMMON *cm) {
               3);
 
     //save a yuv frame
-    sprintf(file_name, "%04d", cm->current_video_frame - 1);
     YV12_save_frame_buffer(scaled_yuv_frame, cm->nemo_cfg->input_frame_dir, file_name);
 }
 
@@ -758,7 +815,6 @@ static void save_sr_yuv_frame(VP9_COMMON *cm) {
         width = cm->width;
         height = cm->height;
     }
-
     if (cm->show_frame) {
         sprintf(file_name, "%04d", cm->current_video_frame - 1);
     } else {
@@ -825,7 +881,7 @@ static void save_yuvframe(VP9_COMMON *cm) {
 }
 
 static void save_input_quality(VP9_COMMON *cm) {
-    char file_path[PATH_MAX] = {0};
+    char file_name[PATH_MAX] = {0};
     char log[LOG_MAX] = {0};
     int width, height;
 
@@ -835,6 +891,11 @@ static void save_input_quality(VP9_COMMON *cm) {
     } else {
         width = cm->width;
         height = cm->height;
+    }
+    if (cm->show_frame) {
+        sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    } else {
+        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
     }
 
     //up-scale a yuv frame
@@ -859,16 +920,10 @@ static void save_input_quality(VP9_COMMON *cm) {
               upscaled_frame->y_crop_width, upscaled_frame->y_crop_height,
               3);
 
-    //load a rgb frame
-    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
-    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->input_reference_frame_dir,
-            cm->current_video_frame - 1);
-    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
-
-    //convert a rgb frame into a yuv frame
-    YV12_BUFFER_CONFIG *compare_frame = cm->yv12_reference_frame;
+    //load a reference frame
+    YV12_BUFFER_CONFIG *reference_frame = cm->yv12_reference_frame;
     vpx_realloc_frame_buffer(
-            compare_frame, width, height,
+            reference_frame, width, height,
             cm->subsampling_x,
             cm->subsampling_y,
 #if CONFIG_VP9_HIGHBITDEPTH
@@ -876,11 +931,11 @@ static void save_input_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-    RGB24_to_YV12(compare_frame, cm->rgb24_reference_frame, cm->color_space, cm->color_range);
+    YV12_load_frame_buffer(reference_frame, cm->nemo_cfg->input_reference_frame_dir, file_name);
 
     //calculate PSNR
     PSNR_STATS psnr_stats;
-    vpx_calc_psnr(upscaled_frame, compare_frame, &psnr_stats);
+    vpx_calc_psnr(upscaled_frame, reference_frame, &psnr_stats);
     sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
     fputs(log, cm->quality_log);
 
@@ -892,7 +947,7 @@ static void save_input_quality(VP9_COMMON *cm) {
 }
 
 static void save_sr_quality(VP9_COMMON *cm) {
-    char file_path[PATH_MAX] = {0};
+    char file_name[PATH_MAX] = {0};
     char log[LOG_MAX] = {0};
     int width, height;
 
@@ -902,6 +957,11 @@ static void save_sr_quality(VP9_COMMON *cm) {
     } else {
         width = cm->width * cm->scale;
         height = cm->height * cm->scale;
+    }
+    if (cm->show_frame) {
+        sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    } else {
+        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
     }
 
     //upscale a yuv frame
@@ -926,13 +986,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
               sr_upscaled_frame->y_crop_width, sr_upscaled_frame->y_crop_height,
               3);
 
-    //load a rgb frame
-    RGB24_realloc_frame_buffer(cm->rgb24_reference_frame, width, height);
-    sprintf(file_path, "%s/%04d.raw", cm->nemo_cfg->sr_reference_frame_dir,
-            cm->current_video_frame - 1);
-    RGB24_load_frame_buffer(cm->rgb24_reference_frame, file_path);
-
-    //convert a yuv frame into a rgb frame
+    //load a yuv reference frame
     YV12_BUFFER_CONFIG *sr_compare_frame = cm->yv12_reference_frame;
     vpx_realloc_frame_buffer(
             sr_compare_frame, width, height,
@@ -943,7 +997,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-    RGB24_to_YV12(sr_compare_frame, cm->rgb24_reference_frame, cm->color_space, cm->color_range);
+    YV12_load_frame_buffer(sr_compare_frame, cm->nemo_cfg->sr_reference_frame_dir, file_name);
 
     //calculate PSNR
     PSNR_STATS psnr_stats;
