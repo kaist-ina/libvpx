@@ -978,10 +978,10 @@ static int main_loop(int argc, const char **argv_)
     setup_directory(nemo_cfg, dataset_dir, input_video_name, reference_video_name, dnn_name, cache_profile_name, postfix);
     sprintf(video_path, "%s/video/%s", dataset_dir, input_video_name);
     if (nemo_cfg->decode_mode == DECODE_SR || nemo_cfg->decode_mode == DECODE_CACHE) {
-        sprintf(dnn_path, "%s/checkpoint/%s/%s", dataset_dir, input_video_name, dnn_name);
+        sprintf(dnn_path, "%s/checkpoint/%s/%s.dlc", dataset_dir, input_video_name, dnn_name);
     }
     if (nemo_cfg->decode_mode == DECODE_CACHE && nemo_cfg->cache_mode == PROFILE_CACHE) {
-        sprintf(cache_profile_path, "%s/profile/%s/%s/%s/%s", dataset_dir, input_video_name, dnn_name, postfix, cache_profile_name);
+        sprintf(cache_profile_path, "%s/profile/%s/%s/%s/%s.profile", dataset_dir, input_video_name, dnn_name, postfix, cache_profile_name);
     }
 
     /* Open a video file */

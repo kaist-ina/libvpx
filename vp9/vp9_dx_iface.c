@@ -379,7 +379,7 @@ load_nemo_dnn(vpx_codec_alg_priv_t *ctx, int scale, const char *dnn_file) {
 #ifdef __ANDROID_API__
             LOGE("Failed to load network: %s", dnn_file);
 #endif
-            fprintf(stderr, "%s: Failed to load network\n", __func__);
+            fprintf(stderr, "%s: Failed to load network: %s\n", __func__, dnn_file);
             return VPX_NEMO_ERROR;
         }
 #endif
@@ -1062,7 +1062,7 @@ static void save_latency(VP9Decoder *pbi, int video_frame_index, int super_frame
     LOGI("%d, %d frame: %.2fmsec", video_frame_index, super_frame_index,
          pbi->common.latency.decode);
 #else
-    fprintf(stderr, "%d, %d frame: %.2fmsec", video_frame_index, super_frame_index, pbi->common.latency.decode);
+    fprintf(stdout, "%d, %d frame: %.2fmsec\n", video_frame_index, super_frame_index, pbi->common.latency.decode);
 #endif
 }
 
