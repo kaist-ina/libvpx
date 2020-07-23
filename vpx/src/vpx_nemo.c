@@ -115,7 +115,7 @@ int read_cache_profile_dummy_bits(nemo_cache_profile_t *cache_profile) {
     }
 
     if (fread(&cache_profile->num_dummy_bits, sizeof(int), 1, cache_profile->file) != 1) {
-        fprintf(stderr, "%s: fail to read a cache cache_profile", __func__);
+        fprintf(stderr, "%s: fail to read a cache profile\n", __func__);
         return -1;
     }
 
@@ -137,7 +137,7 @@ int read_cache_profile(nemo_cache_profile_t *profile) {
 
     if (profile->offset % 8 == 0) {
         if (fread(&profile->byte_value, sizeof(uint8_t), 1, profile->file) != 1) {
-            fprintf(stderr, "%s: fail to read a cache profile", __func__);
+            fprintf(stderr, "%s: fail to read a cache profile\n", __func__);
             return -1;
         }
     }

@@ -379,7 +379,7 @@ load_nemo_dnn(vpx_codec_alg_priv_t *ctx, int scale, const char *dnn_file) {
 #ifdef __ANDROID_API__
             LOGE("Failed to load network: %s", dnn_file);
 #endif
-            fprintf(stderr, "%s: Failed to load network: %s\n", __func__, dnn_file);
+            fprintf(stderr, "%s: Failed to load network: %s\n", __func__);
             return VPX_NEMO_ERROR;
         }
 #endif
@@ -401,7 +401,7 @@ load_nemo_cache_profile(vpx_codec_alg_priv_t *ctx, int scale, const char *cache_
 #ifdef __ANDROID_API__
         LOGE("Failed to open a file");
 #endif
-        fprintf(stderr, "%s: fail to open a file %s", __func__, cache_profile_path);
+        fprintf(stderr, "%s: fail to open a file %s\n", __func__, cache_profile_path);
         return VPX_NEMO_ERROR;
     }
 
@@ -411,7 +411,6 @@ load_nemo_cache_profile(vpx_codec_alg_priv_t *ctx, int scale, const char *cache_
 
     return VPX_CODEC_OK;
 }
-
 
 static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
     char file_path[PATH_MAX] = {0};
@@ -611,8 +610,6 @@ static int
 YV12_load_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const char *file_name) {
     char file_path[PATH_MAX] = {0};
     FILE *serialize_file = NULL;
-
-    printf("y_crop_height: %d, uv_crop_height: %d\n", frame->y_crop_height, frame->uv_crop_height);
 
     //save a y-channel image
     sprintf(file_path, "%s/%s.y", save_dir, file_name);
@@ -942,7 +939,7 @@ static void save_input_quality(VP9_COMMON *cm) {
 #ifdef __ANDROID_API__
     LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    //printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 
@@ -1008,7 +1005,7 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #ifdef __ANDROID_API__
     LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    //printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 
