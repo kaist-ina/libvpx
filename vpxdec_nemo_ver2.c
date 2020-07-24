@@ -981,7 +981,12 @@ static int main_loop(int argc, const char **argv_)
         sprintf(dnn_path, "%s/checkpoint/%s/%s.dlc", dataset_dir, input_video_name, dnn_name);
     }
     if (nemo_cfg->decode_mode == DECODE_CACHE && nemo_cfg->cache_mode == PROFILE_CACHE) {
-        sprintf(cache_profile_path, "%s/profile/%s/%s/%s/%s.profile", dataset_dir, input_video_name, dnn_name, postfix, cache_profile_name);
+        if (postfix == NULL) {
+            sprintf(cache_profile_path, "%s/profile/%s/%s/%s.profile", dataset_dir, input_video_name, dnn_name, cache_profile_name);
+        }
+        else {
+            sprintf(cache_profile_path, "%s/profile/%s/%s/%s/%s.profile", dataset_dir, input_video_name, dnn_name, postfix, cache_profile_name);
+        }
     }
 
     /* Open a video file */
