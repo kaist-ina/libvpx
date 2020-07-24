@@ -43,7 +43,7 @@
 #define LOGS(...) __android_log_print(_SILENT,TAG,__VA_ARGS__)
 #endif
 
-/*** Chanju ***/
+/*** NEMO ***/
 void saveOutputToBuffer(zdl::DlSystem::TensorMap outputTensorMap, float * buffer){
     // Get all output tensor names from the network
     zdl::DlSystem::StringList tensorNames = outputTensorMap.getTensorNames();
@@ -58,7 +58,7 @@ void saveOutputToBuffer(zdl::DlSystem::TensorMap outputTensorMap, float * buffer
         memcpy(buffer, it.dataPointer(), batchChunk * sizeof(float)); // here causes free()
     });
 }
-/*** Chanju ***/
+/*** NEMO ***/
 
 
 // Print the results to raw files
