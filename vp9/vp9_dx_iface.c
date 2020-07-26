@@ -936,13 +936,13 @@ static void save_input_quality(VP9_COMMON *cm) {
     //calculate PSNR
     PSNR_STATS psnr_stats;
     vpx_calc_psnr(upscaled_frame, reference_frame, &psnr_stats);
-    sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    sprintf(log, "%d\t%.4f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
     fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
-    LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    LOGI("output,%d frame: %.4fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.4fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 
@@ -1002,13 +1002,13 @@ static void save_sr_quality(VP9_COMMON *cm) {
     //calculate PSNR
     PSNR_STATS psnr_stats;
     vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats);
-    sprintf(log, "%d\t%.2f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    sprintf(log, "%d\t%.4f\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
     fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
-    LOGI("output,%d frame: %.2fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    LOGI("output,%d frame: %.4fdB", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #else
-    printf("output,%d frame: %.2fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
+    printf("output,%d frame: %.4fdB\n", cm->current_video_frame - 1, psnr_stats.psnr[0]);
 #endif
 }
 
