@@ -96,7 +96,7 @@ typedef struct BufferPool {
     InternalFrameBufferList int_frame_buffers;
 } BufferPool;
 
-//TODO (chanju): declare SNPE variable inside this structure
+//TODO (NEMO): declare SNPE variable inside this structure
 typedef struct VP9Common {
     struct vpx_internal_error_info error;
     vpx_color_space_t color_space;

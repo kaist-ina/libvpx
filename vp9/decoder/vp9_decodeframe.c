@@ -3336,14 +3336,14 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                         */
 
                         if (read_cache_profile_dummy_bits(cache_profile) == -1) {
-                            fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                            fprintf(stderr, "%s: fall back to NO_CACHE mode\n", __func__);
                             cm->nemo_cfg->cache_mode = NO_CACHE;
                             cm->apply_dnn = 0;
                         }
                     }
 
                     if ((cm->apply_dnn = read_cache_profile(cache_profile)) == -1) {
-                        fprintf(stderr, "%s: fall back to NO_CACHE mode", __func__);
+                        fprintf(stderr, "%s: fall back to NO_CACHE mode\n", __func__);
                         cm->nemo_cfg->cache_mode = NO_CACHE;
                         cm->apply_dnn = 0;
                     }
