@@ -3325,15 +3325,12 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                 case PROFILE_CACHE:
                     cache_profile = cm->nemo_cfg->cache_profile;
                     if (cm->frame_type == KEY_FRAME) {
-                        //cache loopback
-                        //TODO: read file size and check whether offset is equal to file size (8991 cannot be applied to all videos)
-                        /*
+                        // (deprecated) cache loopback
                         if (cm->current_video_frame != 0 && cm->current_video_frame % 8991 == 0) {
                             cache_profile->offset = 0;
                             rewind(cache_profile->file);
                             cache_profile->num_dummy_bits = 0;
                         }
-                        */
 
                         if (read_cache_profile_dummy_bits(cache_profile) == -1) {
                             fprintf(stderr, "%s: fall back to NO_CACHE mode\n", __func__);
@@ -3359,6 +3356,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         case DECODE:
             cm->apply_dnn = 0;
             break;
+    }
+
+    /* (deprecated) NEMO: fullfill buffer at the beginning of video streaming */
+    if (cm->current_video_frame < 100) {
+        cm->apply_dnn = 0;
     }
 
     //Note: bilinear interp. is done after decoding because resulting pixels are affected by neighboring pixels.
