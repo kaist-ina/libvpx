@@ -3359,8 +3359,10 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /* (deprecated) NEMO: fullfill buffer at the beginning of video streaming */
-    if (cm->current_video_frame < 100) {
-        cm->apply_dnn = 0;
+    if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
+        if (cm->current_video_frame < 100) {
+            cm->apply_dnn = 0;
+        }
     }
 
     //Note: bilinear interp. is done after decoding because resulting pixels are affected by neighboring pixels.
