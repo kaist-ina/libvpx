@@ -131,6 +131,19 @@ vpx_image_t *vpx_codec_get_frame(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter) {
   return img;
 }
 
+vpx_image_pair_t *vpx_codec_get_frames(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter)
+{
+  vpx_image_pair_t *img_pair;
+
+  if (!ctx || !iter || !ctx->iface || !ctx->priv)
+    img_pair = NULL;
+  else
+    img_pair = ctx->iface->additional.get_frames(get_alg_priv(ctx), iter);
+
+  return img_pair;
+}
+
+
 vpx_codec_err_t vpx_codec_register_put_frame_cb(vpx_codec_ctx_t *ctx,
                                                 vpx_codec_put_frame_cb_fn_t cb,
                                                 void *user_priv) {

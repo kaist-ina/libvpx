@@ -833,6 +833,7 @@ static int main_loop(int argc, const char **argv_) {
   while (frame_avail || got_data) {
     vpx_codec_iter_t iter = NULL;
     vpx_image_t *img;
+    vpx_image_pair_t *img_pair;
     struct vpx_usec_timer timer;
     int corrupted = 0;
 
@@ -885,10 +886,19 @@ static int main_loop(int argc, const char **argv_) {
     }
 
     got_data = 0;
-    if ((img = vpx_codec_get_frame(&decoder, &iter))) {
+    // if ((img = vpx_codec_get_frame(&decoder, &iter))) {
+    //   ++frame_out;
+    //   got_data = 1;
+    // }
+    if ((img_pair = vpx_codec_get_frames(&decoder, &iter))) {
       ++frame_out;
       got_data = 1;
     }
+
+    // if (img_pair){
+    //   printf("%p %p\n", img_pair->visible, img_pair->non_visible);
+    //   vpx_img_pair_free(img_pair);
+    // }
 
     vpx_usec_timer_mark(&timer);
     dx_time += (unsigned int)vpx_usec_timer_elapsed(&timer);

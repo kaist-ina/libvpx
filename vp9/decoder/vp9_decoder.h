@@ -132,6 +132,9 @@ int vp9_receive_compressed_data(struct VP9Decoder *pbi, size_t size,
 int vp9_get_raw_frame(struct VP9Decoder *pbi, YV12_BUFFER_CONFIG *sd,
                       vp9_ppflags_t *flags);
 
+int vp9_get_raw_frames(VP9Decoder *pbi, YV12_BUFFER_CONFIG *sd, YV12_BUFFER_CONFIG *prev_sd,
+                      vp9_ppflags_t *flags); // hyunho: get both visible & non-visible frames
+
 vpx_codec_err_t vp9_copy_reference_dec(struct VP9Decoder *pbi,
                                        VP9_REFFRAME ref_frame_flag,
                                        YV12_BUFFER_CONFIG *sd);

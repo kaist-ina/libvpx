@@ -115,6 +115,13 @@ typedef struct vpx_image {
   void *fb_priv; /**< Frame buffer data associated with the image. */
 } vpx_image_t;   /**< alias for struct vpx_image */
 
+// hyunho: a pair of vpx_image_t 
+typedef struct vpx_image_pair
+{
+  vpx_image_t *non_visible;
+  vpx_image_t *visible;
+} vpx_image_pair_t;
+
 /**\brief Representation of a rectangle on a surface */
 typedef struct vpx_image_rect {
   unsigned int x;   /**< leftmost column */
@@ -200,6 +207,10 @@ void vpx_img_flip(vpx_image_t *img);
  * \param[in]    img       Image descriptor
  */
 void vpx_img_free(vpx_image_t *img);
+
+vpx_image_pair_t *vpx_img_pair_alloc();
+
+void vpx_img_pair_free(vpx_image_pair_t *img_pair);
 
 #ifdef __cplusplus
 }  // extern "C"

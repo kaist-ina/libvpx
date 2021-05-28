@@ -412,6 +412,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
   const uint8_t *source = *psource;
   int retcode = 0;
   cm->error.error_code = VPX_CODEC_OK;
+  cm->is_super_frame = 0; // hyunho
 
   if (size == 0) {
     // This is used to signal that we are missing frames.
@@ -439,6 +440,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
   }
 
   // Find a free frame buffer. Return error if can not find any.
+  cm->prev_fb_idx = cm->new_fb_idx; // hyunho: set prev_fb_index
   cm->new_fb_idx = get_free_fb(cm);
   if (cm->new_fb_idx == INVALID_IDX) {
     pbi->ready_for_new_data = 1;
@@ -468,6 +470,10 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
   cm->error.setjmp = 1;
   vp9_decode_frame(pbi, source, source + size, psource);
 
+  // hyunho: log
+  // printf("prev_fb_idx: %d, new_fb_idx: %d, cur_show_frame_fb_idx: %d, show_existing_frame: %d, show_frame: %d, last_show_frame: %d, frame_type: %d\n", 
+  //                         cm->prev_fb_idx, cm->new_fb_idx, cm->cur_show_frame_fb_idx, cm->show_existing_frame, cm->show_frame, cm->last_show_frame, cm->frame_type);
+
   swap_frame_buffers(pbi);
 
   vpx_clear_system_state();
@@ -486,6 +492,11 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
   if (cm->show_frame) {
     cm->current_video_frame++;
   }
+
+  // hyunho: track non-visible frames
+  if (!cm->prev_show_frame)
+    cm->is_super_frame = 1;
+  cm->prev_show_frame = cm->show_frame; // hyunho
 
   cm->error.setjmp = 0;
   return retcode;
@@ -517,6 +528,43 @@ int vp9_get_raw_frame(VP9Decoder *pbi, YV12_BUFFER_CONFIG *sd,
   }
 #else
   *sd = *cm->frame_to_show;
+  ret = 0;
+#endif /*!CONFIG_POSTPROC*/
+  vpx_clear_system_state();
+  return ret;
+}
+
+int vp9_get_raw_frames(VP9Decoder *pbi, YV12_BUFFER_CONFIG *sd, YV12_BUFFER_CONFIG *prev_sd,
+                      vp9_ppflags_t *flags) {
+  VP9_COMMON *const cm = &pbi->common;
+  int ret = -1;
+#if !CONFIG_VP9_POSTPROC
+  (void)*flags;
+#endif
+
+  if (pbi->ready_for_new_data == 1) return ret;
+
+  pbi->ready_for_new_data = 1;
+
+  /* no raw frame to show!!! */
+  if (!cm->show_frame) return ret;
+
+  pbi->ready_for_new_data = 1;
+
+// hyunho: does not support this
+#if CONFIG_VP9_POSTPROC
+  printf("Hyunho: Does not support CONFIG_VP9_POSTPROC");
+  exit(-1);
+  if (!cm->show_existing_frame) {
+    ret = vp9_post_proc_frame(cm, sd, flags, cm->width);
+  } else {
+    *sd = *cm->frame_to_show;
+    ret = 0;
+  }
+#else
+  *sd = *get_frame_new_buffer(cm);
+  if (!cm->is_super_frame && cm->frame_type != KEY_FRAME)
+    *prev_sd = *get_frame_prev_buffer(cm);
   ret = 0;
 #endif /*!CONFIG_POSTPROC*/
   vpx_clear_system_state();

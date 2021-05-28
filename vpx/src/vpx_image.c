@@ -235,3 +235,20 @@ void vpx_img_free(vpx_image_t *img) {
     if (img->self_allocd) free(img);
   }
 }
+
+vpx_image_pair_t *vpx_img_pair_alloc() {
+  vpx_image_pair_t *img_pair = (vpx_image_pair_t *) calloc(1, sizeof(vpx_image_pair_t));
+  img_pair->visible = NULL;
+  img_pair->non_visible = NULL;
+  return img_pair;
+}
+
+void vpx_img_pair_free(vpx_image_pair_t *img_pair) {
+  if (img_pair)
+  {
+    if (img_pair->visible)
+      free(img_pair->visible);
+    if (img_pair->non_visible)
+      free(img_pair->non_visible);
+  }
+}

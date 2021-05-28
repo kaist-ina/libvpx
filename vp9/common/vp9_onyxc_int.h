@@ -136,6 +136,7 @@ typedef struct VP9Common {
   RefBuffer frame_refs[REFS_PER_FRAME];
 
   int new_fb_idx;
+  int prev_fb_idx; // hyunho: to track alternative reference frames
 
   int cur_show_frame_fb_idx;
 
@@ -150,6 +151,10 @@ typedef struct VP9Common {
   int show_frame;
   int last_show_frame;
   int show_existing_frame;
+
+  // hyunho: track invisible frames 
+  int prev_show_frame; 
+  int is_super_frame;
 
   // Flag signaling that the frame is encoded using only INTRA modes.
   uint8_t intra_only;
@@ -328,6 +333,11 @@ static INLINE YV12_BUFFER_CONFIG *get_ref_frame(VP9_COMMON *cm, int index) {
 static INLINE YV12_BUFFER_CONFIG *get_frame_new_buffer(VP9_COMMON *cm) {
   return &cm->buffer_pool->frame_bufs[cm->new_fb_idx].buf;
 }
+
+static INLINE YV12_BUFFER_CONFIG *get_frame_prev_buffer(VP9_COMMON *cm) {
+  return &cm->buffer_pool->frame_bufs[cm->prev_fb_idx].buf;
+}
+
 
 static INLINE int get_free_fb(VP9_COMMON *cm) {
   RefCntBuffer *const frame_bufs = cm->buffer_pool->frame_bufs;

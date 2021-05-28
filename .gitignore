@@ -67,3 +67,6 @@
 /vpxenc
 /vpxenc.dox
 TAGS
+
+.vscode/
+test_rc_interface

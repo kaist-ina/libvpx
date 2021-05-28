@@ -218,6 +218,9 @@ typedef vpx_codec_err_t (*vpx_codec_decode_fn_t)(vpx_codec_alg_priv_t *ctx,
 typedef vpx_image_t *(*vpx_codec_get_frame_fn_t)(vpx_codec_alg_priv_t *ctx,
                                                  vpx_codec_iter_t *iter);
 
+typedef vpx_image_pair_t *(*vpx_codec_get_frames_fn_t)(vpx_codec_alg_priv_t *ctx,
+                                                 vpx_codec_iter_t *iter);
+
 /*!\brief Pass in external frame buffers for the decoder to use.
  *
  * Registers functions to be called when libvpx needs a frame buffer
@@ -318,6 +321,9 @@ struct vpx_codec_iface {
     vpx_codec_enc_mr_get_mem_loc_fn_t
         mr_get_mem_loc; /**< \copydoc ::vpx_codec_enc_mr_get_mem_loc_fn_t */
   } enc;
+  struct vpx_codec_additional_iface {
+    vpx_codec_get_frames_fn_t get_frames;        
+  } additional;
 };
 
 /*!\brief Callback function pointer / user data pair storage */

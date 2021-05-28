@@ -247,6 +247,9 @@ vpx_image_t *vpx_codec_get_frame(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter);
  * This callback is invoked by the decoder to notify the application of
  * the availability of decoded image data.
  */
+
+vpx_image_pair_t *vpx_codec_get_frames(vpx_codec_ctx_t *ctx, vpx_codec_iter_t *iter);
+
 typedef void (*vpx_codec_put_frame_cb_fn_t)(void *user_priv,
                                             const vpx_image_t *img);
 

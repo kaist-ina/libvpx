@@ -375,6 +375,9 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
       if (res != VPX_CODEC_OK) return res;
 
       data_start += frame_size;
+
+      // hyunho: logging
+      // printf("super index: %d\n", i);
     }
   } else {
     while (data_start < data_end) {
@@ -394,6 +397,46 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
   }
 
   return res;
+}
+
+// hyunho(caution): a reciever must release vpx_image_pair_t by calling vpx_img_pair_free()
+static vpx_image_pair_t *decoder_get_frames(vpx_codec_alg_priv_t *ctx,
+                                      vpx_codec_iter_t *iter) {
+  // vpx_image_t *img = NULL;
+  vpx_image_pair_t *img_pair = vpx_img_pair_alloc();
+
+  // Legacy parameter carried over from VP8. Has no effect for VP9 since we
+  // always return only 1 frame per decode call.
+  (void)iter;
+
+  if (ctx->pbi != NULL) {
+    YV12_BUFFER_CONFIG sd, prev_sd;
+    vp9_ppflags_t flags = { 0, 0, 0 };
+    if (ctx->base.init_flags & VPX_CODEC_USE_POSTPROC) set_ppflags(ctx, &flags);
+    if (vp9_get_raw_frames(ctx->pbi, &sd, &prev_sd, &flags) == 0) {
+      VP9_COMMON *const cm = &ctx->pbi->common;
+      RefCntBuffer *const frame_bufs = cm->buffer_pool->frame_bufs;
+      ctx->last_show_frame = ctx->pbi->common.new_fb_idx;
+      if (ctx->need_resync)
+      {
+        vpx_img_pair_free(img_pair);
+        return NULL;
+      } 
+      img_pair->visible = (vpx_image_t *) calloc(1, sizeof(vpx_image_t));
+      yuvconfig2image(img_pair->visible, &sd, ctx->user_priv);
+      img_pair->visible->fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
+      // printf("decoder_get_frames: %d, %d\n", cm->is_super_frame, cm->frame_type);
+      if (cm->is_super_frame && cm->frame_type != KEY_FRAME)
+      {
+        img_pair->non_visible = (vpx_image_t *) calloc(1, sizeof(vpx_image_t));
+        yuvconfig2image(img_pair->non_visible, &sd, ctx->user_priv);
+        img_pair->non_visible->fb_priv = frame_bufs[cm->new_fb_idx].raw_frame_buffer.priv;
+      }
+      return img_pair;
+    }
+  }
+  vpx_img_pair_free(img_pair);
+  return NULL;
 }
 
 static vpx_image_t *decoder_get_frame(vpx_codec_alg_priv_t *ctx,
@@ -730,5 +773,8 @@ CODEC_INTERFACE(vpx_codec_vp9_dx) = {
       NULL,  // vpx_codec_get_global_headers_fn_t
       NULL,  // vpx_codec_get_preview_frame_fn_t
       NULL   // vpx_codec_enc_mr_get_mem_loc_fn_t
-  }
+  },
+  {
+    decoder_get_frames,
+  },
 };
