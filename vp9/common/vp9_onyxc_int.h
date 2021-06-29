@@ -129,9 +129,11 @@ typedef struct VP9Common {
     /* NEMO: Variables for logging */
     nemo_latency_t latency;
     nemo_metdata_t metadata;
+    nemo_residual_t residual;
     FILE *quality_log;
     FILE *latency_log;
     FILE *metadata_log;
+    FILE *residual_log; // residual
     YV12_BUFFER_CONFIG *yv12_input_frame;
     YV12_BUFFER_CONFIG *yv12_reference_frame;
     RGB24_BUFFER_CONFIG *rgb24_input_frame;
@@ -139,6 +141,7 @@ typedef struct VP9Common {
     RGB24_BUFFER_CONFIG *rgb24_input_tensor;
     RGB24_BUFFER_CONFIG *rgb24_sr_tensor;
     unsigned int current_super_frame;
+    double total_residual; // residual 
 
     YV12_BUFFER_CONFIG *frame_to_show;
     RefCntBuffer *prev_frame;

@@ -46,6 +46,14 @@ typedef struct nemo_metadata {
     int num_noskip_interblocks;
 } nemo_metdata_t;
 
+/* Structure to log metdata */
+typedef struct nemo_residual {
+    size_t total_size;
+    size_t header_size;
+    size_t body_size;
+    uint32_t total_residual;
+} nemo_residual_t;
+
 /* Enum to set a decode mode */
 typedef enum{
     DECODE,
@@ -127,6 +135,8 @@ typedef struct nemo_worker_data {
     FILE *metadata_log;
     nemo_latency_t latency;
     nemo_metdata_t metadata;
+    nemo_residual_t residual;
+    uint8_t *copy_block; // residual
 } nemo_worker_data_t;
 
 /* Structure for a RGB888 frame  */
@@ -160,6 +170,7 @@ typedef struct nemo_cfg{
     int save_quality;
     int save_latency;
     int save_metadata;
+    int save_residual; // residual 
     int filter_interval;
 
     //mode

@@ -88,6 +88,8 @@ DSP_SRCS-yes += vpx_filter.h
 #NEMO
 DSP_SRCS-yes += vpx_bilinear.c
 DSP_SRCS-yes += vpx_bilinear.h
+DSP_SRCS-yes += vpx_residual.c
+DSP_SRCS-yes += vpx_residual.h
 DSP_SRCS-yes += vpx_convert.c
 DSP_SRCS-yes += vpx_convert.h
 ifeq ($(HAVE_NEON),yes)

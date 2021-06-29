@@ -144,6 +144,8 @@ static const arg_def_t savelatencyarg =
         ARG_DEF(NULL, "save-latency", 0, "Save a latency log");
 static const arg_def_t savemetadataarg =
         ARG_DEF(NULL, "save-metadata", 0, "Save a metadata log");
+static const arg_def_t saveresidualarg =
+        ARG_DEF(NULL, "save-residual", 0, "Save a residual log");
 static const arg_def_t postfixarg =
         ARG_DEF(NULL, "postfix", 1, "Postfix for a directory name");
 static const arg_def_t dnnruntimearg =
@@ -151,7 +153,7 @@ static const arg_def_t dnnruntimearg =
 static const arg_def_t *all_args[] =
 {   &help, &codecarg, &use_yv12, &use_i420, &flipuvarg, &rawvideo, &noblitarg, &progressarg, &limitarg, &skiparg,
     &postprocarg, &summaryarg, &outputfile, &threadsarg, &frameparallelarg, &verbosearg, &scalearg, &fb_arg,
-    &md5arg, &error_concealment, &continuearg,
+    &md5arg, &error_concealment, &continuearg, 
 #if CONFIG_VP9_HIGHBITDEPTH
     &outbitdeptharg,
 #endif
@@ -159,7 +161,7 @@ static const arg_def_t *all_args[] =
     &datasetdirarg, &inputvideonamearg, &referencevideonamearg,
     &outputwidtharg, &outputheightarg, &dnnscalearg, &dnnnamearg, &decodemodearg, &dnnmodearg, &cachemodearg, &cacheprofilenamearg,
     &savergbframedarg, &savequalityarg, &savelatencyarg, &saveyuvframearg,
-    &postfixarg, &dnnruntimearg, NULL};
+    &postfixarg, &dnnruntimearg, &saveresidualarg, NULL};
 #if CONFIG_VP8_DECODER
 static const arg_def_t addnoise_level =
 ARG_DEF(NULL, "noise-level", 1, "Enable VP8 postproc add noise");
@@ -959,6 +961,8 @@ static int main_loop(int argc, const char **argv_)
             nemo_cfg->save_latency = 1;
         else if (arg_match(&arg, &savemetadataarg, argi))
             nemo_cfg->save_metadata = 1;
+        else if (arg_match(&arg, &saveresidualarg, argi))
+            nemo_cfg->save_residual = 1;
         else if (arg_match(&arg, &saveyuvframearg, argi))
             nemo_cfg->save_yuvframe = 1;
         else if (arg_match(&arg, &postfixarg, argi))
