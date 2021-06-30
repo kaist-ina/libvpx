@@ -132,6 +132,7 @@ VP9Decoder *vp9_decoder_create(BufferPool *const pool) {
     cm->quality_log = NULL;
     cm->latency_log = NULL;
     cm->metadata_log = NULL;
+    cm->residual_log = NULL;
     cm->nemo_cfg = NULL;
     cm->yv12_input_frame = NULL;
     cm->yv12_reference_frame = NULL;
@@ -181,6 +182,7 @@ void vp9_decoder_remove(VP9Decoder *pbi) {
     if (pbi->common.quality_log != NULL) fclose(pbi->common.quality_log);
     if (pbi->common.latency_log != NULL) fclose(pbi->common.latency_log);
     if (pbi->common.metadata_log != NULL) fclose(pbi->common.metadata_log);
+    if (pbi->common.residual_log != NULL) fclose(pbi->common.residual_log);
 
     /* NEMO: free workers */
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
@@ -414,6 +416,7 @@ int vp9_receive_compressed_data(VP9Decoder *pbi, size_t size,
 
     cm->error.setjmp = 1;
     vp9_decode_frame(pbi, source, source + size, psource);
+    //fprintf(stderr, "Frame-%d\t%d,\tSize-%d\n", pbi->common.current_video_frame, pbi->common.current_super_frame, size); // validation
 
     swap_frame_buffers(pbi);
 

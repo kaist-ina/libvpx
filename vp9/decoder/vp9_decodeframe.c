@@ -1507,6 +1507,13 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             xd->max_blocks_high = xd->mb_to_bottom_edge >= 0 ? 0 : max_blocks_high;
 
             if (!mi->skip) {
+                //&pd->dst.buf[4 * row * pd->dst.stride + 4 * col]
+                if (cm->nemo_cfg->save_residual) {
+                    vpx_copy(pd->dst.buf, pd->dst.stride, mwd->copy_block, 64, 
+                            max_blocks_high * 4, max_blocks_wide * 4);
+                    // vpx_print(pd->dst.buf, pd->dst.stride, max_blocks_high * 4, max_blocks_wide * 4);
+                    // vpx_print(mwd->copy_block, 64, max_blocks_high * 4, max_blocks_wide * 4);
+                }
                 for (row = 0; row < max_blocks_high; row += step)
                     for (col = 0; col < max_blocks_wide; col += step)
                         eobtotal +=
@@ -1520,6 +1527,13 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                     else
                         set_nemo_interp_block(mwd->inter_block_list, plane, max_blocks_wide,
                                               max_blocks_high);
+                }
+                if (cm->nemo_cfg->save_residual) {
+                    mwd->residual.total_residual += vpx_substract(pd->dst.buf, pd->dst.stride, mwd->copy_block, 64, 
+                                                    max_blocks_high * 4, max_blocks_wide * 4);
+                    // vpx_print(pd->dst.buf, pd->dst.stride, max_blocks_high * 4, max_blocks_wide * 4);
+                    // if (max_blocks_wide > 0)
+                    //     exit(0);
                 }
             }
         }
@@ -3249,6 +3263,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     const int tile_rows = 1 << cm->log2_tile_rows;
     const int tile_cols = 1 << cm->log2_tile_cols;
     YV12_BUFFER_CONFIG *const new_fb = get_frame_new_buffer(cm); //check: original frame
+    uint8_t *data_start = data; // to track header, body size 
     xd->cur_buf = new_fb;
 
     if (!first_partition_size) {
@@ -3261,6 +3276,14 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     if (!read_is_valid(data, first_partition_size, data_end))
         vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
                            "Truncated packet or corrupt header length");
+
+    /* NEMO: log residual */
+    if (cm->nemo_cfg->save_residual)
+    {
+        cm->residual.total_size = data_end - data_start;
+        cm->residual.header_size = data - data_start + first_partition_size;
+        cm->residual.body_size = data_end - data - first_partition_size;
+    }
 
     cm->use_prev_frame_mvs =
             !cm->error_resilient_mode && cm->width == cm->last_width &&
@@ -3312,6 +3335,7 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
         }
         memset(&pbi->nemo_worker_data[i].latency, 0, sizeof(nemo_latency_t));
         memset(&pbi->nemo_worker_data[i].metadata, 0, sizeof(nemo_metdata_t));
+        memset(&pbi->nemo_worker_data[i].residual, 0, sizeof(nemo_residual_t));
     }
 
     /* NEMO: decide whether to apply a DNN to the current frame */
@@ -3358,12 +3382,13 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
             break;
     }
 
-    /* (deprecated) NEMO: fullfill buffer at the beginning of video streaming */
+    /* (deprecated) NEMO: fullfill buffer at the beginning of video streaming 
     if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
         if (cm->current_video_frame < 100) {
             cm->apply_dnn = 0;
         }
     }
+    */
 
     //Note: bilinear interp. is done after decoding because resulting pixels are affected by neighboring pixels.
     if (pbi->max_threads > 1 && tile_rows == 1 && tile_cols > 1) {
@@ -3401,6 +3426,16 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                 break;
             case NO_DNN:
                 break;
+        }
+    }
+
+    /* NEMO: summarize residual */
+
+    if (cm->nemo_cfg->save_residual)
+    {
+        cm->residual.total_residual = 0;
+        for (i = 0; i < num_threads; i++) {
+            cm->residual.total_residual += pbi->nemo_worker_data[i].residual.total_residual;
         }
     }
 

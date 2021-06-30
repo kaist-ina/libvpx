@@ -504,6 +504,15 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
         };
     }
 
+        /* NEMO: open a residual log file */
+    if (ctx->nemo_cfg->save_residual) {
+        sprintf(file_path, "%s/residual.txt", ctx->nemo_cfg->log_dir);
+        if ((ctx->pbi->common.residual_log = fopen(file_path, "w")) == NULL) {
+            fprintf(stderr, "%s: cannot open a file %s", __func__, file_path);
+            ctx->nemo_cfg->save_residual = 0;
+        };
+    }
+
     return VPX_CODEC_OK;
 }
 
@@ -1068,6 +1077,7 @@ static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_
     char log[LOG_MAX] = {0};
     const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
 
+    // TODO: merge per-thread data 
     for (i = 0; i < num_threads; ++i) {
         nemo_worker_data_t *mwd = &pbi->nemo_worker_data[i];
         sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\n", current_video_frame, current_super_frame,
@@ -1105,6 +1115,17 @@ static void save_metadata(VP9Decoder *pbi, int current_video_frame, int current_
     }
     fputs(log, pbi->common.metadata_log);
 }
+
+static void save_residual(VP9Decoder *pbi, int current_video_frame, int current_super_frame) {
+    int i;
+    char log[LOG_MAX] = {0};
+
+    nemo_residual_t *residual = &pbi->common.residual;
+    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",  current_video_frame, current_super_frame, residual->total_size, residual->header_size, residual->body_size,
+                                     residual->total_residual, pbi->common.height, pbi->common.width);
+    fputs(log, pbi->common.residual_log);
+}
+
 
 static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
                                       const uint8_t *data, unsigned int data_sz,
@@ -1176,12 +1197,16 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             /* NEMO: Save logs */
             if (cm->show_frame == 0) current_video_frame = cm->current_video_frame;
             else current_video_frame = cm->current_video_frame - 1;
-            if (cm->nemo_cfg->save_rgbframe) save_rgbframe(cm);
-            if (cm->nemo_cfg->save_yuvframe) save_yuvframe(cm);
+            if (cm->nemo_cfg->save_rgbframe) 
+                save_rgbframe(cm);
+            if (cm->nemo_cfg->save_yuvframe) 
+                save_yuvframe(cm);
             if (cm->nemo_cfg->save_latency)
                 save_latency(ctx->pbi, current_video_frame, cm->current_super_frame);
             if (cm->nemo_cfg->save_metadata)
                 save_metadata(ctx->pbi, current_video_frame, cm->current_super_frame);
+            if (cm->nemo_cfg->save_residual)
+                save_residual(ctx->pbi, current_video_frame, cm->current_super_frame);
             cm->current_super_frame++;
         }
     } else {
@@ -1214,14 +1239,16 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             }
 
             /* NEMO: save logs */
-            if (cm->nemo_cfg->save_rgbframe) save_rgbframe(cm);
-            if (cm->nemo_cfg->save_yuvframe) save_yuvframe(cm);
-            if (cm->nemo_cfg->save_latency) {
+            if (cm->nemo_cfg->save_rgbframe) 
+                save_rgbframe(cm);
+            if (cm->nemo_cfg->save_yuvframe) 
+                save_yuvframe(cm);
+            if (cm->nemo_cfg->save_latency) 
                 save_latency(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
-            }
             if (cm->nemo_cfg->save_metadata)
                 save_metadata(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
-
+            if (cm->nemo_cfg->save_residual)
+                save_residual(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
         }
     }
     /* NEMO: Save logs */

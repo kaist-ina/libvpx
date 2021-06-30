@@ -38,6 +38,14 @@ if ($opts{arch} eq "x86_64") {
 #
 # NEMO
 #
+
+add_proto qw/void vpx_copy/, "const unsigned char *src_ptr, int src_stride, unsigned char *dst_ptr, int dst_stride, int height, int width";
+add_proto qw/uint32_t vpx_substract/, "const unsigned char *src_ptr, int src_stride,
+                         unsigned char *dst_ptr, int dst_stride, int height,
+                         int width";
+add_proto qw/void vpx_print/, "const unsigned char *src_ptr, int src_stride,
+                int height, int width";
+
 add_proto qw/void vpx_bilinear_interp_uint8/, "const uint8_t *src, ptrdiff_t src_stride, uint8_t *dst, ptrdiff_t dst_stride, int x_offset, int y_offset, int width,
                                                                                 int height, int scale, const nemo_bilinear_coeff_t *config";
 specialize qw/vpx_bilinear_interp_uint8 neon/;

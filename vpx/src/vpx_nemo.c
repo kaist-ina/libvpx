@@ -175,6 +175,7 @@ void remove_nemo_worker(nemo_worker_data_t *mwd, int num_threads) {
 
             if (mwd[i].latency_log != NULL) fclose(mwd[i].latency_log);
             if (mwd[i].metadata_log != NULL) fclose(mwd[i].metadata_log);
+            if (mwd[i].copy_block != NULL) vpx_free(mwd[i].copy_block);
         }
         vpx_free(mwd);
     }
@@ -199,6 +200,7 @@ static void init_nemo_worker_data(nemo_worker_data_t *mwd, int index) {
 
     mwd->latency_log = NULL;
     mwd->metadata_log = NULL;
+    mwd->copy_block = NULL;
 }
 
 nemo_worker_data_t *init_nemo_worker(int num_threads, nemo_cfg_t *nemo_cfg) {
@@ -233,6 +235,10 @@ nemo_worker_data_t *init_nemo_worker(int num_threads, nemo_cfg_t *nemo_cfg) {
                 fprintf(stderr, "%s: cannot open a file %s", __func__, metadata_log_path);
                 nemo_cfg->save_metadata = 0;
             }
+        }
+
+        if (nemo_cfg->save_residual == 1) {
+            mwd[i].copy_block = (uint32_t*) vpx_malloc(sizeof(uint32_t) * 64 * 64);
         }
     }
 
