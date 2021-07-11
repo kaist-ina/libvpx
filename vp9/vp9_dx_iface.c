@@ -1090,6 +1090,74 @@ static void save_sr_quality(VP9_COMMON *cm) {
 #endif
 }
 
+static void save_cache_quality(VP9_COMMON *cm) {
+    char file_name[PATH_MAX] = {0};
+    char log[LOG_MAX] = {0};
+    int width, height;
+
+    if (cm->nemo_cfg->target_height != 0 && cm->nemo_cfg->target_width != 0) {
+        width = cm->nemo_cfg->target_width;
+        height = cm->nemo_cfg->target_height;
+    } else {
+        width = cm->width * cm->scale;
+        height = cm->height * cm->scale;
+    }
+    if (cm->show_frame) {
+        sprintf(file_name, "%04d", cm->current_video_frame - 1);
+    } else {
+        sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
+    }
+
+    //upscale a yuv frame
+    YV12_BUFFER_CONFIG *sr_frame = get_sr_frame_new_buffer(cm);
+    YV12_BUFFER_CONFIG *sr_upscaled_frame = cm->yv12_input_frame;
+    vpx_realloc_frame_buffer(
+            sr_upscaled_frame, width, height,
+            cm->subsampling_x,
+            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+            cm->use_highbitdepth,
+#endif
+            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            NULL, NULL, NULL);
+    I420Scale(sr_frame->y_buffer, sr_frame->y_stride,
+              sr_frame->u_buffer, sr_frame->uv_stride,
+              sr_frame->v_buffer, sr_frame->uv_stride,
+              sr_frame->y_crop_width, sr_frame->y_crop_height,
+              sr_upscaled_frame->y_buffer, sr_upscaled_frame->y_stride,
+              sr_upscaled_frame->u_buffer, sr_upscaled_frame->uv_stride,
+              sr_upscaled_frame->v_buffer, sr_upscaled_frame->uv_stride,
+              sr_upscaled_frame->y_crop_width, sr_upscaled_frame->y_crop_height,
+              3);
+
+    YV12_BUFFER_CONFIG *sr_compare_frame = cm->yv12_reference_frame;
+    PSNR_STATS psnr_stats1, psnr_stats2;
+    vpx_realloc_frame_buffer(
+            sr_compare_frame, width, height,
+            cm->subsampling_x,
+            cm->subsampling_y,
+#if CONFIG_VP9_HIGHBITDEPTH
+            cm->use_highbitdepth,
+#endif
+            VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
+            NULL, NULL, NULL);
+
+    YV12_load_frame_buffer(sr_compare_frame, cm->nemo_cfg->sr_reference_frame_dir, file_name);
+    vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats1);
+
+    YV12_load_frame_buffer(sr_compare_frame, cm->nemo_cfg->sr_offline_frame_dir, file_name);
+    vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats2);
+
+    sprintf(log, "%d\t%.4f\t%.4f\t%llu\n", cm->current_video_frame - 1, psnr_stats1.psnr[0], psnr_stats2.psnr[0], psnr_stats2.sse[0]);
+    fputs(log, cm->quality_log);
+
+#ifdef __ANDROID_API__
+    LOGI("output,%d frame: %.4fdB", cm->current_video_frame - 1, psnr_stats1.psnr[0]);
+#else
+    printf("output,%d frame: %.4fdB\n", cm->current_video_frame - 1, psnr_stats1.psnr[0]);
+#endif
+}
+
 static void save_quality(VP9_COMMON *cm) {
     switch (cm->nemo_cfg->decode_mode) {
         case DECODE:
@@ -1099,7 +1167,7 @@ static void save_quality(VP9_COMMON *cm) {
             save_sr_quality(cm);
             break;
         case DECODE_CACHE:
-            save_sr_quality(cm);
+            save_cache_quality(cm);
             break;
     }
 }

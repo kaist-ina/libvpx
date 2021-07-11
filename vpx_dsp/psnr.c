@@ -10,6 +10,7 @@
 
 #include <math.h>
 #include <assert.h>
+#include <math.h>
 //#include <vp8/common/blockd.h>
 #include <vp9/common/vp9_enums.h>
 #include <vp9/common/vp9_blockd.h>
@@ -261,6 +262,7 @@ void vpx_calc_psnr(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
     const int b_strides[3] = {b->y_stride, b->uv_stride, b->uv_stride};
     int i;
     uint64_t total_sse = 0;
+    uint64_t total_rmse = 0;
     uint32_t total_samples = 0;
 
     for (i = 0; i < 3; ++i) {
