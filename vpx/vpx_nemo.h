@@ -51,7 +51,8 @@ typedef struct nemo_residual {
     size_t total_size;
     size_t header_size;
     size_t body_size;
-    uint32_t total_residual;
+    uint64_t total_residual;
+    uint64_t total_residuals[3];
 } nemo_residual_t;
 
 /* Enum to set a decode mode */
@@ -136,7 +137,6 @@ typedef struct nemo_worker_data {
     nemo_latency_t latency;
     nemo_metdata_t metadata;
     nemo_residual_t residual;
-    uint8_t *copy_block; // residual
 } nemo_worker_data_t;
 
 /* Structure for a RGB888 frame  */
@@ -170,7 +170,7 @@ typedef struct nemo_cfg{
     int save_quality;
     int save_latency;
     int save_metadata;
-    int save_residual; // residual 
+    int save_residual; // residual - a) save residual proxy, b) save residual frame (when save_frame for an input video when save_frame is set to true)
     int filter_interval;
 
     //mode

@@ -431,6 +431,10 @@ static vpx_codec_err_t init_decoder(vpx_codec_alg_priv_t *ctx) {
             return VPX_NEMO_ERROR;
         }
     }
+    else if (ctx->nemo_cfg->save_residual && ctx->cfg.threads != 1)
+    {
+        return VPX_NEMO_ERROR;
+    }
 
     ctx->last_show_frame = -1;
     ctx->need_resync = 1;
@@ -616,6 +620,59 @@ YV12_save_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const ch
 }
 
 static int 
+YV12_save_frame_residual(YV12_BUFFER_CONFIG *frame, const char *save_dir, const char *file_name) {
+    char file_path[PATH_MAX] = {0};
+    FILE *serialize_file = NULL;
+
+    //save a y-channel image
+    sprintf(file_path, "%s/%s.y_res", save_dir, file_name);
+    serialize_file = fopen(file_path, "wb");
+    if (serialize_file == NULL) {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    int16_t *src = frame->y_residual;
+    int h = frame->y_crop_height;
+    do {
+        fwrite(src, sizeof(int16_t), frame->y_crop_width / 2, serialize_file);
+        src += frame->y_stride / 2;
+    } while (--h);
+    fclose(serialize_file);
+
+    //save a u-channel image
+    sprintf(file_path, "%s/%s.u_res", save_dir, file_name);
+    serialize_file = fopen(file_path, "wb");
+    if (serialize_file == NULL) {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    src = frame->u_residual;
+    h = frame->uv_crop_height;
+    do {
+        fwrite(src, sizeof(int16_t), frame->uv_crop_width / 2, serialize_file);
+        src += frame->uv_stride / 2;
+    } while (--h);
+    fclose(serialize_file);
+
+    //save a v-channel image
+    sprintf(file_path, "%s/%s.v_res", save_dir, file_name);
+    serialize_file = fopen(file_path, "wb");
+    if (serialize_file == NULL) {
+        fprintf(stderr, "%s: fail to save a file to %s\n", __func__, file_path);
+        return -1;
+    }
+    src = frame->v_residual;
+    h = frame->uv_crop_height;
+    do {
+        fwrite(src, sizeof(int16_t), frame->uv_crop_width / 2, serialize_file);
+        src += frame->uv_stride / 2;
+    } while (--h);
+    fclose(serialize_file);
+
+    return 0;
+}
+
+static int 
 YV12_load_frame_buffer(YV12_BUFFER_CONFIG *frame, const char *save_dir, const char *file_name) {
     char file_path[PATH_MAX] = {0};
     FILE *serialize_file = NULL;
@@ -718,9 +775,10 @@ static void save_input_rgbframe(VP9_COMMON *cm) {
     RGB24_save_frame_buffer(scaled_rgb_frame, file_path);
 }
 
-static void save_input_yuvframe(VP9_COMMON *cm) {
+static void save_input_yuvframe(VP9Decoder *pbi) {
     char file_name[PATH_MAX] = {0};
     int width, height;
+    VP9_COMMON* cm = &pbi->common;
     if (cm->nemo_cfg->target_height != 0 && cm->nemo_cfg->target_width != 0) {
         width = cm->nemo_cfg->target_width;
         height = cm->nemo_cfg->target_height;
@@ -729,16 +787,28 @@ static void save_input_yuvframe(VP9_COMMON *cm) {
         height = cm->height;
     }
 
-    if (cm->show_frame) {
+    if (cm->show_frame)
+    {
         sprintf(file_name, "%04d", cm->current_video_frame - 1);
-    } else {
+    }
+    else
+    {
         sprintf(file_name, "%04d_%d", cm->current_video_frame, cm->current_super_frame);
     }
 
-    //up-scale a yuv frame
-    YV12_BUFFER_CONFIG *yuv_frame = get_frame_new_buffer(cm);
-    YV12_BUFFER_CONFIG *scaled_yuv_frame = cm->yv12_input_frame;
-    vpx_realloc_frame_buffer(
+    if (cm->nemo_cfg->save_residual)
+    {
+
+        YV12_BUFFER_CONFIG *yuv_residual = pbi->nemo_worker_data[0].lr_resiudal;
+        YV12_save_frame_residual(yuv_residual, cm->nemo_cfg->input_frame_dir, file_name);
+    }
+    else
+    {
+
+        //up-scale a yuv frame
+        YV12_BUFFER_CONFIG *yuv_frame = get_frame_new_buffer(cm);
+        YV12_BUFFER_CONFIG *scaled_yuv_frame = cm->yv12_input_frame;
+        vpx_realloc_frame_buffer(
             scaled_yuv_frame, width, height,
             cm->subsampling_x,
             cm->subsampling_y,
@@ -747,18 +817,19 @@ static void save_input_yuvframe(VP9_COMMON *cm) {
 #endif
             VP9_DEC_BORDER_IN_PIXELS, cm->byte_alignment,
             NULL, NULL, NULL);
-    I420Scale(yuv_frame->y_buffer, yuv_frame->y_stride,
-              yuv_frame->u_buffer, yuv_frame->uv_stride,
-              yuv_frame->v_buffer, yuv_frame->uv_stride,
-              yuv_frame->y_crop_width, yuv_frame->y_crop_height,
-              scaled_yuv_frame->y_buffer, scaled_yuv_frame->y_stride,
-              scaled_yuv_frame->u_buffer, scaled_yuv_frame->uv_stride,
-              scaled_yuv_frame->v_buffer, scaled_yuv_frame->uv_stride,
-              scaled_yuv_frame->y_crop_width, scaled_yuv_frame->y_crop_height,
-              3);
+        I420Scale(yuv_frame->y_buffer, yuv_frame->y_stride,
+                  yuv_frame->u_buffer, yuv_frame->uv_stride,
+                  yuv_frame->v_buffer, yuv_frame->uv_stride,
+                  yuv_frame->y_crop_width, yuv_frame->y_crop_height,
+                  scaled_yuv_frame->y_buffer, scaled_yuv_frame->y_stride,
+                  scaled_yuv_frame->u_buffer, scaled_yuv_frame->uv_stride,
+                  scaled_yuv_frame->v_buffer, scaled_yuv_frame->uv_stride,
+                  scaled_yuv_frame->y_crop_width, scaled_yuv_frame->y_crop_height,
+                  3);
 
-    //save a yuv frame
-    YV12_save_frame_buffer(scaled_yuv_frame, cm->nemo_cfg->input_frame_dir, file_name);
+        //save a yuv frame
+        YV12_save_frame_buffer(scaled_yuv_frame, cm->nemo_cfg->input_frame_dir, file_name);
+    }
 }
 
 static void save_sr_rgbframe(VP9_COMMON *cm) {
@@ -867,13 +938,14 @@ static void save_rgbframe(VP9_COMMON *cm) {
     }
 }
 
-static void save_yuvframe(VP9_COMMON *cm) {
+static void save_yuvframe(VP9Decoder *pbi) {
+    VP9_COMMON* cm = &pbi->common;
     if (cm->show_frame) {
         if (cm->nemo_cfg->filter_interval == 0 ||
             (cm->current_video_frame - 1) % cm->nemo_cfg->filter_interval == 0) {
             switch (cm->nemo_cfg->decode_mode) {
                 case DECODE:
-                    save_input_yuvframe(cm);
+                    save_input_yuvframe(pbi);
                     break;
                 case DECODE_SR:
                     save_sr_yuv_frame(cm);
@@ -1120,9 +1192,11 @@ static void save_residual(VP9Decoder *pbi, int current_video_frame, int current_
     int i;
     char log[LOG_MAX] = {0};
 
+    // log
     nemo_residual_t *residual = &pbi->common.residual;
-    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n",  current_video_frame, current_super_frame, residual->total_size, residual->header_size, residual->body_size,
-                                     residual->total_residual, pbi->common.height, pbi->common.width);
+    sprintf(log, "%d\t%d\t%d\t%d\t%d\t%llu\t%llu\t%llu\t%llu\t%d\t%d\n",  current_video_frame, current_super_frame, residual->total_size, residual->header_size, residual->body_size,
+                                     residual->total_residual, residual->total_residuals[0], residual->total_residuals[1], residual->total_residuals[2],
+                                     pbi->common.height, pbi->common.width);
     fputs(log, pbi->common.residual_log);
 }
 
@@ -1200,7 +1274,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             if (cm->nemo_cfg->save_rgbframe) 
                 save_rgbframe(cm);
             if (cm->nemo_cfg->save_yuvframe) 
-                save_yuvframe(cm);
+                save_yuvframe(ctx->pbi);
             if (cm->nemo_cfg->save_latency)
                 save_latency(ctx->pbi, current_video_frame, cm->current_super_frame);
             if (cm->nemo_cfg->save_metadata)
@@ -1242,7 +1316,7 @@ static vpx_codec_err_t decoder_decode(vpx_codec_alg_priv_t *ctx,
             if (cm->nemo_cfg->save_rgbframe) 
                 save_rgbframe(cm);
             if (cm->nemo_cfg->save_yuvframe) 
-                save_yuvframe(cm);
+                save_yuvframe(ctx->pbi);
             if (cm->nemo_cfg->save_latency) 
                 save_latency(ctx->pbi, cm->current_video_frame - 1, cm->current_super_frame);
             if (cm->nemo_cfg->save_metadata)

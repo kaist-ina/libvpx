@@ -40,9 +40,14 @@ if ($opts{arch} eq "x86_64") {
 #
 
 add_proto qw/void vpx_copy/, "const unsigned char *src_ptr, int src_stride, unsigned char *dst_ptr, int dst_stride, int height, int width";
-add_proto qw/uint32_t vpx_substract/, "const unsigned char *src_ptr, int src_stride,
+add_proto qw/uint64_t vpx_substract/, "const unsigned char *src_ptr, int src_stride,
                          unsigned char *dst_ptr, int dst_stride, int height,
                          int width";
+add_proto qw/void vpx_add/, "const int16_t *src_ptr, int src_stride,
+                         int16_t *dst_ptr, int dst_stride, int height,
+                         int width";
+add_proto qw/uint64_t vpx_sum/, "const unsigned char *src_ptr, int src_stride,
+                int height, int width";
 add_proto qw/void vpx_print/, "const unsigned char *src_ptr, int src_stride,
                 int height, int width";
 

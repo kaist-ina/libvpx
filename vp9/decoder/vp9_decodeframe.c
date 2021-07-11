@@ -510,9 +510,17 @@ static int reconstruct_inter_block(TileWorkerData *twd, MODE_INFO *const mi,
                         pd->dst.stride, eob);
             }
         } else {
-            inverse_transform_block_inter(
+            if (cm->nemo_cfg->save_residual) {
+                inverse_transform_block_inter_copy(
+                        xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
+                        pd->dst.stride, &pd->res.buf[4 * row * pd->res.stride + 4 * col],
+                        pd->res.stride, eob);
+            }
+            else {
+                inverse_transform_block_inter(
                     xd, plane, tx_size, &pd->dst.buf[4 * row * pd->dst.stride + 4 * col],
                     pd->dst.stride, eob);
+            }
         }
     }
 
@@ -1476,6 +1484,9 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
 #endif
         } else {
             dec_build_inter_predictors_sb(pbi, xd, mi_row, mi_col);
+            if(cm->nemo_cfg->save_residual) {
+                vp9_setup_res_planes(xd->plane, mwd->lr_resiudal, mi_row, mi_col);
+            }
         }
 #if DEBUG_LATENCY
         clock_gettime(CLOCK_MONOTONIC, &start_time);
@@ -1507,13 +1518,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
             xd->max_blocks_high = xd->mb_to_bottom_edge >= 0 ? 0 : max_blocks_high;
 
             if (!mi->skip) {
-                //&pd->dst.buf[4 * row * pd->dst.stride + 4 * col]
-                if (cm->nemo_cfg->save_residual) {
-                    vpx_copy(pd->dst.buf, pd->dst.stride, mwd->copy_block, 64, 
-                            max_blocks_high * 4, max_blocks_wide * 4);
-                    // vpx_print(pd->dst.buf, pd->dst.stride, max_blocks_high * 4, max_blocks_wide * 4);
-                    // vpx_print(mwd->copy_block, 64, max_blocks_high * 4, max_blocks_wide * 4);
-                }
                 for (row = 0; row < max_blocks_high; row += step)
                     for (col = 0; col < max_blocks_wide; col += step)
                         eobtotal +=
@@ -1527,13 +1531,6 @@ static void decode_block(TileWorkerData *twd, VP9Decoder *const pbi, int mi_row,
                     else
                         set_nemo_interp_block(mwd->inter_block_list, plane, max_blocks_wide,
                                               max_blocks_high);
-                }
-                if (cm->nemo_cfg->save_residual) {
-                    mwd->residual.total_residual += vpx_substract(pd->dst.buf, pd->dst.stride, mwd->copy_block, 64, 
-                                                    max_blocks_high * 4, max_blocks_wide * 4);
-                    // vpx_print(pd->dst.buf, pd->dst.stride, max_blocks_high * 4, max_blocks_wide * 4);
-                    // if (max_blocks_wide > 0)
-                    //     exit(0);
                 }
             }
         }
@@ -3093,7 +3090,15 @@ static size_t read_uncompressed_header(VP9Decoder *pbi,
             setup_residual_size(cm, pbi->nemo_worker_data[i].lr_resiudal);
         }
     }
-
+    else {
+      if (cm->nemo_cfg->save_residual) {
+        const int num_threads = (pbi->max_threads > 1) ? pbi->max_threads : 1;
+        for (i = 0; i < num_threads; ++i) {
+          setup_residual_size(cm, pbi->nemo_worker_data[i].lr_resiudal);
+        }
+      }
+    }
+    
     return sz;
 }
 
@@ -3252,7 +3257,7 @@ void upscale_frame_by_online_dnn(VP9_COMMON *const cm) {
 
 void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
                       const uint8_t *data_end, const uint8_t **p_data_end) {
-    int i;
+    int i, j;
     VP9_COMMON *const cm = &pbi->common;
     MACROBLOCKD *const xd = &pbi->mb;
     struct vpx_read_bit_buffer rb;
@@ -3332,6 +3337,11 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     for (i = 0; i < num_threads; i++) {
         if (cm->nemo_cfg->decode_mode == DECODE_CACHE) {
             memset(pbi->nemo_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->nemo_worker_data[i].lr_resiudal->buffer_alloc_sz);
+        }
+        else {
+            if (cm->nemo_cfg->save_residual) {
+                memset(pbi->nemo_worker_data[i].lr_resiudal->buffer_alloc, 0, pbi->nemo_worker_data[i].lr_resiudal->buffer_alloc_sz);
+            }
         }
         memset(&pbi->nemo_worker_data[i].latency, 0, sizeof(nemo_latency_t));
         memset(&pbi->nemo_worker_data[i].metadata, 0, sizeof(nemo_metdata_t));
@@ -3430,27 +3440,53 @@ void vp9_decode_frame(VP9Decoder *pbi, const uint8_t *data,
     }
 
     /* NEMO: summarize residual */
-
     if (cm->nemo_cfg->save_residual)
     {
         cm->residual.total_residual = 0;
-        for (i = 0; i < num_threads; i++) {
-            cm->residual.total_residual += pbi->nemo_worker_data[i].residual.total_residual;
+        for (i = 0; i < MAX_MB_PLANE; i++)
+        {
+            cm->residual.total_residuals[i] = 0;
+        }
+
+        const int16_t *buffers[MAX_MB_PLANE] = {
+            pbi->nemo_worker_data[0].lr_resiudal->y_residual,
+            pbi->nemo_worker_data[0].lr_resiudal->u_residual,
+            pbi->nemo_worker_data[0].lr_resiudal->v_residual
+        };
+        const int strides[MAX_MB_PLANE] = {
+            pbi->nemo_worker_data[0].lr_resiudal->y_stride / 2,
+            pbi->nemo_worker_data[0].lr_resiudal->uv_stride / 2,
+            pbi->nemo_worker_data[0].lr_resiudal->uv_stride / 2
+        };
+        const int widths[MAX_MB_PLANE] = {
+            pbi->nemo_worker_data[0].lr_resiudal->y_width / 2,
+            pbi->nemo_worker_data[0].lr_resiudal->uv_width / 2,
+            pbi->nemo_worker_data[0].lr_resiudal->uv_width / 2
+        };
+        const int heights[MAX_MB_PLANE] = {
+            pbi->nemo_worker_data[0].lr_resiudal->y_height,
+            pbi->nemo_worker_data[0].lr_resiudal->uv_height,
+            pbi->nemo_worker_data[0].lr_resiudal->uv_height
+        };
+        for (i = 0; i < MAX_MB_PLANE; i++)
+        {
+            cm->residual.total_residuals[i] += vpx_sum_c(buffers[i], strides[i], heights[i], widths[i]);
+            cm->residual.total_residual += cm->residual.total_residuals[i];
         }
     }
 
     if (!xd->corrupted) {
-        if (!cm->error_resilient_mode && !cm->frame_parallel_decoding_mode) {
-            vp9_adapt_coef_probs(cm);
+      if (!cm->error_resilient_mode && !cm->frame_parallel_decoding_mode) {
+        vp9_adapt_coef_probs(cm);
 
-            if (!frame_is_intra_only(cm)) {
-                vp9_adapt_mode_probs(cm);
-                vp9_adapt_mv_probs(cm, cm->allow_high_precision_mv);
-            }
+        if (!frame_is_intra_only(cm)) {
+          vp9_adapt_mode_probs(cm);
+          vp9_adapt_mv_probs(cm, cm->allow_high_precision_mv);
         }
+      }
     } else {
-        vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
-                           "Decode failed. Frame data is corrupted.");
+      vpx_internal_error(&cm->error, VPX_CODEC_CORRUPT_FRAME,
+                         "Decode failed. Frame data is corrupted.");
     }
 
     // Non frame parallel update frame context here.

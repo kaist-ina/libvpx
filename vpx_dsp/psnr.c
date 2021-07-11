@@ -281,6 +281,8 @@ void vpx_calc_psnr(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
     psnr->samples[0] = total_samples;
     psnr->psnr[0] =
             vpx_sse_to_psnr((double) total_samples, peak, (double) total_sse);
+    
+    // TODO: return RMSE, MSE using the psnr pointer 
 }
 
 //void vpx_calc_psnr_block_old(const YV12_BUFFER_CONFIG *a, const YV12_BUFFER_CONFIG *b,
