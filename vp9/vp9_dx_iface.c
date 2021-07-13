@@ -1145,10 +1145,11 @@ static void save_cache_quality(VP9_COMMON *cm) {
     YV12_load_frame_buffer(sr_compare_frame, cm->nemo_cfg->sr_reference_frame_dir, file_name);
     vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats1);
 
-    YV12_load_frame_buffer(sr_compare_frame, cm->nemo_cfg->sr_offline_frame_dir, file_name);
-    vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats2);
+    //YV12_load_frame_buffer(sr_compare_frame, cm->nemo_cfg->sr_offline_frame_dir, file_name);
+    //vpx_calc_psnr(sr_upscaled_frame, sr_compare_frame, &psnr_stats2);
 
-    sprintf(log, "%d\t%.4f\t%.4f\t%llu\n", cm->current_video_frame - 1, psnr_stats1.psnr[0], psnr_stats2.psnr[0], psnr_stats2.sse[0]);
+    sprintf(log, "%d\t%.4f\n", cm->current_video_frame - 1, psnr_stats1.psnr[0]);
+    //sprintf(log, "%d\t%.4f\t%.4f\t%llu\n", cm->current_video_frame - 1, psnr_stats1.psnr[0], psnr_stats2.psnr[0], psnr_stats2.sse[0]);
     fputs(log, cm->quality_log);
 
 #ifdef __ANDROID_API__
